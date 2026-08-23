@@ -45,8 +45,8 @@ from langchain.chat_models import init_chat_model
 # ═══ Alternative Models (comment out default above, uncomment one below) ═════
 # model = init_chat_model("anthropic:claude-sonnet-4-6")
 # model = init_chat_model("openai:gpt-4.1-mini")
-model = init_chat_model("openai:gpt-4.1")
-strong_model = init_chat_model("openai:gpt-5-nano", reasoning_effort="none")
+model = init_chat_model("openai:gpt-5-nano", reasoning_effort="low")
+strong_model = init_chat_model("openai:gpt-5-nano", reasoning_effort="low")
 
 # ═══ Open-Source / Alternative Hosted Models ══════════════════════════════════
 

@@ -1,26 +1,93 @@
-import textwrap
+import html
+import re
+
+MAX_PAGE_TEXT_CHARS = 12_000
+MAX_ELEMENTS = 100
 
 class Helpers:
     @staticmethod
-    def format_page_to_llm_output(data, text_width=50):
-        url = data.get('url', '')
-        if '?' in url:
-            url = url.split('?', 1)[0] + '?...'
+    def truncate(text: str, max_chars: int) -> tuple[str, bool]:
+        if len(text) <= max_chars:
+            return text, False
 
-        title = data.get('title', '')
-        pages_below = float(data.get('pagesBelow', 0))
+        return text[:max_chars].rstrip(), True
 
-        lines = [f'<page url="{url}" title="{title}" pages_below="{pages_below}">', "Interactive elements:"]
+    @staticmethod
+    def normalize_page_text(text: str) -> str:
+        normalized_lines = []
 
-        for i, element in enumerate(data.get('elements', [])):
-            tag = element.get('tag', '')
-            attrs = element.get('attrs', '')
-            text = element.get('text', '')
-            tag_str = f"{tag} {attrs}".strip()
-            lines.append(f"[{i}]<{tag_str} /> {text}")
+        for line in text.splitlines():
+            line = re.sub(r"\s+", " ", line).strip()
 
-        lines.append("Page text:")
-        lines.append(textwrap.fill(data.get('pageText', ''), width=text_width))
-        lines.append("</page>")
+            if line:
+                normalized_lines.append(line)
 
+        return "\n".join(normalized_lines)
+
+    @staticmethod
+    def format_page_to_llm_output(data: dict) -> str:
+        url = data.get("url", "")
+
+        if "?" in url:
+            url = url.split("?", 1)[0] + "?..."
+
+        title = data.get("title", "")
+        pages_below = float(data.get("pagesBelow", 0))
+
+        url = html.escape(url, quote=True)
+        title = html.escape(title, quote=True)
+
+        elements = data.get("elements", [])
+        visible_elements = elements[:MAX_ELEMENTS]
+
+        lines = [
+            (
+                f'<page url="{url}" '
+                f'title="{title}" '
+                f'pages_below="{pages_below:.1f}">'
+            ),
+            "",
+            "Interactive elements:",
+        ]
+
+        if visible_elements:
+            for index, element in enumerate(visible_elements):
+                tag = element.get("tag", "").strip()
+                attrs = element.get("attrs", "").strip()
+                text = Helpers.normalize_page_text(element.get("text", ""))
+
+                tag_str = f"{tag} {attrs}".strip()
+
+                if text:
+                    lines.append(f"[{index}] <{tag_str}> {text}")
+                else:
+                    lines.append(f"[{index}] <{tag_str}>")
+
+            if len(elements) > MAX_ELEMENTS:
+                lines.append(
+                    f"... {len(elements) - MAX_ELEMENTS} additional elements omitted"
+                )
+        else:
+            lines.append("(none)")
+
+        page_text = Helpers.normalize_page_text(data.get("pageText", ""))
+        page_text, truncated = Helpers.truncate(page_text, MAX_PAGE_TEXT_CHARS)
+
+        lines.extend(
+            [
+                "",
+                "Page text:",
+                page_text or "(none)",
+            ]
+        )
+
+        if truncated:
+            lines.append("\n[Page text truncated]")
+
+        lines.extend(
+            [
+                "",
+                "</page>",
+            ]
+        )
         return "\n".join(lines)
