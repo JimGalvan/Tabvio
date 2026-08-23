@@ -1,7 +1,7 @@
 import html
 import re
 
-MAX_PAGE_TEXT_CHARS = 12_000
+MAX_PAGE_TEXT_CHARS = 3_000
 MAX_ELEMENTS = 100
 
 class Helpers:
