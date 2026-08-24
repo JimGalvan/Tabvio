@@ -1,0 +1,22 @@
+.latest-action {
+  min-height: 20px;
+  padding: 0 2px;
+  margin: -4px 0 14px;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .latest-action {
+    padding: 9px 10px;
+    margin: -2px 0 12px;
+    background: rgba(43, 125, 192, 0.08);
+    border-left: 3px solid var(--signal);
+    white-space: normal;
+  }
+}

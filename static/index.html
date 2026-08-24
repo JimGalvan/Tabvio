@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#dce8f0">
   <title>Tabvio · Browser agent live</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/live-view.css">
 </head>
 <body>
   <main class="shell">
@@ -49,6 +50,10 @@
           </div>
           <button class="quiet-button" type="button" id="cancel-button">Cancel run</button>
         </div>
+
+        <p class="latest-action" id="latest-action" aria-live="polite">
+          The agent is preparing its browser.
+        </p>
 
         <div class="browser-viewport" id="browser-viewport">
           <img id="browser-screen" alt="Live view of the agent browser" hidden>

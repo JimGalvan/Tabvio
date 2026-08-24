@@ -1,3 +1,5 @@
+const SCREEN_REFRESH_INTERVAL_MS = 750;
+
 const taskForm = document.querySelector("#task-form");
 const taskInput = document.querySelector("#task-input");
 const startButton = document.querySelector("#start-button");
@@ -10,6 +12,8 @@ const runIdLabel = document.querySelector("#run-id");
 const cancelButton = document.querySelector("#cancel-button");
 const browserScreen = document.querySelector("#browser-screen");
 const browserWaiting = document.querySelector("#browser-waiting");
+const browserWaitingMessage = browserWaiting.querySelector("p");
+const latestAction = document.querySelector("#latest-action");
 const activityList = document.querySelector("#activity-list");
 const activityEmpty = document.querySelector("#activity-empty");
 const eventCount = document.querySelector("#event-count");
@@ -30,6 +34,8 @@ const eventTypes = [
   "browser.action.completed",
   "browser.action.failed",
   "browser.tab.changed",
+  "browser.capture.failed",
+  "browser.capture.recovered",
   "agent.message.delta",
   "input.required",
   "input.received",
@@ -46,7 +52,11 @@ const terminalStatuses = new Set([
 ]);
 
 let activeRunId = null;
+let activeScreenUrl = null;
+let currentScreenObjectUrl = null;
 let eventSource = null;
+let screenRefreshTimer = null;
+let screenRequestInFlight = false;
 let displayedEventCount = 0;
 let streamedMessage = "";
 
@@ -133,7 +143,9 @@ browserScreen.addEventListener("load", () => {
 });
 
 function openRun(responseBody) {
+  stopScreenRefresh();
   activeRunId = responseBody.run.id;
+  activeScreenUrl = responseBody.screen_url;
   displayedEventCount = 0;
   streamedMessage = "";
   activityList.replaceChildren();
@@ -142,13 +154,15 @@ function openRun(responseBody) {
   answerPanel.hidden = true;
   cancelButton.disabled = false;
   runIdLabel.textContent = activeRunId;
+  latestAction.textContent = "The agent is preparing its browser.";
   briefSection.hidden = true;
   workspace.hidden = false;
   updateStatus(responseBody.run.status);
 
   browserScreen.hidden = true;
   browserWaiting.hidden = false;
-  browserScreen.src = `${responseBody.screen_url}?started=${Date.now()}`;
+  browserWaitingMessage.textContent = "Waiting for the first browser frame";
+  void refreshBrowserScreen();
 
   if (eventSource) {
     eventSource.close();
@@ -164,6 +178,69 @@ function openRun(responseBody) {
       statusLabel.textContent = "Reconnecting";
     }
   });
+}
+
+async function refreshBrowserScreen(scheduleNextRefresh = true) {
+  const requestedRunId = activeRunId;
+  const requestedScreenUrl = activeScreenUrl;
+  if (!requestedRunId || !requestedScreenUrl || screenRequestInFlight) {
+    return;
+  }
+
+  screenRequestInFlight = true;
+  try {
+    const response = await fetch(
+      `${requestedScreenUrl}?captured=${Date.now()}`,
+      {cache: "no-store"},
+    );
+
+    if (response.status === 204) {
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`Live view returned ${response.status}`);
+    }
+
+    const frame = await response.blob();
+    if (requestedRunId !== activeRunId) {
+      return;
+    }
+
+    const nextScreenObjectUrl = URL.createObjectURL(frame);
+    const previousScreenObjectUrl = currentScreenObjectUrl;
+    currentScreenObjectUrl = nextScreenObjectUrl;
+    browserScreen.src = nextScreenObjectUrl;
+    if (previousScreenObjectUrl) {
+      URL.revokeObjectURL(previousScreenObjectUrl);
+    }
+  } catch (error) {
+    browserWaitingMessage.textContent = "Live view reconnecting";
+  } finally {
+    screenRequestInFlight = false;
+    const runIsActive = requestedRunId === activeRunId;
+    const runIsTerminal = terminalStatuses.has(statusDot.dataset.status);
+    if (scheduleNextRefresh && runIsActive && !runIsTerminal) {
+      screenRefreshTimer = window.setTimeout(
+        refreshBrowserScreen,
+        SCREEN_REFRESH_INTERVAL_MS,
+      );
+    }
+  }
+}
+
+function stopScreenRefresh() {
+  if (screenRefreshTimer) {
+    window.clearTimeout(screenRefreshTimer);
+    screenRefreshTimer = null;
+  }
+
+  activeScreenUrl = null;
+  screenRequestInFlight = false;
+  if (currentScreenObjectUrl) {
+    URL.revokeObjectURL(currentScreenObjectUrl);
+    currentScreenObjectUrl = null;
+  }
+  browserScreen.removeAttribute("src");
 }
 
 function handleRunEvent(serverEvent) {
@@ -207,6 +284,9 @@ function addActivity(eventType, payload, createdAt) {
   activityEmpty.hidden = true;
   displayedEventCount += 1;
   eventCount.textContent = `${displayedEventCount} ${displayedEventCount === 1 ? "event" : "events"}`;
+  latestAction.textContent = presentation.detail
+    ? `${presentation.title} · ${presentation.detail}`
+    : presentation.title;
 
   const listItem = document.createElement("li");
   listItem.className = "activity-item";
@@ -244,6 +324,8 @@ function describeEvent(eventType, payload) {
     "browser.action.completed": {title: `${capitalize(payload.action)} completed`, detail: payload.target},
     "browser.action.failed": {title: `${capitalize(payload.action)} failed`, detail: payload.error},
     "browser.tab.changed": {title: "Browser tab changed", detail: payload.tab_id},
+    "browser.capture.failed": {title: "Live view paused", detail: payload.message},
+    "browser.capture.recovered": {title: "Live view resumed", detail: payload.message},
     "input.required": {title: "Waiting for your answer", detail: payload.question},
     "input.received": {title: "Answer received", detail: "The agent is continuing the task."},
     "run.completed": {title: "Run completed", detail: "The agent verified its final result."},
@@ -279,6 +361,12 @@ function completeRun(status) {
   cancelButton.disabled = true;
   answerPanel.hidden = true;
   setFormBusy(false);
+
+  if (screenRefreshTimer) {
+    window.clearTimeout(screenRefreshTimer);
+    screenRefreshTimer = null;
+  }
+  void refreshBrowserScreen(false);
 
   if (eventSource) {
     eventSource.close();
