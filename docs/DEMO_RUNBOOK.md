@@ -44,8 +44,9 @@ The second prompt demonstrates the live browser view, action ledger, user-input 
 
 ## Expected behavior
 
-- The activity ledger updates while the agent works.
-- The browser panel refreshes from the watch-only MJPEG stream.
+- The latest-action line and full activity ledger update while the agent works.
+- The browser panel refreshes through cache-free JPEG snapshots.
+- A temporary screenshot failure reports a paused live view and retries automatically.
 - A question card appears when the agent needs an answer.
 - Submitting the answer resumes the existing run.
 - The completed answer remains visible and the run is stored in SQLite.
