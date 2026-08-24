@@ -147,7 +147,7 @@ class BrowserManager:
         return self._frame
 
     async def _observe_current_page(self):
-        with open("scan-page.js", encoding="utf-8") as f:
+        with open("js/scan-page.js", encoding="utf-8") as f:
             scan_page_js = f.read()
 
         frame = self._active_frame()
@@ -181,7 +181,7 @@ class BrowserManager:
         if self._page is None or self._page.is_closed():
             raise RuntimeError("No page is open")
 
-        with open("get-text-in-viewport.js", encoding="utf-8") as f:
+        with open("js/get-text-in-viewport.js", encoding="utf-8") as f:
             get_text_in_viewport_js = f.read()
 
         return await self._active_frame().evaluate(get_text_in_viewport_js)
