@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +22,10 @@ BASE_DIRECTORY = Path(__file__).resolve().parent
 STATIC_DIRECTORY = BASE_DIRECTORY / "static"
 DATABASE_PATH = BASE_DIRECTORY / "data" / "tabvio.db"
 MJPEG_BOUNDARY = "tabvio-frame"
+SCREEN_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "X-Accel-Buffering": "no",
+}
 
 
 def _read_headless_setting() -> bool:
@@ -124,6 +128,29 @@ async def stream_run_events(
     )
 
 
+@app.get("/api/runs/{run_id}/screen.jpg")
+async def get_run_screen(run_id: UUID) -> Response:
+    try:
+        frame = run_manager.get_latest_frame(run_id)
+    except RunNotFoundError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exception),
+        ) from exception
+
+    if frame is None:
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT,
+            headers=SCREEN_CACHE_HEADERS,
+        )
+
+    return Response(
+        content=frame,
+        media_type="image/jpeg",
+        headers=SCREEN_CACHE_HEADERS,
+    )
+
+
 @app.get("/api/runs/{run_id}/screen.mjpeg")
 async def stream_run_screen(run_id: UUID) -> StreamingResponse:
     try:
@@ -146,10 +173,7 @@ async def stream_run_screen(run_id: UUID) -> StreamingResponse:
     return StreamingResponse(
         frame_stream(),
         media_type=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-            "X-Accel-Buffering": "no",
-        },
+        headers=SCREEN_CACHE_HEADERS,
     )
 
 
@@ -191,7 +215,7 @@ def _build_run_response(run) -> RunResponse:
     return RunResponse(
         run=run,
         stream_url=f"/api/runs/{run.id}/stream",
-        screen_url=f"/api/runs/{run.id}/screen.mjpeg",
+        screen_url=f"/api/runs/{run.id}/screen.jpg",
     )
 
 
