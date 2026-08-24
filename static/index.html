@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#dce8f0">
+  <title>Tabvio · Browser agent live</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="/" aria-label="Tabvio home">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Tabvio</span>
+      </a>
+      <div class="run-state" aria-live="polite">
+        <span class="run-state-dot" id="status-dot"></span>
+        <span id="status-label">Ready</span>
+      </div>
+    </header>
+
+    <section class="brief" id="brief-section">
+      <div class="brief-copy">
+        <p class="eyebrow">Deterministic browser agent</p>
+        <h1>Give it an outcome.<br><span>Watch the work.</span></h1>
+        <p class="brief-note">The agent observes, validates, acts, and verifies each browser step while you follow along live.</p>
+      </div>
+
+      <form class="task-form" id="task-form">
+        <label for="task-input">What should the agent do?</label>
+        <textarea id="task-input" name="task" rows="4" required placeholder="Open example.com and summarize what is on the page."></textarea>
+        <div class="task-actions">
+          <p id="form-message" role="alert"></p>
+          <button class="primary-button" type="submit" id="start-button">
+            Start run
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="workspace" id="workspace" hidden>
+      <div class="browser-stage">
+        <div class="stage-header">
+          <div>
+            <p class="stage-label">Live browser</p>
+            <p class="run-id" id="run-id"></p>
+          </div>
+          <button class="quiet-button" type="button" id="cancel-button">Cancel run</button>
+        </div>
+
+        <div class="browser-viewport" id="browser-viewport">
+          <img id="browser-screen" alt="Live view of the agent browser" hidden>
+          <div class="browser-waiting" id="browser-waiting">
+            <span class="waiting-orbit" aria-hidden="true"></span>
+            <p>Waiting for the first browser frame</p>
+          </div>
+        </div>
+
+        <section class="answer-panel" id="answer-panel" hidden>
+          <p class="answer-label">The agent needs your input</p>
+          <p class="answer-question" id="answer-question"></p>
+          <form id="answer-form">
+            <label class="visually-hidden" for="answer-input">Your answer</label>
+            <input id="answer-input" autocomplete="off" required placeholder="Type your answer">
+            <button class="primary-button" type="submit">Send answer</button>
+          </form>
+        </section>
+
+        <section class="result-panel" id="result-panel" hidden>
+          <p class="result-label">Agent response</p>
+          <p class="result-output" id="result-output"></p>
+        </section>
+      </div>
+
+      <aside class="activity-panel">
+        <div class="activity-heading">
+          <p class="stage-label">Action ledger</p>
+          <span id="event-count">0 events</span>
+        </div>
+        <ol class="activity-list" id="activity-list" aria-live="polite"></ol>
+        <div class="activity-empty" id="activity-empty">
+          Activity will appear as the agent works.
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
