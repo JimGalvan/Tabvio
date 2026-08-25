@@ -213,6 +213,22 @@ a:focus-visible {
   color: #8798a3;
 }
 
+.task-hint {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.task-hint code {
+  padding: 0.1em 0.4em;
+  color: var(--ink);
+  font-family: var(--utility-font);
+  font-size: 0.9em;
+  background: var(--signal-soft);
+  border-radius: 4px;
+}
+
 .task-actions {
   display: flex;
   align-items: center;
