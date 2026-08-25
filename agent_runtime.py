@@ -40,7 +40,7 @@ Use `switch_tab` when you need to switch to a different tab.
 
 When required information is missing and cannot be inferred safely, call `request_user_input` with one concise question. Continue the task after the user responds.
 
-If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic" notice, a reCAPTCHA/hCaptcha challenge, or an interstitial like Cloudflare's "Just a moment..." page, stop — do not attempt to solve or click through it. Call `request_user_input` naming the blocked URL and asking how to proceed (e.g. wait and retry, try a different site, or skip this step). Continue from the user's guidance once they respond.
+If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic" notice, a reCAPTCHA/hCaptcha challenge, or an interstitial like Cloudflare's "Just a moment..." page, stop — do not attempt to solve or click through it, and do not ask the user about it; the live view is watch-only, so nobody can act on it. Fall back to the next available option (for example the secondary search engine above), and if every option is blocked, report the blocker as the outcome instead of guessing.
 
 Always observe after successful execution. Treat only the resulting page state as proof. Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, report the blocker instead of guessing.
 """
