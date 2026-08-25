@@ -23,9 +23,9 @@
 
     <section class="brief" id="brief-section">
       <div class="brief-copy">
-        <p class="eyebrow">Deterministic browser agent</p>
-        <h1>Give it an outcome.<br><span>Watch the work.</span></h1>
-        <p class="brief-note">The agent observes, validates, acts, and verifies each browser step while you follow along live.</p>
+        <p class="eyebrow">Autonomous browser agent</p>
+        <h1>Give it a task.<br><span>Get it done.</span></h1>
+        <p class="brief-note">Automate browser work from start to finish—research, forms, data entry, and multi-step workflows.</p>
       </div>
 
       <form class="task-form" id="task-form">
@@ -77,6 +77,26 @@
           <p class="result-label">Agent response</p>
           <p class="result-output" id="result-output"></p>
         </section>
+
+        <section class="answer-panel" id="follow-up-panel" hidden>
+          <p class="answer-label">Continue this browser session</p>
+          <p class="answer-question" id="follow-up-deadline"></p>
+          <form id="follow-up-form">
+            <label class="visually-hidden" for="follow-up-input">Additional task</label>
+            <input id="follow-up-input" autocomplete="off" required placeholder="Add another task">
+            <button class="primary-button" type="submit">Ask follow-up</button>
+            <button class="quiet-button" type="button" id="end-session-button">End session</button>
+          </form>
+          <p class="answer-question" id="follow-up-message" role="alert"></p>
+        </section>
+
+        <div class="task-actions" id="terminal-actions" hidden>
+          <span></span>
+          <button class="primary-button" type="button" id="new-run-button">
+            Start another run
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
       </div>
 
       <aside class="activity-panel">
@@ -93,5 +113,6 @@
   </main>
 
   <script src="/static/app.js" defer></script>
+  <script src="/static/run-reconnect.js" defer></script>
 </body>
 </html>

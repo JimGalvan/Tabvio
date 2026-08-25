@@ -127,6 +127,11 @@ a:focus-visible {
   background: var(--success);
 }
 
+.run-state-dot.ready_for_follow_up {
+  background: var(--success);
+  box-shadow: 0 0 0 5px rgba(37, 122, 90, 0.12);
+}
+
 .run-state-dot.failed,
 .run-state-dot.cancelled,
 .run-state-dot.timed_out {

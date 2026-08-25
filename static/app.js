@@ -23,6 +23,12 @@ const answerForm = document.querySelector("#answer-form");
 const answerInput = document.querySelector("#answer-input");
 const resultPanel = document.querySelector("#result-panel");
 const resultOutput = document.querySelector("#result-output");
+const followUpPanel = document.querySelector("#follow-up-panel");
+const followUpDeadline = document.querySelector("#follow-up-deadline");
+const followUpForm = document.querySelector("#follow-up-form");
+const followUpInput = document.querySelector("#follow-up-input");
+const followUpMessage = document.querySelector("#follow-up-message");
+const endSessionButton = document.querySelector("#end-session-button");
 
 const eventTypes = [
   "run.created",
@@ -39,6 +45,9 @@ const eventTypes = [
   "agent.message.delta",
   "input.required",
   "input.received",
+  "follow_up.started",
+  "follow_up.ended",
+  "follow_up.expired",
   "run.completed",
   "run.failed",
   "run.cancelled",
@@ -49,6 +58,11 @@ const terminalStatuses = new Set([
   "failed",
   "cancelled",
   "timed_out",
+]);
+
+const screenPausedStatuses = new Set([
+  ...terminalStatuses,
+  "ready_for_follow_up",
 ]);
 
 let activeRunId = null;
@@ -118,6 +132,72 @@ answerForm.addEventListener("submit", async (formEvent) => {
   }
 });
 
+followUpForm.addEventListener("submit", async (formEvent) => {
+  formEvent.preventDefault();
+  const task = followUpInput.value.trim();
+  if (!task || !activeRunId) {
+    return;
+  }
+
+  const submitButton = followUpForm.querySelector(".primary-button");
+  submitButton.disabled = true;
+  endSessionButton.disabled = true;
+  followUpMessage.textContent = "";
+
+  try {
+    const response = await fetch(`/api/runs/${activeRunId}/follow-ups`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({task}),
+    });
+    const responseBody = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(responseBody.detail || "The follow-up could not be started");
+    }
+
+    followUpInput.value = "";
+    followUpPanel.hidden = true;
+    resultPanel.hidden = true;
+    streamedMessage = "";
+    cancelButton.disabled = false;
+    updateStatus(responseBody.run.status);
+    void refreshBrowserScreen();
+  } catch (error) {
+    followUpMessage.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+    endSessionButton.disabled = false;
+  }
+});
+
+endSessionButton.addEventListener("click", async () => {
+  if (!activeRunId) {
+    return;
+  }
+
+  const submitButton = followUpForm.querySelector(".primary-button");
+  submitButton.disabled = true;
+  endSessionButton.disabled = true;
+  followUpMessage.textContent = "";
+
+  try {
+    const response = await fetch(`/api/runs/${activeRunId}/end`, {
+      method: "POST",
+    });
+    const responseBody = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(responseBody.detail || "The browser session could not be ended");
+    }
+
+    followUpPanel.hidden = true;
+    updateStatus(responseBody.run.status);
+  } catch (error) {
+    followUpMessage.textContent = error.message;
+    submitButton.disabled = false;
+    endSessionButton.disabled = false;
+  }
+});
+
 cancelButton.addEventListener("click", async () => {
   if (!activeRunId) {
     return;
@@ -152,17 +232,23 @@ function openRun(responseBody) {
   activityEmpty.hidden = false;
   resultPanel.hidden = true;
   answerPanel.hidden = true;
+  followUpPanel.hidden = true;
+  followUpMessage.textContent = "";
   cancelButton.disabled = false;
   runIdLabel.textContent = activeRunId;
   latestAction.textContent = "The agent is preparing its browser.";
   briefSection.hidden = true;
   workspace.hidden = false;
-  updateStatus(responseBody.run.status);
-
   browserScreen.hidden = true;
   browserWaiting.hidden = false;
   browserWaitingMessage.textContent = "Waiting for the first browser frame";
-  void refreshBrowserScreen();
+  updateStatus(
+    responseBody.run.status,
+    responseBody.run.follow_up_expires_at,
+  );
+  void refreshBrowserScreen(
+    !screenPausedStatuses.has(responseBody.run.status),
+  );
 
   if (eventSource) {
     eventSource.close();
@@ -218,8 +304,10 @@ async function refreshBrowserScreen(scheduleNextRefresh = true) {
   } finally {
     screenRequestInFlight = false;
     const runIsActive = requestedRunId === activeRunId;
-    const runIsTerminal = terminalStatuses.has(statusDot.dataset.status);
-    if (scheduleNextRefresh && runIsActive && !runIsTerminal) {
+    const screenRefreshIsPaused = screenPausedStatuses.has(
+      statusDot.dataset.status,
+    );
+    if (scheduleNextRefresh && runIsActive && !screenRefreshIsPaused) {
       screenRefreshTimer = window.setTimeout(
         refreshBrowserScreen,
         SCREEN_REFRESH_INTERVAL_MS,
@@ -258,7 +346,7 @@ function handleRunEvent(serverEvent) {
   addActivity(eventType, payload, new Date(event.created_at));
 
   if (eventType === "run.status") {
-    updateStatus(payload.status);
+    updateStatus(payload.status, payload.follow_up_expires_at);
   } else if (eventType === "input.required") {
     answerQuestion.textContent = payload.question || "The agent needs more information.";
     answerPanel.hidden = false;
@@ -266,7 +354,14 @@ function handleRunEvent(serverEvent) {
   } else if (eventType === "run.completed") {
     resultOutput.textContent = payload.output || streamedMessage;
     resultPanel.hidden = false;
-    completeRun("succeeded");
+    showFollowUpPanel(payload.follow_up_expires_at);
+  } else if (eventType === "follow_up.started") {
+    streamedMessage = "";
+    resultOutput.textContent = "";
+    resultPanel.hidden = true;
+    followUpPanel.hidden = true;
+    cancelButton.disabled = false;
+    void refreshBrowserScreen();
   } else if (eventType === "run.failed") {
     resultOutput.textContent = payload.error || "The run failed.";
     resultPanel.hidden = false;
@@ -328,7 +423,10 @@ function describeEvent(eventType, payload) {
     "browser.capture.recovered": {title: "Live view resumed", detail: payload.message},
     "input.required": {title: "Waiting for your answer", detail: payload.question},
     "input.received": {title: "Answer received", detail: "The agent is continuing the task."},
-    "run.completed": {title: "Run completed", detail: "The agent verified its final result."},
+    "follow_up.started": {title: "Follow-up started", detail: payload.task},
+    "follow_up.ended": {title: "Browser session ended", detail: "The browser was closed."},
+    "follow_up.expired": {title: "Browser session expired", detail: "The follow-up window ended."},
+    "run.completed": {title: "Task completed", detail: "The agent verified its result."},
     "run.failed": {title: "Run failed", detail: payload.error},
     "run.cancelled": {title: "Run cancelled", detail: "The browser session was closed."},
   };
@@ -336,11 +434,12 @@ function describeEvent(eventType, payload) {
   return descriptions[eventType] || null;
 }
 
-function updateStatus(status) {
+function updateStatus(status, followUpExpiresAt = null) {
   const labels = {
     queued: "Queued",
     running: "Agent working",
     waiting_for_input: "Needs your input",
+    ready_for_follow_up: "Ready for follow-up",
     succeeded: "Completed",
     failed: "Failed",
     cancelled: "Cancelled",
@@ -351,15 +450,48 @@ function updateStatus(status) {
   statusDot.dataset.status = status;
   statusLabel.textContent = labels[status] || status;
 
+  if (status === "ready_for_follow_up") {
+    showFollowUpPanel(followUpExpiresAt);
+  } else {
+    followUpPanel.hidden = true;
+  }
+
   if (terminalStatuses.has(status)) {
     completeRun(status);
   }
+}
+
+function showFollowUpPanel(expiresAt) {
+  cancelButton.disabled = true;
+  answerPanel.hidden = true;
+  followUpPanel.hidden = false;
+  followUpMessage.textContent = "";
+  followUpDeadline.textContent = formatFollowUpDeadline(expiresAt);
+
+  if (screenRefreshTimer) {
+    window.clearTimeout(screenRefreshTimer);
+    screenRefreshTimer = null;
+  }
+  void refreshBrowserScreen(false);
+}
+
+function formatFollowUpDeadline(expiresAt) {
+  if (!expiresAt) {
+    return "Ask another task before this browser session closes.";
+  }
+
+  const expirationTime = new Date(expiresAt);
+  return `Ask another task before the browser closes at ${expirationTime.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}.`;
 }
 
 function completeRun(status) {
   updateStatusWithoutCompletion(status);
   cancelButton.disabled = true;
   answerPanel.hidden = true;
+  followUpPanel.hidden = true;
   setFormBusy(false);
 
   if (screenRefreshTimer) {
