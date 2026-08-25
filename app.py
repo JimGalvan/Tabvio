@@ -10,12 +10,19 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from run_manager import (
-    RunAlreadyActiveError,
+    RunCapacityReachedError,
     RunManager,
     RunNotFoundError,
+    RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
-from run_models import CreateRunRequest, RunEvent, RunResponse, UserInputRequest
+from run_models import (
+    CreateRunRequest,
+    FollowUpRequest,
+    RunEvent,
+    RunResponse,
+    UserInputRequest,
+)
 from run_repository import RunRepository
 
 BASE_DIRECTORY = Path(__file__).resolve().parent
@@ -33,8 +40,53 @@ def _read_headless_setting() -> bool:
     return configured_value not in {"false", "0", "no"}
 
 
+def _read_max_concurrent_runs() -> int:
+    configured_value = os.getenv(
+        "TABVIO_MAX_CONCURRENT_RUNS",
+        str(RunManager.DEFAULT_MAX_CONCURRENT_RUNS),
+    )
+    try:
+        max_concurrent_runs = int(configured_value)
+    except ValueError as exception:
+        raise RuntimeError(
+            "TABVIO_MAX_CONCURRENT_RUNS must be an integer"
+        ) from exception
+
+    if max_concurrent_runs < 1:
+        raise RuntimeError(
+            "TABVIO_MAX_CONCURRENT_RUNS must be at least 1"
+        )
+
+    return max_concurrent_runs
+
+
+def _read_follow_up_window_seconds() -> int:
+    configured_value = os.getenv(
+        "TABVIO_FOLLOW_UP_WINDOW_SECONDS",
+        str(RunManager.DEFAULT_FOLLOW_UP_WINDOW_SECONDS),
+    )
+    try:
+        follow_up_window_seconds = int(configured_value)
+    except ValueError as exception:
+        raise RuntimeError(
+            "TABVIO_FOLLOW_UP_WINDOW_SECONDS must be an integer"
+        ) from exception
+
+    if follow_up_window_seconds < 1:
+        raise RuntimeError(
+            "TABVIO_FOLLOW_UP_WINDOW_SECONDS must be at least 1"
+        )
+
+    return follow_up_window_seconds
+
+
 repository = RunRepository(DATABASE_PATH)
-run_manager = RunManager(repository, headless=_read_headless_setting())
+run_manager = RunManager(
+    repository,
+    headless=_read_headless_setting(),
+    max_concurrent_runs=_read_max_concurrent_runs(),
+    follow_up_window_seconds=_read_follow_up_window_seconds(),
+)
 
 
 @asynccontextmanager
@@ -73,9 +125,9 @@ async def create_run(request: CreateRunRequest) -> RunResponse:
             task=request.task,
             max_runtime_seconds=request.max_runtime_seconds,
         )
-    except RunAlreadyActiveError as exception:
+    except RunCapacityReachedError as exception:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(exception),
         ) from exception
 
@@ -205,6 +257,45 @@ async def cancel_run(run_id: UUID) -> RunResponse:
     except RunNotFoundError as exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exception),
+        ) from exception
+
+    return _build_run_response(run)
+
+
+@app.post("/api/runs/{run_id}/follow-ups", response_model=RunResponse)
+async def submit_follow_up(
+    run_id: UUID,
+    request: FollowUpRequest,
+) -> RunResponse:
+    try:
+        run = await run_manager.submit_follow_up(run_id, request.task)
+    except RunNotFoundError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exception),
+        ) from exception
+    except RunNotReadyForFollowUpError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exception),
+        ) from exception
+
+    return _build_run_response(run)
+
+
+@app.post("/api/runs/{run_id}/end", response_model=RunResponse)
+async def end_run_session(run_id: UUID) -> RunResponse:
+    try:
+        run = await run_manager.end_session(run_id)
+    except RunNotFoundError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exception),
+        ) from exception
+    except RunNotReadyForFollowUpError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exception),
         ) from exception
 

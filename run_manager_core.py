@@ -23,6 +23,10 @@ class RunNotWaitingForInputError(RuntimeError):
     pass
 
 
+class RunNotReadyForFollowUpError(RuntimeError):
+    pass
+
+
 @dataclass
 class RunContext:
     run: RunRecord
@@ -35,6 +39,7 @@ class RunContext:
     next_event_sequence: int = 1
     execution_task: asyncio.Task[None] | None = None
     capture_task: asyncio.Task[None] | None = None
+    follow_up_expiry_task: asyncio.Task[None] | None = None
     assistant_output_parts: list[str] = field(default_factory=list)
 
 
@@ -361,10 +366,15 @@ class RunManager:
         context.run.status = status
         context.run.updated_at = utc_now()
         self._repository.save_run(context.run)
+        status_payload = {"status": status.value}
+        if context.run.follow_up_expires_at is not None:
+            status_payload["follow_up_expires_at"] = (
+                context.run.follow_up_expires_at.isoformat()
+            )
         await self._publish(
             context,
             "run.status",
-            {"status": status.value},
+            status_payload,
         )
 
     async def _finish_context(self, context: RunContext) -> None:

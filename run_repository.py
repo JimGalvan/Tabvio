@@ -25,6 +25,7 @@ class RunRepository:
                     max_runtime_seconds INTEGER NOT NULL,
                     final_output TEXT,
                     error TEXT,
+                    follow_up_expires_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -44,6 +45,15 @@ class RunRepository:
                 ON run_events(run_id, sequence);
                 """
             )
+            run_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(runs)")
+            }
+            if "follow_up_expires_at" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE runs ADD COLUMN follow_up_expires_at TEXT"
+                )
+            connection.commit()
 
     def save_run(self, run: RunRecord) -> None:
         with closing(self._connect()) as connection:
@@ -57,9 +67,10 @@ class RunRepository:
                     max_runtime_seconds,
                     final_output,
                     error,
+                    follow_up_expires_at,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     thread_id = excluded.thread_id,
                     task = excluded.task,
@@ -67,6 +78,7 @@ class RunRepository:
                     max_runtime_seconds = excluded.max_runtime_seconds,
                     final_output = excluded.final_output,
                     error = excluded.error,
+                    follow_up_expires_at = excluded.follow_up_expires_at,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -77,6 +89,11 @@ class RunRepository:
                     run.max_runtime_seconds,
                     run.final_output,
                     run.error,
+                    (
+                        run.follow_up_expires_at.isoformat()
+                        if run.follow_up_expires_at is not None
+                        else None
+                    ),
                     run.created_at.isoformat(),
                     run.updated_at.isoformat(),
                 ),
@@ -101,6 +118,7 @@ class RunRepository:
             max_runtime_seconds=row["max_runtime_seconds"],
             final_output=row["final_output"],
             error=row["error"],
+            follow_up_expires_at=row["follow_up_expires_at"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

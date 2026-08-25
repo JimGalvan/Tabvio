@@ -14,6 +14,7 @@ class RunStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     WAITING_FOR_INPUT = "waiting_for_input"
+    READY_FOR_FOLLOW_UP = "ready_for_follow_up"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -37,6 +38,7 @@ class RunRecord(BaseModel):
     max_runtime_seconds: int
     final_output: str | None = None
     error: str | None = None
+    follow_up_expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -59,8 +61,11 @@ class UserInputRequest(BaseModel):
     answer: str = Field(min_length=1, max_length=10_000)
 
 
+class FollowUpRequest(BaseModel):
+    task: str = Field(min_length=1, max_length=10_000)
+
+
 class RunResponse(BaseModel):
     run: RunRecord
     stream_url: str
     screen_url: str
-

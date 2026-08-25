@@ -57,6 +57,7 @@ class RunRepositoryTests(unittest.TestCase):
 
         run.status = RunStatus.SUCCEEDED
         run.final_output = "Done"
+        run.follow_up_expires_at = utc_now()
         run.updated_at = utc_now()
         self._repository.save_run(run)
 
@@ -66,6 +67,10 @@ class RunRepositoryTests(unittest.TestCase):
         self.assertEqual(stored_run.created_at, original_created_at)
         self.assertEqual(stored_run.status, RunStatus.SUCCEEDED)
         self.assertEqual(stored_run.final_output, "Done")
+        self.assertEqual(
+            stored_run.follow_up_expires_at,
+            run.follow_up_expires_at,
+        )
         self.assertEqual(stored_run.created_at.utcoffset(), UTC.utcoffset(None))
         self.assertEqual(stored_run.updated_at.utcoffset(), UTC.utcoffset(None))
 
