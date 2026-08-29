@@ -14,7 +14,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel, Field, model_validator
 
 from browser_session import BrowserSession
-from models import model, strong_model
+from model_config import model, strong_model
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 warnings.filterwarnings(

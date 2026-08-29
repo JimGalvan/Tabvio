@@ -1951,69 +1951,6 @@ otel = [
 ]
 
 [[package]]
-name = "lca-deepagents-python"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "deepagents" },
-    { name = "deepagents-code" },
-    { name = "fastapi" },
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-community" },
-    { name = "langchain-core" },
-    { name = "langchain-mcp-adapters" },
-    { name = "langchain-ollama" },
-    { name = "langchain-openai" },
-    { name = "langchain-quickjs" },
-    { name = "langgraph" },
-    { name = "langgraph-cli", extra = ["inmem"] },
-    { name = "langsmith" },
-    { name = "markdown" },
-    { name = "matplotlib" },
-    { name = "nh3" },
-    { name = "playwright" },
-    { name = "python-dotenv" },
-    { name = "questionary" },
-    { name = "tavily-python" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "deepagents", specifier = "==0.7.0" },
-    { name = "deepagents-code" },
-    { name = "fastapi", specifier = ">=0.116.0,<1.0" },
-    { name = "langchain", specifier = ">=1.0.0,<2.0" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-community", specifier = ">=0.4.2" },
-    { name = "langchain-core", specifier = ">=1.3.3,<2.0" },
-    { name = "langchain-mcp-adapters" },
-    { name = "langchain-ollama", specifier = ">=1.1.0" },
-    { name = "langchain-openai" },
-    { name = "langchain-quickjs" },
-    { name = "langgraph", specifier = ">=1.0.0,<2.0" },
-    { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.4.0" },
-    { name = "langsmith", extras = ["sandbox"] },
-    { name = "markdown" },
-    { name = "matplotlib", specifier = ">=3.11.0" },
-    { name = "nh3" },
-    { name = "playwright", specifier = ">=1.59.0,<2.0" },
-    { name = "python-dotenv" },
-    { name = "questionary", specifier = ">=2.0.0" },
-    { name = "tavily-python" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0,<1.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.15.17" }]
-
-[[package]]
 name = "linkify-it-py"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3668,6 +3605,69 @@ sdist = { url = "https://files.pythonhosted.org/packages/ef/52/9ba0f43b686e7f3dd
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a8/45/a132b9074aa18e799b891b91ad72133c98d8042c70f6240e4c5f9dabee2f/structlog-25.5.0-py3-none-any.whl", hash = "sha256:a8453e9b9e636ec59bd9e79bbd4a72f025981b3ba0f5837aebf48f02f37a7f9f", size = 72510, upload-time = "2025-10-27T08:28:21.535Z" },
 ]
+
+[[package]]
+name = "tabvio"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "deepagents" },
+    { name = "deepagents-code" },
+    { name = "fastapi" },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-community" },
+    { name = "langchain-core" },
+    { name = "langchain-mcp-adapters" },
+    { name = "langchain-ollama" },
+    { name = "langchain-openai" },
+    { name = "langchain-quickjs" },
+    { name = "langgraph" },
+    { name = "langgraph-cli", extra = ["inmem"] },
+    { name = "langsmith" },
+    { name = "markdown" },
+    { name = "matplotlib" },
+    { name = "nh3" },
+    { name = "playwright" },
+    { name = "python-dotenv" },
+    { name = "questionary" },
+    { name = "tavily-python" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deepagents", specifier = "==0.7.0" },
+    { name = "deepagents-code" },
+    { name = "fastapi", specifier = ">=0.116.0,<1.0" },
+    { name = "langchain", specifier = ">=1.0.0,<2.0" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-community", specifier = ">=0.4.2" },
+    { name = "langchain-core", specifier = ">=1.3.3,<2.0" },
+    { name = "langchain-mcp-adapters" },
+    { name = "langchain-ollama", specifier = ">=1.1.0" },
+    { name = "langchain-openai" },
+    { name = "langchain-quickjs" },
+    { name = "langgraph", specifier = ">=1.0.0,<2.0" },
+    { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.4.0" },
+    { name = "langsmith", extras = ["sandbox"] },
+    { name = "markdown" },
+    { name = "matplotlib", specifier = ">=3.11.0" },
+    { name = "nh3" },
+    { name = "playwright", specifier = ">=1.59.0,<2.0" },
+    { name = "python-dotenv" },
+    { name = "questionary", specifier = ">=2.0.0" },
+    { name = "tavily-python" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0,<1.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.15.17" }]
 
 [[package]]
 name = "tavily-python"
