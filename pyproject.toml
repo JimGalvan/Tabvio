@@ -9,6 +9,7 @@ py-modules = ["model_config"]
 name = "tabvio"
 version = "0.1.0"
 requires-python = ">=3.11,<3.15"
+license = "AGPL-3.0-only"
 
 dependencies = [
     "deepagents==0.7.0",
