@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from playwright.async_api import (
@@ -13,12 +14,15 @@ from playwright.async_api import Frame as PlaywrightFrame
 from entities import BrowserState, Element, Frame, Tab
 from helpers import Helpers
 
+logger = logging.getLogger(__name__)
+
 
 class BrowserSession:
     LOAD_TIMEOUT_MS = 60_000
     FRAME_WIDTH = 960
     FRAME_HEIGHT = 540
     FRAME_QUALITY = 55
+    OBSERVE_ATTEMPTS = 3
 
     def __init__(self, headless: bool = True):
         self._headless = headless
@@ -33,6 +37,7 @@ class BrowserSession:
         self._next_tab_id = 0
         self._next_frame_id = 0
         self._browser_state = BrowserState([], [])
+        self._scan_page_javascript: str | None = None
 
     @property
     def is_open(self) -> bool:
@@ -164,17 +169,29 @@ class BrowserSession:
 
         return self._frame
 
-    async def _observe_current_page(self) -> str:
-        scan_page_path = Path(__file__).resolve().parent / "js" / "scan-page.js"
-        scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
+    async def _scan_page(self) -> str:
+        """Scan the page, following it if it navigates mid-scan."""
+        if not self._scan_page_javascript:
+            scan_page_path = Path(__file__).resolve().parent / "js" / "scan-page.js"
+            self._scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
 
-        frame = self._active_frame()
-        await frame.wait_for_load_state(
-            "domcontentloaded", timeout=self.LOAD_TIMEOUT_MS
-        )
-        await frame.wait_for_load_state("load", timeout=self.LOAD_TIMEOUT_MS)
-        raw_result = await frame.evaluate(scan_page_javascript)
-        result = json.loads(raw_result)
+        final_attempt = self.OBSERVE_ATTEMPTS - 1
+        for attempt in range(self.OBSERVE_ATTEMPTS):
+            try:
+                frame = self._active_frame()
+                await frame.wait_for_load_state("domcontentloaded", timeout=self.LOAD_TIMEOUT_MS)
+                await frame.wait_for_load_state("load", timeout=self.LOAD_TIMEOUT_MS)
+                return await frame.evaluate(self._scan_page_javascript)
+            except Exception as exception:
+                if attempt == final_attempt:
+                    raise
+                logger.info("Page navigated mid-scan, observing the new document: %s",exception)
+                self._reset_page_state(self._page)
+        raise RuntimeError("The page kept navigating and could not be observed")
+
+    async def _observe_current_page(self) -> str:
+        scan_result = await self._scan_page()
+        result = json.loads(scan_result)
 
         self._elements = []
         for index, raw_element in enumerate(result["elements"]):
