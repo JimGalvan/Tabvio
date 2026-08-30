@@ -15,13 +15,13 @@ from tabvio.config import (
     read_headless_setting,
     read_max_concurrent_runs,
 )
+from tabvio.runs import constants
 from tabvio.runs.exceptions import (
     RunCapacityReachedError,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
-from tabvio.runs import constants
 from tabvio.runs.models import RunEvent
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
