@@ -1,5 +1,5 @@
 (() => {
-    const MAX_ELEMENTS = 120;
+    const MAX_ELEMENTS = 500;
     const INTERACTIVE_TAGS = ['a','button','input','select','textarea','summary','label'];
     const INTERACTIVE_ROLES = ['button','link','checkbox','radio','tab','menuitem',
         'option','switch','combobox','searchbox','textbox'];
