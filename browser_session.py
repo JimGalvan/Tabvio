@@ -201,8 +201,8 @@ class BrowserSession:
         await self._collect_browser_state()
         return (
             f"{page_content}\n"
-            f"Current available tabs:{self._browser_state.tabs}\n"
-            f"Current available frames:{self._browser_state.frames}"
+            f"<available-tabs>{self._browser_state.tabs}\n</available-tabs>"
+            f"<available-iframes>{self._browser_state.frames}</available-iframes>"
         )
 
     def get_stored_element(self, element_index: int) -> Element | None:
