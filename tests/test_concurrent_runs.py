@@ -4,9 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs import constants
+from tabvio.runs.exceptions import RunCapacityReachedError
+from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
-from tabvio.runs.service import RunCapacityReachedError, RunContext, RunManager
+from tabvio.runs.service import RunManager
 
 
 class ClosingBrowser:
@@ -74,7 +76,7 @@ class ConcurrentRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self._manager._resuming_run_ids, set())
         self.assertLessEqual(
             len(self._manager._completed_frames),
-            self._manager.MAX_COMPLETED_FRAME_COUNT,
+            constants.MAX_COMPLETED_FRAME_COUNT,
         )
         self.assertTrue(all(browser.closed for browser in closed_browsers))
 

@@ -3,10 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
-from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs import constants
+from tabvio.runs.exceptions import RunNotFoundError
+from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
-from tabvio.runs.service import RunContext, RunManager, RunNotFoundError
+from tabvio.runs.service import RunManager
 
 
 class RecoveringBrowser:
@@ -31,9 +34,14 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
         self._repository = RunRepository(database_path)
         self._repository.initialize()
         self._manager = RunManager(self._repository)
-        self._manager.FRAME_CAPTURE_TIMEOUT_SECONDS = self.WAIT_TIMEOUT_SECONDS
-        self._manager.FRAME_RETRY_INTERVAL_SECONDS = self.TEST_INTERVAL_SECONDS
-        self._manager.FRAME_INTERVAL_SECONDS = self.TEST_INTERVAL_SECONDS
+        self._constant_patchers = [
+            patch.object(constants, "FRAME_CAPTURE_TIMEOUT_SECONDS", self.WAIT_TIMEOUT_SECONDS),
+            patch.object(constants, "FRAME_RETRY_INTERVAL_SECONDS", self.TEST_INTERVAL_SECONDS),
+            patch.object(constants, "FRAME_INTERVAL_SECONDS", self.TEST_INTERVAL_SECONDS),
+        ]
+        for constant_patcher in self._constant_patchers:
+            constant_patcher.start()
+            self.addCleanup(constant_patcher.stop)
 
     async def asyncTearDown(self) -> None:
         self._temporary_directory.cleanup()

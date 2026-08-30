@@ -15,15 +15,16 @@ from tabvio.config import (
     read_headless_setting,
     read_max_concurrent_runs,
 )
-from tabvio.runs.models import RunEvent
-from tabvio.runs.repository import RunRepository
-from tabvio.runs.service import (
+from tabvio.runs.exceptions import (
     RunCapacityReachedError,
-    RunManager,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
+from tabvio.runs import constants
+from tabvio.runs.models import RunEvent
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import RunManager
 from tabvio.server.schemas import (
     CreateRunRequest,
     FollowUpRequest,
@@ -42,12 +43,8 @@ repository = RunRepository(DATABASE_PATH)
 run_manager = RunManager(
     repository,
     headless=read_headless_setting(),
-    max_concurrent_runs=read_max_concurrent_runs(
-        RunManager.DEFAULT_MAX_CONCURRENT_RUNS
-    ),
-    follow_up_window_seconds=read_follow_up_window_seconds(
-        RunManager.DEFAULT_FOLLOW_UP_WINDOW_SECONDS
-    ),
+    max_concurrent_runs=read_max_concurrent_runs(constants.DEFAULT_MAX_CONCURRENT_RUNS),
+    follow_up_window_seconds=read_follow_up_window_seconds(constants.DEFAULT_FOLLOW_UP_WINDOW_SECONDS),
 )
 
 

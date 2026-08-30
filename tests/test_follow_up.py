@@ -4,14 +4,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs.exceptions import RunCapacityReachedError, RunNotReadyForFollowUpError
+from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
-from tabvio.runs.service import (
-    RunCapacityReachedError,
-    RunContext,
-    RunManager,
-    RunNotReadyForFollowUpError,
-)
+from tabvio.runs.service import RunManager
 
 
 class FollowUpBrowser:

@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from tabvio.runs.service import RunNotReadyForFollowUpError
+from tabvio.runs.exceptions import RunNotReadyForFollowUpError
 from tabvio.server import routes as app_module
 from tabvio.server.schemas import FollowUpRequest
 

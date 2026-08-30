@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-from tabvio.runs.service import RunCapacityReachedError
+from tabvio.runs.exceptions import RunCapacityReachedError
 from tabvio.server import routes as app_module
 from tabvio.server.schemas import CreateRunRequest
 

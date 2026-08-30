@@ -1,9 +1,16 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from tabvio.agent.runtime import AgentRuntime
 
 
 def utc_now() -> datetime:
@@ -50,6 +57,22 @@ class RunEvent(BaseModel):
     event_type: str
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
+
+
+@dataclass
+class RunContext:
+    run: RunRecord
+    runtime: AgentRuntime
+    events: list[RunEvent] = field(default_factory=list)
+    event_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
+    frame_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
+    latest_frame: bytes | None = None
+    frame_sequence: int = 0
+    next_event_sequence: int = 1
+    execution_task: asyncio.Task[None] | None = None
+    capture_task: asyncio.Task[None] | None = None
+    follow_up_expiry_task: asyncio.Task[None] | None = None
+    assistant_output_parts: list[str] = field(default_factory=list)
 
 
 class CreateRunRequest(BaseModel):
