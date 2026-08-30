@@ -3,6 +3,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
@@ -101,12 +102,24 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
-app.mount("/static", StaticFiles(directory=STATIC_DIRECTORY), name="static")
+class RevalidatedStaticFiles(StaticFiles):
+    """Serve static files that browsers must revalidate before reusing."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["cache-control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatedStaticFiles(directory=STATIC_DIRECTORY), name="static")
 
 
 @app.get("/", include_in_schema=False)
 async def get_viewer() -> FileResponse:
-    return FileResponse(STATIC_DIRECTORY / "index.html")
+    return FileResponse(
+        STATIC_DIRECTORY / "index.html",
+        headers={"cache-control": "no-cache"},
+    )
 
 
 @app.get("/api/health")

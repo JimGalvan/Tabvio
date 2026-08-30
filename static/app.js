@@ -74,6 +74,16 @@ let screenRequestInFlight = false;
 let displayedEventCount = 0;
 let streamedMessage = "";
 
+const exampleChips = document.querySelectorAll(".example-chip");
+
+exampleChips.forEach((chip) => {
+  chip.addEventListener("click", () => {
+    taskInput.value = chip.dataset.example || "";
+    taskInput.focus();
+    taskInput.setSelectionRange(taskInput.value.length, taskInput.value.length);
+  });
+});
+
 taskForm.addEventListener("submit", async (formEvent) => {
   formEvent.preventDefault();
   const task = taskInput.value.trim();
