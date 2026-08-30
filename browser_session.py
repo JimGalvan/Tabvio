@@ -48,9 +48,7 @@ class BrowserSession:
             self._playwright = await async_playwright().start()
 
         if self._browser is None:
-            self._browser = await self._playwright.chromium.launch(
-                headless=self._headless
-            )
+            self._browser = await self._playwright.chromium.launch(headless=self._headless)
             self._context = await self._browser.new_context(
                 viewport={"width": 1365, "height": 768}
             )
