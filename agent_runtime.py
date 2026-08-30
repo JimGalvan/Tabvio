@@ -5,6 +5,7 @@ from uuid import UUID
 
 from deepagents import create_deep_agent
 from langchain.agents.middleware import ModelRetryMiddleware, ModelFallbackMiddleware
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent_tools import build_browser_tools
@@ -48,6 +49,14 @@ class AgentRuntime:
 def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
     browser = BrowserSession(headless=headless)
 
+    fallback_model = ChatOpenAI(
+        model="gpt-5.6-terra",
+        use_responses_api=True,
+        reasoning={
+            "effort": "low",
+        },
+    )
+
     agent = create_deep_agent(
         model=strong_model,
         checkpointer=InMemorySaver(),
@@ -60,9 +69,7 @@ def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
                 backoff_factor=2.0,
                 initial_delay=1.0,
             ),
-            ModelFallbackMiddleware(
-                "openai:gpt-5.6-terra",
-            ),
+            ModelFallbackMiddleware(fallback_model)
         ],
     )
     config = {"configurable": {"thread_id": str(thread_id)}}
