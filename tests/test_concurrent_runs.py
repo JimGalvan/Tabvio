@@ -4,10 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from run_manager import RunCapacityReachedError, RunManager
-from run_manager_core import RunContext
-from run_models import RunRecord, RunStatus
-from run_repository import RunRepository
+from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import RunCapacityReachedError, RunContext, RunManager
 
 
 class ClosingBrowser:

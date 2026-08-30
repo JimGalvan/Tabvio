@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from uuid import uuid4
 
-from run_manager import RunManager
+from tabvio.runs.service import RunManager
 
 
 class InteractiveResumeTests(unittest.TestCase):

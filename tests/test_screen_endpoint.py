@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-import app as app_module
-from run_models import RunRecord
+from tabvio.runs.models import RunRecord
+from tabvio.server import routes as app_module
 
 
 class ScreenEndpointTests(unittest.IsolatedAsyncioTestCase):

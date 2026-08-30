@@ -3,18 +3,15 @@ from typing import Any
 
 from langchain_quickjs import CodeInterpreterMiddleware
 
-from agent_tools import build_page_navigator_tools
-from browser_session import BrowserSession
-from model_config import model
+from tabvio.agent.llm import model
+from tabvio.agent.prompts import PAGE_NAVIGATOR_PROMPT
+from tabvio.browser.session import BrowserSession
+from tabvio.browser.tools import build_page_navigator_tools
 
 warnings.filterwarnings(
     "ignore",
     message=r"The class `CodeInterpreterMiddleware` is in beta.*",
 )
-
-PAGE_NAVIGATOR_PROMPT = """
-Locate an off-screen target from a JSON list of up to five keywords. Use `eval` to call `tools.getTextInViewport({})`, compare lowercase text with the keywords, and call `tools.scroll({amount: 0.5})` until a keyword is found, scrolling stops changing position, or 12 scrolls complete. Report whether a keyword was found and the scroll count.
-"""
 
 
 def build_page_navigator(browser: BrowserSession) -> dict[str, Any]:

@@ -1,8 +1,6 @@
 import json
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -10,25 +8,29 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from run_manager import (
+from tabvio.config import (
+    DATABASE_PATH,
+    STATIC_DIRECTORY,
+    read_follow_up_window_seconds,
+    read_headless_setting,
+    read_max_concurrent_runs,
+)
+from tabvio.runs.models import RunEvent
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import (
     RunCapacityReachedError,
     RunManager,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
-from run_models import (
+from tabvio.server.schemas import (
     CreateRunRequest,
     FollowUpRequest,
-    RunEvent,
     RunResponse,
     UserInputRequest,
 )
-from run_repository import RunRepository
 
-BASE_DIRECTORY = Path(__file__).resolve().parent
-STATIC_DIRECTORY = BASE_DIRECTORY / "static"
-DATABASE_PATH = BASE_DIRECTORY / "data" / "tabvio.db"
 MJPEG_BOUNDARY = "tabvio-frame"
 SCREEN_CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -36,57 +38,16 @@ SCREEN_CACHE_HEADERS = {
 }
 
 
-def _read_headless_setting() -> bool:
-    configured_value = os.getenv("TABVIO_HEADLESS", "true").strip().lower()
-    return configured_value not in {"false", "0", "no"}
-
-
-def _read_max_concurrent_runs() -> int:
-    configured_value = os.getenv(
-        "TABVIO_MAX_CONCURRENT_RUNS",
-        str(RunManager.DEFAULT_MAX_CONCURRENT_RUNS),
-    )
-    try:
-        max_concurrent_runs = int(configured_value)
-    except ValueError as exception:
-        raise RuntimeError(
-            "TABVIO_MAX_CONCURRENT_RUNS must be an integer"
-        ) from exception
-
-    if max_concurrent_runs < 1:
-        raise RuntimeError(
-            "TABVIO_MAX_CONCURRENT_RUNS must be at least 1"
-        )
-
-    return max_concurrent_runs
-
-
-def _read_follow_up_window_seconds() -> int:
-    configured_value = os.getenv(
-        "TABVIO_FOLLOW_UP_WINDOW_SECONDS",
-        str(RunManager.DEFAULT_FOLLOW_UP_WINDOW_SECONDS),
-    )
-    try:
-        follow_up_window_seconds = int(configured_value)
-    except ValueError as exception:
-        raise RuntimeError(
-            "TABVIO_FOLLOW_UP_WINDOW_SECONDS must be an integer"
-        ) from exception
-
-    if follow_up_window_seconds < 1:
-        raise RuntimeError(
-            "TABVIO_FOLLOW_UP_WINDOW_SECONDS must be at least 1"
-        )
-
-    return follow_up_window_seconds
-
-
 repository = RunRepository(DATABASE_PATH)
 run_manager = RunManager(
     repository,
-    headless=_read_headless_setting(),
-    max_concurrent_runs=_read_max_concurrent_runs(),
-    follow_up_window_seconds=_read_follow_up_window_seconds(),
+    headless=read_headless_setting(),
+    max_concurrent_runs=read_max_concurrent_runs(
+        RunManager.DEFAULT_MAX_CONCURRENT_RUNS
+    ),
+    follow_up_window_seconds=read_follow_up_window_seconds(
+        RunManager.DEFAULT_FOLLOW_UP_WINDOW_SECONDS
+    ),
 )
 
 
@@ -102,6 +63,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
 class RevalidatedStaticFiles(StaticFiles):
     """Serve static files that browsers must revalidate before reusing."""
 
@@ -337,7 +300,5 @@ def _format_sse_event(event: RunEvent) -> str:
     event_data = event.model_dump(mode="json")
     serialized_data = json.dumps(event_data, ensure_ascii=False)
     return (
-        f"id: {event.sequence}\n"
-        f"event: {event.event_type}\n"
-        f"data: {serialized_data}\n\n"
+        f"id: {event.sequence}\nevent: {event.event_type}\ndata: {serialized_data}\n\n"
     )

@@ -24,4 +24,4 @@ EXPOSE 8000
 
 ENV TABVIO_HEADLESS=true
 
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn tabvio.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

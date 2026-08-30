@@ -4,6 +4,7 @@ import re
 MAX_PAGE_TEXT_CHARS = 3_000
 MAX_ELEMENTS = 100
 
+
 class Helpers:
     @staticmethod
     def truncate(text: str, max_chars: int) -> tuple[str, bool]:
@@ -41,11 +42,7 @@ class Helpers:
         visible_elements = elements[:MAX_ELEMENTS]
 
         lines = [
-            (
-                f'<page url="{url}" '
-                f'title="{title}" '
-                f'pages_below="{pages_below:.1f}">'
-            ),
+            (f'<page url="{url}" title="{title}" pages_below="{pages_below:.1f}">'),
             "",
             "Interactive elements:",
         ]

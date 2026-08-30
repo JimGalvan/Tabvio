@@ -11,8 +11,8 @@ from playwright.async_api import (
 )
 from playwright.async_api import Frame as PlaywrightFrame
 
-from entities import BrowserState, Element, Frame, Tab
-from helpers import Helpers
+from tabvio.browser.formatting import Helpers
+from tabvio.browser.models import BrowserState, Element, Frame, Tab
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,9 @@ class BrowserSession:
             self._playwright = await async_playwright().start()
 
         if self._browser is None:
-            self._browser = await self._playwright.chromium.launch(headless=self._headless)
+            self._browser = await self._playwright.chromium.launch(
+                headless=self._headless
+            )
             self._context = await self._browser.new_context(
                 viewport={"width": 1365, "height": 768}
             )
@@ -92,9 +94,7 @@ class BrowserSession:
             self._reset_page_state(pages[-1] if pages else None)
 
         self._tabs_by_id = {
-            tab_id: page
-            for tab_id, page in self._tabs_by_id.items()
-            if page in pages
+            tab_id: page for tab_id, page in self._tabs_by_id.items() if page in pages
         }
 
         registered_pages = list(self._tabs_by_id.values())
@@ -171,7 +171,7 @@ class BrowserSession:
         """Scan the page, following it if it navigates mid-scan."""
         if not self._scan_page_javascript:
             scan_page_path = (
-                Path(__file__).resolve().parent / "agent_scripts" / "scan-page.js"
+                Path(__file__).resolve().parent / "scripts" / "scan-page.js"
             )
             self._scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
 
@@ -179,13 +179,17 @@ class BrowserSession:
         for attempt in range(self.OBSERVE_ATTEMPTS):
             try:
                 frame = self._active_frame()
-                await frame.wait_for_load_state("domcontentloaded", timeout=self.LOAD_TIMEOUT_MS)
+                await frame.wait_for_load_state(
+                    "domcontentloaded", timeout=self.LOAD_TIMEOUT_MS
+                )
                 await frame.wait_for_load_state("load", timeout=self.LOAD_TIMEOUT_MS)
                 return await frame.evaluate(self._scan_page_javascript)
             except Exception as exception:
                 if attempt == final_attempt:
                     raise
-                logger.info("Page navigated mid-scan, observing the new document: %s",exception)
+                logger.info(
+                    "Page navigated mid-scan, observing the new document: %s", exception
+                )
                 self._reset_page_state(self._page)
         raise RuntimeError("The page kept navigating and could not be observed")
 
@@ -217,7 +221,7 @@ class BrowserSession:
             raise RuntimeError("No page is open")
 
         javascript_path = (
-            Path(__file__).resolve().parent / "agent_scripts" / "get-text-in-viewport.js"
+            Path(__file__).resolve().parent / "scripts" / "get-text-in-viewport.js"
         )
         javascript = javascript_path.read_text(encoding="utf-8")
         return await self._active_frame().evaluate(javascript)
@@ -238,7 +242,9 @@ class BrowserSession:
         )
         return f"Scrolled to {position['current']} of {position['maximum']} pixels"
 
-    async def _page_coordinates(self, horizontal: float, vertical: float) -> tuple[float, float]:
+    async def _page_coordinates(
+        self, horizontal: float, vertical: float
+    ) -> tuple[float, float]:
         if self._page is None:
             raise RuntimeError("No page is open")
 

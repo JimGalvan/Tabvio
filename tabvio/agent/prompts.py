@@ -1,19 +1,4 @@
-import logging
-from dataclasses import dataclass
-from typing import Any
-from uuid import UUID
-
-from deepagents import create_deep_agent
-from langchain.agents.middleware import ModelRetryMiddleware, ModelFallbackMiddleware
-from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
-
-from agent_tools import build_browser_tools
-from browser_session import BrowserSession
-from model_config import strong_model
-from sub_agents import build_page_navigator
-
-logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+"""System prompts used by Tabvio agents."""
 
 SYSTEM_PROMPT = """
 You are a web browser agent. Follow an Observe -> Decide -> Act loop until the user's task is verified complete.
@@ -38,39 +23,6 @@ If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic"
 Always observe after successful execution. Treat only the resulting page state as proof. Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, report the blocker instead of guessing.
 """
 
-
-@dataclass
-class AgentRuntime:
-    agent: Any
-    config: dict[str, dict[str, str]]
-    browser: BrowserSession
-
-
-def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
-    browser = BrowserSession(headless=headless)
-
-    fallback_model = ChatOpenAI(
-        model="gpt-5.6-terra",
-        use_responses_api=True,
-        reasoning={
-            "effort": "low",
-        },
-    )
-
-    agent = create_deep_agent(
-        model=strong_model,
-        checkpointer=InMemorySaver(),
-        system_prompt=SYSTEM_PROMPT,
-        tools=build_browser_tools(browser),
-        subagents=[build_page_navigator(browser)],
-        middleware=[
-            ModelRetryMiddleware(
-                max_retries=3,
-                backoff_factor=2.0,
-                initial_delay=1.0,
-            ),
-            ModelFallbackMiddleware(fallback_model)
-        ],
-    )
-    config = {"configurable": {"thread_id": str(thread_id)}}
-    return AgentRuntime(agent=agent, config=config, browser=browser)
+PAGE_NAVIGATOR_PROMPT = """
+Locate an off-screen target from a JSON list of up to five keywords. Use `eval` to call `tools.getTextInViewport({})`, compare lowercase text with the keywords, and call `tools.scroll({amount: 0.5})` until a keyword is found, scrolling stops changing position, or 12 scrolls complete. Report whether a keyword was found and the scroll count.
+"""

@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from run_manager import RunManager
-from run_models import RunRecord, RunStatus
-from run_repository import RunRepository
+from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import RunManager
 
 
 class TerminalCancellationTests(unittest.IsolatedAsyncioTestCase):

@@ -4,7 +4,7 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
-from run_models import RunEvent, RunRecord, RunStatus
+from tabvio.runs.models import RunEvent, RunRecord, RunStatus
 
 
 class RunRepository:
@@ -46,8 +46,7 @@ class RunRepository:
                 """
             )
             run_columns = {
-                row["name"]
-                for row in connection.execute("PRAGMA table_info(runs)")
+                row["name"] for row in connection.execute("PRAGMA table_info(runs)")
             }
             if "follow_up_expires_at" not in run_columns:
                 connection.execute(

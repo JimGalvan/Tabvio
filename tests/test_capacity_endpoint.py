@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-import app as app_module
-from run_manager import RunCapacityReachedError
-from run_models import CreateRunRequest
+from tabvio.runs.service import RunCapacityReachedError
+from tabvio.server import routes as app_module
+from tabvio.server.schemas import CreateRunRequest
 
 
 class CapacityEndpointTests(unittest.IsolatedAsyncioTestCase):
@@ -20,9 +20,7 @@ class CapacityEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
         ):
             with self.assertRaises(HTTPException) as raised_exception:
-                await app_module.create_run(
-                    CreateRunRequest(task="Open example.com")
-                )
+                await app_module.create_run(CreateRunRequest(task="Open example.com"))
 
         self.assertEqual(raised_exception.exception.status_code, 429)
 

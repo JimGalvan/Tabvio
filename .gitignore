@@ -3,3 +3,7 @@ __pycache__/
 /.venv/
 /data/
 /*.egg-info/
+/.idea/
+/.pytest_cache/
+/.ruff_cache/
+**/.ipynb_checkpoints/

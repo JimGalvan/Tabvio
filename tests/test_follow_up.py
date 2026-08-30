@@ -4,10 +4,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from run_manager import RunCapacityReachedError, RunManager
-from run_manager_core import RunContext, RunNotReadyForFollowUpError
-from run_models import RunRecord, RunStatus
-from run_repository import RunRepository
+from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import (
+    RunCapacityReachedError,
+    RunContext,
+    RunManager,
+    RunNotReadyForFollowUpError,
+)
 
 
 class FollowUpBrowser:
@@ -34,9 +38,7 @@ class FollowUpAgent:
 
     async def aget_state(self, config):
         output = f"Result {len(self.inputs)}"
-        return SimpleNamespace(
-            values={"messages": [SimpleNamespace(content=output)]}
-        )
+        return SimpleNamespace(values={"messages": [SimpleNamespace(content=output)]})
 
 
 class FollowUpTests(unittest.IsolatedAsyncioTestCase):

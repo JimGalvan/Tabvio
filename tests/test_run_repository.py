@@ -3,8 +3,8 @@ import unittest
 from datetime import UTC
 from pathlib import Path
 
-from run_models import RunEvent, RunRecord, RunStatus, utc_now
-from run_repository import RunRepository
+from tabvio.runs.models import RunEvent, RunRecord, RunStatus, utc_now
+from tabvio.runs.repository import RunRepository
 
 
 class RunRepositoryTests(unittest.TestCase):

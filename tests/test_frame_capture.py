@@ -4,10 +4,9 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from run_manager import RunManager
-from run_manager_core import RunContext, RunNotFoundError
-from run_models import RunRecord, RunStatus
-from run_repository import RunRepository
+from tabvio.runs.models import RunRecord, RunStatus
+from tabvio.runs.repository import RunRepository
+from tabvio.runs.service import RunContext, RunManager, RunNotFoundError
 
 
 class RecoveringBrowser:
@@ -70,10 +69,12 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(self._manager.get_latest_frame(run.id))
         with self.assertRaises(RunNotFoundError):
-            self._manager.get_latest_frame(RunRecord(
-                task="Unknown run",
-                max_runtime_seconds=300,
-            ).id)
+            self._manager.get_latest_frame(
+                RunRecord(
+                    task="Unknown run",
+                    max_runtime_seconds=300,
+                ).id
+            )
 
     async def _wait_for_latest_frame(self, context: RunContext) -> None:
         while context.latest_frame is None:

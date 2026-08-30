@@ -6,7 +6,7 @@ from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field, model_validator
 
-from browser_session import BrowserSession
+from tabvio.browser.session import BrowserSession
 
 
 class BrowserStep(BaseModel):
@@ -34,15 +34,21 @@ def _publish_custom_event(event_type: str, payload: dict[str, Any]) -> None:
 def _validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
     for step in steps[:-1]:
         if step.action in {"click", "select", "press"}:
-            raise ValueError(f"{step.action}[{step.element_index}] must be final; observe before planning more actions")
+            raise ValueError(
+                f"{step.action}[{step.element_index}] must be final; observe before planning more actions"
+            )
 
     for step in steps:
         element = browser.get_stored_element(step.element_index)
         if element is None:
-            raise ValueError(f"element [{step.element_index}] is not in the latest observation")
+            raise ValueError(
+                f"element [{step.element_index}] is not in the latest observation"
+            )
 
         if step.action == "fill" and element.tag.lower() not in {"input", "textarea"}:
-            raise ValueError(f"fill[{step.element_index}] targets <{element.tag}>, not an input or textarea")
+            raise ValueError(
+                f"fill[{step.element_index}] targets <{element.tag}>, not an input or textarea"
+            )
 
 
 def _element_label(browser: BrowserSession, element_index: int) -> str:
@@ -110,13 +116,15 @@ def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
         try:
             _validate_plan(browser, normalized_steps)
         except ValueError as exception:
-            return json.dumps({
+            return json.dumps(
+                {
                     "ok": False,
                     "kind": "validation_error",
                     "completed": [],
                     "failed": None,
                     "error": str(exception),
-                })
+                }
+            )
 
         completed: list[str] = []
         for step in normalized_steps:
@@ -141,15 +149,19 @@ def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
                 completed.append(step_reference)
                 _publish_custom_event("browser.action.completed", event_payload)
             except Exception as exception:
-                _publish_custom_event("browser.action.failed",
-                                      {**event_payload, "error": str(exception)},)
-                return json.dumps({
+                _publish_custom_event(
+                    "browser.action.failed",
+                    {**event_payload, "error": str(exception)},
+                )
+                return json.dumps(
+                    {
                         "ok": False,
                         "kind": "execution_error",
                         "completed": completed,
                         "failed": step_reference,
                         "error": str(exception),
-                    })
+                    }
+                )
 
         return json.dumps(
             {"ok": True, "kind": "success", "completed": completed, "failed": None}

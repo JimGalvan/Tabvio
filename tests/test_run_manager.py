@@ -1,6 +1,6 @@
 import unittest
 
-from run_manager import RunManager
+from tabvio.runs.service import RunManager
 
 
 class Message:

@@ -2,8 +2,12 @@
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-py-modules = ["model_config"]
+[tool.setuptools.packages.find]
+include = ["tabvio*"]
+
+[tool.setuptools.package-data]
+"tabvio.browser" = ["scripts/*.js"]
+"tabvio.server" = ["static/*"]
 
 [project]
 name = "tabvio"
@@ -44,5 +48,6 @@ lint.ignore = ["T201", "E501", "UP006", "UP007", "E402"]
 dev = [
     "ipykernel>=7.3.0",
     "notebook>=7.6.2",
+    "pytest>=8.0.0,<9.0.0",
     "ruff>=0.15.17",
 ]

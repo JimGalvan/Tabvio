@@ -2,7 +2,7 @@ import unittest
 
 from langchain_core.messages import AIMessageChunk
 
-from run_manager import RunManager
+from tabvio.runs.service import RunManager
 
 
 class StreamMessageChunkTests(unittest.TestCase):

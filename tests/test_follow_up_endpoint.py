@@ -4,9 +4,9 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-import app as app_module
-from run_manager import RunNotReadyForFollowUpError
-from run_models import FollowUpRequest
+from tabvio.runs.service import RunNotReadyForFollowUpError
+from tabvio.server import routes as app_module
+from tabvio.server.schemas import FollowUpRequest
 
 
 class FollowUpEndpointTests(unittest.IsolatedAsyncioTestCase):
