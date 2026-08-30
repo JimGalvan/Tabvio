@@ -60,6 +60,12 @@ def _element_label(browser: BrowserSession, element_index: int) -> str:
 def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
     """Build the browser tools for the main agent, bound to one session."""
 
+    # TODO: put this in a reusable place
+    @tool
+    async def get_text_in_viewport() -> str:
+        """Return text visible in the current browser viewport."""
+        return await browser.get_text_in_viewport()
+
     @tool
     async def navigate_and_observe(url: str) -> str:
         """Navigate to a URL and return the resulting page snapshot."""
