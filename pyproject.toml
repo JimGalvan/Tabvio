@@ -42,5 +42,7 @@ lint.ignore = ["T201", "E501", "UP006", "UP007", "E402"]
 
 [dependency-groups]
 dev = [
+    "ipykernel>=7.3.0",
+    "notebook>=7.6.2",
     "ruff>=0.15.17",
 ]

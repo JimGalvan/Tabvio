@@ -70,19 +70,19 @@ class Helpers:
         else:
             lines.append("(none)")
 
-        page_text = Helpers.normalize_page_text(data.get("pageText", ""))
-        page_text, truncated = Helpers.truncate(page_text, MAX_PAGE_TEXT_CHARS)
+        # page_text = Helpers.normalize_page_text(data.get("pageText", ""))
+        # page_text, truncated = Helpers.truncate(page_text, MAX_PAGE_TEXT_CHARS)
+        #
+        # lines.extend(
+        #     [
+        #         "",
+        #         "Page text:",
+        #         page_text or "(none)",
+        #     ]
+        # )
 
-        lines.extend(
-            [
-                "",
-                "Page text:",
-                page_text or "(none)",
-            ]
-        )
-
-        if truncated:
-            lines.append("\n[Page text truncated]")
+        # if truncated:
+        #     lines.append("\n[Page text truncated]")
 
         lines.extend(
             [
