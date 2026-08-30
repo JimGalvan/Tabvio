@@ -170,7 +170,9 @@ class BrowserSession:
     async def _scan_page(self) -> str:
         """Scan the page, following it if it navigates mid-scan."""
         if not self._scan_page_javascript:
-            scan_page_path = Path(__file__).resolve().parent / "js" / "scan-page.js"
+            scan_page_path = (
+                Path(__file__).resolve().parent / "agent_scripts" / "scan-page.js"
+            )
             self._scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
 
         final_attempt = self.OBSERVE_ATTEMPTS - 1
@@ -215,7 +217,7 @@ class BrowserSession:
             raise RuntimeError("No page is open")
 
         javascript_path = (
-            Path(__file__).resolve().parent / "js" / "get-text-in-viewport.js"
+            Path(__file__).resolve().parent / "agent_scripts" / "get-text-in-viewport.js"
         )
         javascript = javascript_path.read_text(encoding="utf-8")
         return await self._active_frame().evaluate(javascript)
