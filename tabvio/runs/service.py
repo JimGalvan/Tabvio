@@ -47,12 +47,17 @@ class RunManager:
             self,
             task: str,
             max_runtime_seconds: int,
+            user_id: UUID | None = None,
     ) -> RunRecord:
         async with self._manager_lock:
             if len(self._active_run_ids) >= self._max_concurrent_runs:
                 raise RunCapacityReachedError("The demo is currently at capacity. Try again shortly.")
 
-            run = RunRecord(task=task.strip(), max_runtime_seconds=max_runtime_seconds)
+            run = RunRecord(
+                task=task.strip(),
+                max_runtime_seconds=max_runtime_seconds,
+                user_id=user_id,
+            )
             runtime = build_agent_runtime(run.thread_id, headless=self._headless)
             context = RunContext(run=run, runtime=runtime)
             self._contexts[run.id] = context

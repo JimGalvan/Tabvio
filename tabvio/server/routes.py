@@ -5,9 +5,18 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from tabvio.auth import routes as auth_routes
+from tabvio.auth.models import User
+from tabvio.auth.sessions import (
+    AuthKitSessionMiddleware,
+    CurrentUser,
+    read_session_state,
+    user_repository,
+    verify_auth_configuration,
+)
 from tabvio.config import (
     DATABASE_PATH,
     STATIC_DIRECTORY,
@@ -22,7 +31,7 @@ from tabvio.runs.exceptions import (
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
-from tabvio.runs.models import RunEvent
+from tabvio.runs.models import RunEvent, RunRecord
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
 from tabvio.server.schemas import (
@@ -50,7 +59,9 @@ run_manager = RunManager(
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    verify_auth_configuration()
     repository.initialize()
+    user_repository.initialize()
     yield
     await run_manager.shutdown()
 
@@ -60,6 +71,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(AuthKitSessionMiddleware)
+app.include_router(auth_routes.router)
 
 
 class RevalidatedStaticFiles(StaticFiles):
@@ -75,7 +89,10 @@ app.mount("/static", RevalidatedStaticFiles(directory=STATIC_DIRECTORY), name="s
 
 
 @app.get("/", include_in_schema=False)
-async def get_viewer() -> FileResponse:
+async def get_viewer(request: Request) -> Response:
+    if read_session_state(request) is None:
+        return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+
     return FileResponse(
         STATIC_DIRECTORY / "index.html",
         headers={"cache-control": "no-cache"},
@@ -87,16 +104,40 @@ async def get_health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _require_owned_run(run_id: UUID, user: User) -> RunRecord:
+    """Load a run the signed-in account owns.
+
+    Someone else's run is reported as missing rather than forbidden, so a run
+    identifier cannot be used to confirm that a run exists.
+    """
+    try:
+        run = run_manager.get_run(run_id)
+    except RunNotFoundError as exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exception),
+        ) from exception
+
+    if run.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run {run_id} was not found",
+        )
+
+    return run
+
+
 @app.post(
     "/api/runs",
     response_model=RunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def create_run(request: CreateRunRequest) -> RunResponse:
+async def create_run(request: CreateRunRequest, user: CurrentUser) -> RunResponse:
     try:
         run = await run_manager.create_run(
             task=request.task,
             max_runtime_seconds=request.max_runtime_seconds,
+            user_id=user.id,
         )
     except RunCapacityReachedError as exception:
         raise HTTPException(
@@ -108,31 +149,18 @@ async def create_run(request: CreateRunRequest) -> RunResponse:
 
 
 @app.get("/api/runs/{run_id}", response_model=RunResponse)
-async def get_run(run_id: UUID) -> RunResponse:
-    try:
-        run = run_manager.get_run(run_id)
-    except RunNotFoundError as exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exception),
-        ) from exception
-
-    return _build_run_response(run)
+async def get_run(run_id: UUID, user: CurrentUser) -> RunResponse:
+    return _build_run_response(_require_owned_run(run_id, user))
 
 
 @app.get("/api/runs/{run_id}/stream")
 async def stream_run_events(
     run_id: UUID,
     request: Request,
+    user: CurrentUser,
     last_event_id: str | None = Header(default=None),
 ) -> StreamingResponse:
-    try:
-        run_manager.get_run(run_id)
-    except RunNotFoundError as exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exception),
-        ) from exception
+    _require_owned_run(run_id, user)
 
     after_sequence = _parse_last_event_id(last_event_id)
 
@@ -154,7 +182,9 @@ async def stream_run_events(
 
 
 @app.get("/api/runs/{run_id}/screen.jpg")
-async def get_run_screen(run_id: UUID) -> Response:
+async def get_run_screen(run_id: UUID, user: CurrentUser) -> Response:
+    _require_owned_run(run_id, user)
+
     try:
         frame = run_manager.get_latest_frame(run_id)
     except RunNotFoundError as exception:
@@ -177,14 +207,8 @@ async def get_run_screen(run_id: UUID) -> Response:
 
 
 @app.get("/api/runs/{run_id}/screen.mjpeg")
-async def stream_run_screen(run_id: UUID) -> StreamingResponse:
-    try:
-        run_manager.get_run(run_id)
-    except RunNotFoundError as exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exception),
-        ) from exception
+async def stream_run_screen(run_id: UUID, user: CurrentUser) -> StreamingResponse:
+    _require_owned_run(run_id, user)
 
     async def frame_stream() -> AsyncIterator[bytes]:
         async for frame in run_manager.stream_frames(run_id):
@@ -206,7 +230,10 @@ async def stream_run_screen(run_id: UUID) -> StreamingResponse:
 async def submit_run_input(
     run_id: UUID,
     request: UserInputRequest,
+    user: CurrentUser,
 ) -> RunResponse:
+    _require_owned_run(run_id, user)
+
     try:
         run = await run_manager.submit_input(run_id, request.answer)
     except RunNotFoundError as exception:
@@ -224,7 +251,9 @@ async def submit_run_input(
 
 
 @app.post("/api/runs/{run_id}/cancel", response_model=RunResponse)
-async def cancel_run(run_id: UUID) -> RunResponse:
+async def cancel_run(run_id: UUID, user: CurrentUser) -> RunResponse:
+    _require_owned_run(run_id, user)
+
     try:
         run = await run_manager.cancel_run(run_id)
     except RunNotFoundError as exception:
@@ -240,7 +269,10 @@ async def cancel_run(run_id: UUID) -> RunResponse:
 async def submit_follow_up(
     run_id: UUID,
     request: FollowUpRequest,
+    user: CurrentUser,
 ) -> RunResponse:
+    _require_owned_run(run_id, user)
+
     try:
         run = await run_manager.submit_follow_up(run_id, request.task)
     except RunNotFoundError as exception:
@@ -258,7 +290,9 @@ async def submit_follow_up(
 
 
 @app.post("/api/runs/{run_id}/end", response_model=RunResponse)
-async def end_run_session(run_id: UUID) -> RunResponse:
+async def end_run_session(run_id: UUID, user: CurrentUser) -> RunResponse:
+    _require_owned_run(run_id, user)
+
     try:
         run = await run_manager.end_session(run_id)
     except RunNotFoundError as exception:

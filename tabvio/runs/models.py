@@ -40,6 +40,7 @@ class RunStatus(StrEnum):
 class RunRecord(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     thread_id: UUID = Field(default_factory=uuid4)
+    user_id: UUID | None = None
     task: str
     status: RunStatus = RunStatus.QUEUED
     max_runtime_seconds: int

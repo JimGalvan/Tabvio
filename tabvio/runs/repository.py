@@ -20,6 +20,7 @@ class RunRepository:
                 CREATE TABLE IF NOT EXISTS runs (
                     id TEXT PRIMARY KEY,
                     thread_id TEXT NOT NULL,
+                    user_id TEXT,
                     task TEXT NOT NULL,
                     status TEXT NOT NULL,
                     max_runtime_seconds INTEGER NOT NULL,
@@ -52,6 +53,13 @@ class RunRepository:
                 connection.execute(
                     "ALTER TABLE runs ADD COLUMN follow_up_expires_at TEXT"
                 )
+            if "user_id" not in run_columns:
+                # Runs recorded before sign-in existed stay unowned, which
+                # leaves them unreachable rather than visible to everyone.
+                connection.execute("ALTER TABLE runs ADD COLUMN user_id TEXT")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_runs_user_id ON runs(user_id)"
+            )
             connection.commit()
 
     def save_run(self, run: RunRecord) -> None:
@@ -61,6 +69,7 @@ class RunRepository:
                 INSERT INTO runs (
                     id,
                     thread_id,
+                    user_id,
                     task,
                     status,
                     max_runtime_seconds,
@@ -69,9 +78,10 @@ class RunRepository:
                     follow_up_expires_at,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     thread_id = excluded.thread_id,
+                    user_id = excluded.user_id,
                     task = excluded.task,
                     status = excluded.status,
                     max_runtime_seconds = excluded.max_runtime_seconds,
@@ -83,6 +93,7 @@ class RunRepository:
                 (
                     str(run.id),
                     str(run.thread_id),
+                    str(run.user_id) if run.user_id is not None else None,
                     run.task,
                     run.status.value,
                     run.max_runtime_seconds,
@@ -112,6 +123,7 @@ class RunRepository:
         return RunRecord(
             id=row["id"],
             thread_id=row["thread_id"],
+            user_id=row["user_id"],
             task=row["task"],
             status=RunStatus(row["status"]),
             max_runtime_seconds=row["max_runtime_seconds"],

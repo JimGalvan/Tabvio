@@ -93,6 +93,36 @@ a:focus-visible {
   transform: rotate(-30deg);
 }
 
+.masthead-side {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--utility-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.account-email {
+  color: var(--ink-soft);
+}
+
+.account-link {
+  color: var(--ink-soft);
+  text-decoration: none;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-link:hover {
+  color: var(--ink);
+}
+
 .run-state {
   display: flex;
   align-items: center;

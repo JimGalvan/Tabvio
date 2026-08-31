@@ -29,6 +29,7 @@ const followUpForm = document.querySelector("#follow-up-form");
 const followUpInput = document.querySelector("#follow-up-input");
 const followUpMessage = document.querySelector("#follow-up-message");
 const endSessionButton = document.querySelector("#end-session-button");
+const accountEmail = document.querySelector("#account-email");
 
 const eventTypes = [
   "run.created",
@@ -293,6 +294,10 @@ async function refreshBrowserScreen(scheduleNextRefresh = true) {
     if (response.status === 204) {
       return;
     }
+    if (response.status === 401) {
+      returnToSignIn();
+      return;
+    }
     if (!response.ok) {
       throw new Error(`Live view returned ${response.status}`);
     }
@@ -542,9 +547,34 @@ function capitalize(value) {
 }
 
 async function readResponseBody(response) {
+  if (response.status === 401) {
+    returnToSignIn();
+    throw new Error("Your session expired. Redirecting to sign-in.");
+  }
+
   try {
     return await response.json();
   } catch (error) {
     return {};
   }
 }
+
+function returnToSignIn() {
+  window.location.href = "/login";
+}
+
+async function loadSignedInAccount() {
+  try {
+    const response = await fetch("/api/auth/me");
+    if (!response.ok) {
+      return;
+    }
+
+    const account = await response.json();
+    accountEmail.textContent = account.email;
+  } catch (error) {
+    // The masthead simply stays blank if the account cannot be loaded.
+  }
+}
+
+void loadSignedInAccount();
