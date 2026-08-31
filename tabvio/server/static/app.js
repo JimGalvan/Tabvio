@@ -30,6 +30,9 @@ const followUpInput = document.querySelector("#follow-up-input");
 const followUpMessage = document.querySelector("#follow-up-message");
 const endSessionButton = document.querySelector("#end-session-button");
 const accountEmail = document.querySelector("#account-email");
+const historyList = document.querySelector("#history-list");
+const historyEmpty = document.querySelector("#history-empty");
+const historyRefresh = document.querySelector("#history-refresh");
 
 const eventTypes = [
   "run.created",
@@ -107,6 +110,7 @@ taskForm.addEventListener("submit", async (formEvent) => {
     }
 
     openRun(responseBody);
+    void loadRunHistory();
   } catch (error) {
     formMessage.textContent = error.message;
     setFormBusy(false);
@@ -504,6 +508,7 @@ function formatFollowUpDeadline(expiresAt) {
 
 function completeRun(status) {
   updateStatusWithoutCompletion(status);
+  void loadRunHistory();
   cancelButton.disabled = true;
   answerPanel.hidden = true;
   followUpPanel.hidden = true;
@@ -560,7 +565,7 @@ async function readResponseBody(response) {
 }
 
 function returnToSignIn() {
-  window.location.href = "/login";
+  window.location.href = "/login?next=%2Fapp";
 }
 
 async function loadSignedInAccount() {
@@ -577,4 +582,116 @@ async function loadSignedInAccount() {
   }
 }
 
+const historyStatusLabels = {
+  queued: "Queued",
+  running: "Running",
+  waiting_for_input: "Needs you",
+  ready_for_follow_up: "Open",
+  succeeded: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  timed_out: "Timed out",
+};
+
+async function loadRunHistory() {
+  try {
+    const response = await fetch("/api/runs");
+    if (!response.ok) {
+      if (response.status === 401) {
+        returnToSignIn();
+      }
+      return;
+    }
+
+    const body = await response.json();
+    renderRunHistory(body.runs || []);
+  } catch (error) {
+    // Leave whatever was already listed rather than blanking the panel.
+  }
+}
+
+function renderRunHistory(runs) {
+  historyEmpty.hidden = runs.length > 0;
+  historyList.replaceChildren();
+
+  for (const run of runs) {
+    const item = document.createElement("li");
+    item.className = "history-item";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-entry";
+    button.addEventListener("click", () => {
+      void openRunFromHistory(run.id);
+    });
+
+    const task = document.createElement("span");
+    task.className = "history-task";
+    task.textContent = run.task;
+
+    const meta = document.createElement("span");
+    meta.className = "history-meta";
+    const status = document.createElement("span");
+    status.className = `history-status ${run.status}`;
+    status.textContent = historyStatusLabels[run.status] || run.status;
+    const started = document.createElement("span");
+    started.textContent = formatStartTime(run.created_at);
+    meta.append(status, started);
+
+    button.append(task, meta);
+    item.append(button);
+    historyList.append(item);
+  }
+}
+
+function formatStartTime(createdAt) {
+  const startedAt = new Date(createdAt);
+  const startedToday =
+    startedAt.toDateString() === new Date().toDateString();
+
+  return startedToday
+    ? startedAt.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})
+    : startedAt.toLocaleDateString([], {month: "short", day: "numeric"});
+}
+
+async function openRunFromHistory(runId) {
+  try {
+    const response = await fetch(`/api/runs/${runId}`);
+    const responseBody = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(responseBody.detail || "The run could not be opened");
+    }
+
+    openRun(responseBody);
+    if (responseBody.run.final_output) {
+      resultOutput.textContent = responseBody.run.final_output;
+      resultPanel.hidden = false;
+    }
+  } catch (error) {
+    formMessage.textContent = error.message;
+  }
+}
+
+historyRefresh.addEventListener("click", () => {
+  void loadRunHistory();
+});
+
+function restorePendingTask() {
+  // Written by the landing page before it sent the visitor to sign up.
+  try {
+    const pendingTask = window.sessionStorage.getItem("tabvio.pending-task");
+    if (!pendingTask) {
+      return;
+    }
+
+    window.sessionStorage.removeItem("tabvio.pending-task");
+    taskInput.value = pendingTask;
+    taskInput.focus();
+  } catch (error) {
+    // Storage can be unavailable; the task box simply starts empty.
+  }
+}
+
+restorePendingTask();
 void loadSignedInAccount();
+void loadRunHistory();

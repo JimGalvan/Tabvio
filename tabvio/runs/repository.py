@@ -120,6 +120,24 @@ class RunRepository:
         if row is None:
             return None
 
+        return self._build_run(row)
+
+    def list_runs_for_user(self, user_id: UUID, limit: int) -> list[RunRecord]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM runs
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (str(user_id), limit),
+            ).fetchall()
+
+        return [self._build_run(row) for row in rows]
+
+    def _build_run(self, row: sqlite3.Row) -> RunRecord:
         return RunRecord(
             id=row["id"],
             thread_id=row["thread_id"],

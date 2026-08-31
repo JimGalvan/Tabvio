@@ -49,6 +49,10 @@ HTTP. Session cookies are marked `Secure` under the same rule.
 string. Generate one with
 `uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
 
+`/` is a public landing page. Signing in lands on the dashboard at `/app`,
+which holds the task form and your run history. A task typed on the landing
+page is carried through sign-up and waits in the dashboard.
+
 Every run belongs to the account that started it, and runs recorded before
 accounts existed belong to nobody, so they are no longer reachable.
 

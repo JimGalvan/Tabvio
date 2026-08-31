@@ -89,6 +89,20 @@ class FollowUpRequest(BaseModel):
     task: str = Field(min_length=1, max_length=10_000)
 
 
+class RunSummary(BaseModel):
+    """A run as it appears in the dashboard history list."""
+
+    id: UUID
+    task: str
+    status: RunStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class RunListResponse(BaseModel):
+    runs: list[RunSummary]
+
+
 class RunResponse(BaseModel):
     run: RunRecord
     stream_url: str

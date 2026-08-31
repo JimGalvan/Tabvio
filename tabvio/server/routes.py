@@ -37,7 +37,9 @@ from tabvio.runs.service import RunManager
 from tabvio.server.schemas import (
     CreateRunRequest,
     FollowUpRequest,
+    RunListResponse,
     RunResponse,
+    RunSummary,
     UserInputRequest,
 )
 
@@ -88,15 +90,25 @@ class RevalidatedStaticFiles(StaticFiles):
 app.mount("/static", RevalidatedStaticFiles(directory=STATIC_DIRECTORY), name="static")
 
 
+def _serve_page(name: str) -> FileResponse:
+    return FileResponse(
+        STATIC_DIRECTORY / name,
+        headers={"cache-control": "no-cache"},
+    )
+
+
 @app.get("/", include_in_schema=False)
-async def get_viewer(request: Request) -> Response:
+async def get_landing_page() -> FileResponse:
+    """The public front door. Nothing here reads a run, so it needs no session."""
+    return _serve_page("index.html")
+
+
+@app.get("/app", include_in_schema=False)
+async def get_dashboard(request: Request) -> Response:
     if read_session_state(request) is None:
         return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
 
-    return FileResponse(
-        STATIC_DIRECTORY / "index.html",
-        headers={"cache-control": "no-cache"},
-    )
+    return _serve_page("app.html")
 
 
 @app.get("/api/health")
@@ -125,6 +137,14 @@ def _require_owned_run(run_id: UUID, user: User) -> RunRecord:
         )
 
     return run
+
+
+@app.get("/api/runs", response_model=RunListResponse)
+async def list_runs(user: CurrentUser) -> RunListResponse:
+    runs = run_manager.list_runs(user.id)
+    return RunListResponse(
+        runs=[RunSummary.model_validate(run.model_dump()) for run in runs]
+    )
 
 
 @app.post(

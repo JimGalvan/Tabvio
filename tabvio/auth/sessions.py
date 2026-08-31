@@ -9,8 +9,9 @@ refresh tokens encrypted with ``WORKOS_COOKIE_PASSWORD``.
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, HTTPException, Request, Response, status
 from starlette.concurrency import run_in_threadpool
@@ -23,8 +24,11 @@ from tabvio.auth.models import User
 from tabvio.auth.repository import UserRepository
 from tabvio.config import (
     DATABASE_PATH,
+    LOGIN_STATE_COOKIE_MAX_AGE_SECONDS,
+    LOGIN_STATE_COOKIE_NAME,
     SESSION_COOKIE_MAX_AGE_SECONDS,
     SESSION_COOKIE_NAME,
+    SIGNED_IN_PATH,
     read_workos_api_key,
     read_workos_client_id,
     read_workos_cookie_password,
@@ -97,10 +101,54 @@ def build_redirect_uri(request: Request) -> str:
     return f"{scheme}://{base_url.netloc}/callback"
 
 
-def build_authorization_url(request: Request, state: str | None = None) -> str:
+def is_safe_return_path(path: str) -> bool:
+    """Only same-site paths, so the state cannot carry an open redirect."""
+    return (
+        path.startswith("/")
+        and not path.startswith("//")
+        and "\\" not in path
+    )
+
+
+def create_login_state(return_path: str) -> tuple[str, str]:
+    """Build the OAuth state and the token the callback will check it against.
+
+    The state carries where to land after signing in, and the random token in
+    front of it is what makes the callback verifiable: a callback that arrives
+    without a matching cookie did not start here.
+    """
+    if not is_safe_return_path(return_path):
+        return_path = SIGNED_IN_PATH
+
+    token = secrets.token_urlsafe(32)
+    return f"{token}:{return_path}", token
+
+
+def read_return_path(state: str | None, expected_token: str | None) -> str | None:
+    """Check the callback against the token this browser was issued.
+
+    Returns the path to land on, or None when the state is missing, malformed,
+    or does not match, which means the callback should be refused.
+    """
+    if not state or not expected_token:
+        return None
+
+    token, separator, return_path = state.partition(":")
+    if not separator or not secrets.compare_digest(token, expected_token):
+        return None
+
+    return return_path if is_safe_return_path(return_path) else SIGNED_IN_PATH
+
+
+def build_authorization_url(
+    request: Request,
+    state: str | None = None,
+    screen_hint: Literal["sign-in", "sign-up"] = "sign-in",
+) -> str:
     return get_client().user_management.get_authorization_url(
         provider="authkit",
         redirect_uri=build_redirect_uri(request),
+        screen_hint=screen_hint,
         state=state,
     )
 
@@ -210,6 +258,28 @@ def set_session_cookie(
 def clear_session_cookie(response: Response, secure: bool = True) -> None:
     response.delete_cookie(
         SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+
+
+def set_login_state_cookie(response: Response, token: str, secure: bool) -> None:
+    response.set_cookie(
+        LOGIN_STATE_COOKIE_NAME,
+        token,
+        max_age=LOGIN_STATE_COOKIE_MAX_AGE_SECONDS,
+        path="/",
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+
+
+def clear_login_state_cookie(response: Response, secure: bool) -> None:
+    response.delete_cookie(
+        LOGIN_STATE_COOKIE_NAME,
         path="/",
         httponly=True,
         secure=secure,

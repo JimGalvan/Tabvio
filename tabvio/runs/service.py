@@ -78,6 +78,22 @@ class RunManager:
 
             return run
 
+    def list_runs(
+            self,
+            user_id: UUID,
+            limit: int = constants.MAX_LISTED_RUNS,
+    ) -> list[RunRecord]:
+        """Recent runs for one account, newest first.
+
+        A run that is still in flight is read from its live context so the
+        history shows its current status rather than the last one written.
+        """
+        stored_runs = self._repository.list_runs_for_user(user_id, limit)
+        return [
+            self._contexts[run.id].run if run.id in self._contexts else run
+            for run in stored_runs
+        ]
+
     def get_run(self, run_id: UUID) -> RunRecord:
         context = self._contexts.get(run_id)
         if context is not None:

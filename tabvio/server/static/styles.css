@@ -93,6 +93,127 @@ a:focus-visible {
   transform: rotate(-30deg);
 }
 
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper, #fff);
+  font-family: var(--utility-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.pill-button:hover {
+  opacity: 0.85;
+}
+
+.history {
+  margin-top: 34px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.history-refresh {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-family: var(--utility-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-refresh:hover {
+  color: var(--ink);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.history-entry:hover {
+  background: rgba(134, 152, 164, 0.12);
+}
+
+.history-task {
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-status.running,
+.history-status.queued {
+  color: var(--live);
+}
+
+.history-status.waiting_for_input {
+  color: #c77b18;
+}
+
+.history-status.succeeded,
+.history-status.ready_for_follow_up {
+  color: var(--success);
+}
+
+.history-status.failed,
+.history-status.cancelled,
+.history-status.timed_out {
+  color: var(--danger);
+}
+
+.history-empty {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
 .masthead-side {
   display: flex;
   align-items: center;
@@ -296,6 +417,11 @@ a:focus-visible {
   margin: 0;
   color: var(--danger);
   font-size: 0.86rem;
+}
+
+/* Plain guidance sitting where error messages normally go. */
+.task-actions .task-hint {
+  color: var(--ink-soft);
 }
 
 .primary-button,

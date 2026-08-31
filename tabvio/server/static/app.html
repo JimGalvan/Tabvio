@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#dce8f0">
+  <title>Tabvio · Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/live-view.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="/" aria-label="Tabvio home">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Tabvio</span>
+      </a>
+      <div class="masthead-side">
+        <div class="run-state" aria-live="polite">
+          <span class="run-state-dot" id="status-dot"></span>
+          <span id="status-label">Ready</span>
+        </div>
+        <div class="account">
+          <span class="account-email" id="account-email"></span>
+          <a class="account-link" href="/logout">Sign out</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="brief" id="brief-section">
+      <div class="brief-copy">
+        <p class="eyebrow">New run</p>
+        <h1>What should<br><span>the agent do?</span></h1>
+        <p class="brief-note">Describe the task in plain language. Include the URL to get the most relevant result.</p>
+
+        <section class="history" id="history">
+          <div class="history-heading">
+            <p class="stage-label">Your runs</p>
+            <button class="history-refresh" type="button" id="history-refresh">Refresh</button>
+          </div>
+          <ol class="history-list" id="history-list"></ol>
+          <p class="history-empty" id="history-empty">Runs you start will be listed here.</p>
+        </section>
+      </div>
+
+      <form class="task-form" id="task-form">
+        <label class="visually-hidden" for="task-input">Task</label>
+        <textarea id="task-input" name="task" rows="4" required placeholder="Open example.com and summarize what is on the page."></textarea>
+        <p class="task-hint">Tip: include the URL — e.g. <code>example.com</code> — to get the most relevant result.</p>
+        <div class="task-examples">
+          <button class="example-chip" type="button" data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">Try an example: Top 5 on Hacker News</button>
+        </div>
+        <div class="task-actions">
+          <p id="form-message" role="alert"></p>
+          <button class="primary-button" type="submit" id="start-button">
+            Start run
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="workspace" id="workspace" hidden>
+      <div class="browser-stage">
+        <div class="stage-header">
+          <div>
+            <p class="stage-label">Live browser</p>
+            <p class="run-id" id="run-id"></p>
+          </div>
+          <button class="quiet-button" type="button" id="cancel-button">Cancel run</button>
+        </div>
+
+        <p class="latest-action" id="latest-action" aria-live="polite">
+          The agent is preparing its browser.
+        </p>
+
+        <div class="browser-viewport" id="browser-viewport">
+          <img id="browser-screen" alt="Live view of the agent browser" hidden>
+          <div class="browser-waiting" id="browser-waiting">
+            <span class="waiting-orbit" aria-hidden="true"></span>
+            <p>Waiting for the first browser frame</p>
+          </div>
+        </div>
+
+        <section class="answer-panel" id="answer-panel" hidden>
+          <p class="answer-label">The agent needs your input</p>
+          <p class="answer-question" id="answer-question"></p>
+          <form id="answer-form">
+            <label class="visually-hidden" for="answer-input">Your answer</label>
+            <input id="answer-input" autocomplete="off" required placeholder="Type your answer">
+            <button class="primary-button" type="submit">Send answer</button>
+          </form>
+        </section>
+
+        <section class="result-panel" id="result-panel" hidden>
+          <p class="result-label">Agent response</p>
+          <p class="result-output" id="result-output"></p>
+        </section>
+
+        <section class="answer-panel" id="follow-up-panel" hidden>
+          <p class="answer-label">Continue this browser session</p>
+          <p class="answer-question" id="follow-up-deadline"></p>
+          <form id="follow-up-form">
+            <label class="visually-hidden" for="follow-up-input">Additional task</label>
+            <input id="follow-up-input" autocomplete="off" required placeholder="Add another task">
+            <button class="primary-button" type="submit">Ask follow-up</button>
+            <button class="quiet-button" type="button" id="end-session-button">End session</button>
+          </form>
+          <p class="answer-question" id="follow-up-message" role="alert"></p>
+        </section>
+
+        <div class="task-actions" id="terminal-actions" hidden>
+          <span></span>
+          <button class="primary-button" type="button" id="new-run-button">
+            Start another run
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </div>
+
+      <aside class="activity-panel">
+        <div class="activity-heading">
+          <p class="stage-label">Action ledger</p>
+          <span id="event-count">0 events</span>
+        </div>
+        <ol class="activity-list" id="activity-list" aria-live="polite"></ol>
+        <div class="activity-empty" id="activity-empty">
+          Activity will appear as the agent works.
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+  <script src="/static/run-reconnect.js" defer></script>
+</body>
+</html>
