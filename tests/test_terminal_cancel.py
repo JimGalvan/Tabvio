@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 from tabvio.runs.models import RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
@@ -19,15 +20,17 @@ class TerminalCancellationTests(unittest.IsolatedAsyncioTestCase):
         self._temporary_directory.cleanup()
 
     async def test_cancelling_a_cleaned_terminal_run_is_idempotent(self) -> None:
+        owner_id = uuid4()
         run = RunRecord(
             task="Completed task",
             max_runtime_seconds=300,
+            user_id=owner_id,
             status=RunStatus.SUCCEEDED,
             final_output="Done",
         )
         self._repository.save_run(run)
 
-        returned_run = await self._manager.cancel_run(run.id)
+        returned_run = await self._manager.cancel_run(run.id, owner_id)
 
         self.assertEqual(returned_run.id, run.id)
         self.assertEqual(returned_run.status, RunStatus.SUCCEEDED)

@@ -1,42 +1,31 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
-
-from tabvio.auth.models import User
 from tabvio.runs.exceptions import RunNotReadyForFollowUpError
-from tabvio.runs.models import RunRecord
 from tabvio.server import routes as app_module
-from tabvio.server.schemas import FollowUpRequest
+from tests.support import build_run, signed_in_client
 
 
-class FollowUpEndpointTests(unittest.IsolatedAsyncioTestCase):
-    async def test_follow_up_conflict_returns_http_409(self) -> None:
-        user = User(workos_user_id="user_01ABC", email="owner@example.com")
-        run = RunRecord(
-            task="Open example.com",
-            max_runtime_seconds=300,
-            user_id=user.id,
-        )
-
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            with patch.object(
-                app_module.run_manager,
-                "submit_follow_up",
-                AsyncMock(
-                    side_effect=RunNotReadyForFollowUpError(
-                        "The run is not ready for a follow-up"
-                    )
-                ),
-            ):
-                with self.assertRaises(HTTPException) as raised_exception:
-                    await app_module.submit_follow_up(
-                        run_id=run.id,
-                        request=FollowUpRequest(task="Add an item"),
-                        user=user,
+class FollowUpEndpointTests(unittest.TestCase):
+    def test_follow_up_conflict_returns_http_409(self) -> None:
+        with signed_in_client() as (client, user):
+            run = build_run(user.id)
+            with patch.object(app_module.repository, "get_run", return_value=run):
+                with patch.object(
+                    app_module.run_manager,
+                    "submit_follow_up",
+                    AsyncMock(
+                        side_effect=RunNotReadyForFollowUpError(
+                            "The run is not ready for a follow-up"
+                        )
+                    ),
+                ):
+                    response = client.post(
+                        f"/api/runs/{run.id}/follow-ups", json={"task": "Add an item"}
                     )
 
-        self.assertEqual(raised_exception.exception.status_code, 409)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "The run is not ready for a follow-up")
 
 
 if __name__ == "__main__":

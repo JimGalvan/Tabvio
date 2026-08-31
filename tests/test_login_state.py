@@ -1,11 +1,11 @@
 import unittest
 
+from tabvio.auth.constants import SIGNED_IN_PATH
 from tabvio.auth.sessions import (
     create_login_state,
     is_safe_return_path,
     read_return_path,
 )
-from tabvio.config import SIGNED_IN_PATH
 
 
 class LoginStateTests(unittest.TestCase):

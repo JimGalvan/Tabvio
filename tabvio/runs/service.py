@@ -9,6 +9,7 @@ from uuid import UUID
 from langgraph.types import Command
 
 from tabvio.agent.runtime import build_agent_runtime
+from tabvio.clock import utc_now
 from tabvio.runs import constants
 from tabvio.runs.exceptions import (
     RunCapacityReachedError,
@@ -16,7 +17,7 @@ from tabvio.runs.exceptions import (
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
 )
-from tabvio.runs.models import RunContext, RunEvent, RunRecord, RunStatus, utc_now
+from tabvio.runs.models import RunContext, RunEvent, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 
 
@@ -94,19 +95,30 @@ class RunManager:
             for run in stored_runs
         ]
 
-    def get_run(self, run_id: UUID) -> RunRecord:
-        context = self._contexts.get(run_id)
-        if context is not None:
-            return context.run
+    def _resolve_owned(
+            self,
+            run_id: UUID,
+            user_id: UUID,
+    ) -> tuple[RunContext | None, RunRecord]:
+        """Find a run the account owns, live context first, stored record after.
 
-        run = self._repository.get_run(run_id)
-        if run is None:
+        Someone else's run raises RunNotFoundError rather than a distinct
+        error, so a run identifier cannot be used to confirm a run exists.
+        Runs recorded before accounts existed have no owner and match nobody.
+        """
+        context = self._contexts.get(run_id)
+        run = context.run if context is not None else self._repository.get_run(run_id)
+        if run is None or run.user_id != user_id:
             raise RunNotFoundError(f"Run {run_id} was not found")
 
+        return context, run
+
+    def get_run(self, run_id: UUID, user_id: UUID) -> RunRecord:
+        _, run = self._resolve_owned(run_id, user_id)
         return run
 
-    async def submit_input(self, run_id: UUID, answer: str) -> RunRecord:
-        context = self._contexts.get(run_id)
+    async def submit_input(self, run_id: UUID, user_id: UUID, answer: str) -> RunRecord:
+        context, _ = self._resolve_owned(run_id, user_id)
         if context is None:
             raise RunNotFoundError(f"Run {run_id} was not found")
 
@@ -124,10 +136,10 @@ class RunManager:
             self._resuming_run_ids.discard(run_id)
             raise
 
-    async def submit_follow_up(self, run_id: UUID, task: str) -> RunRecord:
+    async def submit_follow_up(self, run_id: UUID, user_id: UUID, task: str) -> RunRecord:
         expiry_task = None
         async with self._manager_lock:
-            context = self._contexts.get(run_id)
+            context, _ = self._resolve_owned(run_id, user_id)
             if context is None:
                 raise RunNotFoundError(f"Run {run_id} was not found")
 
@@ -154,13 +166,12 @@ class RunManager:
         await self._await_cancelled_task(expiry_task)
         return context.run
 
-    async def end_session(self, run_id: UUID) -> RunRecord:
+    async def end_session(self, run_id: UUID, user_id: UUID) -> RunRecord:
         expiry_task = None
         async with self._manager_lock:
-            context = self._contexts.get(run_id)
+            context, run = self._resolve_owned(run_id, user_id)
             if context is None:
-                run = self._repository.get_run(run_id)
-                if run is not None and run.status.is_terminal:
+                if run.status.is_terminal:
                     return run
                 raise RunNotFoundError(f"Run {run_id} was not found")
 
@@ -180,11 +191,10 @@ class RunManager:
         await self._finish_context(context)
         return context.run
 
-    async def cancel_run(self, run_id: UUID) -> RunRecord:
-        context = self._contexts.get(run_id)
+    async def cancel_run(self, run_id: UUID, user_id: UUID) -> RunRecord:
+        context, run = self._resolve_owned(run_id, user_id)
         if context is None:
-            run = self._repository.get_run(run_id)
-            if run is None or not run.status.is_terminal:
+            if not run.status.is_terminal:
                 raise RunNotFoundError(f"Run {run_id} was not found")
             return run
 
@@ -205,8 +215,8 @@ class RunManager:
 
         return context.run
 
-    def get_latest_frame(self, run_id: UUID) -> bytes | None:
-        context = self._contexts.get(run_id)
+    def get_latest_frame(self, run_id: UUID, user_id: UUID) -> bytes | None:
+        context, _ = self._resolve_owned(run_id, user_id)
         if context is not None:
             return context.latest_frame
 
@@ -215,24 +225,31 @@ class RunManager:
             self._completed_frames.move_to_end(run_id)
             return completed_frame
 
-        if self._repository.get_run(run_id) is None:
-            raise RunNotFoundError(f"Run {run_id} was not found")
-
         return None
 
-    async def stream_events(
+    def stream_events(
             self,
             run_id: UUID,
+            user_id: UUID,
             after_sequence: int = 0,
     ) -> AsyncIterator[RunEvent]:
-        context = self._contexts.get(run_id)
-        if context is None:
-            run = self._repository.get_run(run_id)
-            if run is None:
-                raise RunNotFoundError(f"Run {run_id} was not found")
+        """Events for a run the account owns, live if it is still running.
 
-            stored_events = self._repository.list_events(run_id, after_sequence)
-            for event in stored_events:
+        Ownership is settled here rather than inside the generator so that an
+        unauthorised caller is refused before the streaming response starts,
+        while its headers can still be changed.
+        """
+        context, _ = self._resolve_owned(run_id, user_id)
+        return self._stream_events(run_id, context, after_sequence)
+
+    async def _stream_events(
+            self,
+            run_id: UUID,
+            context: RunContext | None,
+            after_sequence: int,
+    ) -> AsyncIterator[RunEvent]:
+        if context is None:
+            for event in self._repository.list_events(run_id, after_sequence):
                 yield event
             return
 
@@ -259,11 +276,14 @@ class RunManager:
             if is_terminal:
                 return
 
-    async def stream_frames(self, run_id: UUID) -> AsyncIterator[bytes]:
-        context = self._contexts.get(run_id)
+    def stream_frames(self, run_id: UUID, user_id: UUID) -> AsyncIterator[bytes]:
+        context, _ = self._resolve_owned(run_id, user_id)
         if context is None:
             raise RunNotFoundError(f"Run {run_id} was not found")
 
+        return self._stream_frames(context)
+
+    async def _stream_frames(self, context: RunContext) -> AsyncIterator[bytes]:
         delivered_frame_sequence = 0
         while True:
             async with context.frame_condition:

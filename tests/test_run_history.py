@@ -4,19 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from tabvio.auth.models import User
-from tabvio.runs.models import RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.server import routes as app_module
-
-
-def build_run(user_id, task: str, status: RunStatus = RunStatus.SUCCEEDED) -> RunRecord:
-    return RunRecord(
-        task=task,
-        max_runtime_seconds=300,
-        user_id=user_id,
-        status=status,
-    )
+from tests.support import build_run, signed_in_client
 
 
 class RunHistoryRepositoryTests(unittest.TestCase):
@@ -28,9 +18,8 @@ class RunHistoryRepositoryTests(unittest.TestCase):
 
     def test_only_the_owners_runs_are_listed(self) -> None:
         owner_id = uuid4()
-        other_id = uuid4()
         self.repository.save_run(build_run(owner_id, "Mine"))
-        self.repository.save_run(build_run(other_id, "Theirs"))
+        self.repository.save_run(build_run(uuid4(), "Theirs"))
         self.repository.save_run(build_run(None, "Nobody's"))
 
         listed = self.repository.list_runs_for_user(owner_id, limit=50)
@@ -49,6 +38,22 @@ class RunHistoryRepositoryTests(unittest.TestCase):
 
         self.assertEqual([run.task for run in listed], ["Newer", "Older"])
 
+    def test_runs_created_in_the_same_instant_have_a_stable_order(self) -> None:
+        """Two runs can share a timestamp, and the list must not shuffle between reads."""
+        owner_id = uuid4()
+        first = build_run(owner_id, "First")
+        second = build_run(owner_id, "Second")
+        second.created_at = first.created_at
+        self.repository.save_run(first)
+        self.repository.save_run(second)
+
+        orders = {
+            tuple(run.id for run in self.repository.list_runs_for_user(owner_id, limit=50))
+            for _ in range(5)
+        }
+
+        self.assertEqual(len(orders), 1)
+
     def test_the_limit_is_applied(self) -> None:
         owner_id = uuid4()
         for index in range(5):
@@ -57,30 +62,43 @@ class RunHistoryRepositoryTests(unittest.TestCase):
         self.assertEqual(len(self.repository.list_runs_for_user(owner_id, limit=3)), 3)
 
 
-class RunHistoryEndpointTests(unittest.IsolatedAsyncioTestCase):
-    async def test_history_returns_the_callers_runs(self) -> None:
-        user = User(workos_user_id="user_01ABC", email="owner@example.com")
-        runs = [build_run(user.id, "Mine"), build_run(user.id, "Also mine")]
+class RunHistoryEndpointTests(unittest.TestCase):
+    def test_history_returns_the_callers_runs(self) -> None:
+        with signed_in_client() as (client, user):
+            runs = [build_run(user.id, "Mine"), build_run(user.id, "Also mine")]
+            with patch.object(
+                app_module.repository, "list_runs_for_user", return_value=runs
+            ):
+                response = client.get("/api/runs")
 
-        with patch.object(app_module.run_manager, "list_runs", return_value=runs):
-            response = await app_module.list_runs(user)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [run["task"] for run in response.json()["runs"]], ["Mine", "Also mine"]
+        )
 
-        self.assertEqual([run.task for run in response.runs], ["Mine", "Also mine"])
+    def test_history_asks_only_for_the_callers_runs(self) -> None:
+        with signed_in_client() as (client, user):
+            with patch.object(
+                app_module.repository, "list_runs_for_user", return_value=[]
+            ) as list_runs_for_user:
+                client.get("/api/runs")
 
-    async def test_history_hides_internal_fields(self) -> None:
-        """Thread and owner identifiers stay server-side."""
-        user = User(workos_user_id="user_01ABC", email="owner@example.com")
+        list_runs_for_user.assert_called_once()
+        self.assertEqual(list_runs_for_user.call_args.args[0], user.id)
 
-        with patch.object(
-            app_module.run_manager,
-            "list_runs",
-            return_value=[build_run(user.id, "Mine")],
-        ):
-            response = await app_module.list_runs(user)
+    def test_history_hides_internal_fields(self) -> None:
+        """The thread and owner identifiers must not reach the browser."""
+        with signed_in_client() as (client, user):
+            with patch.object(
+                app_module.repository,
+                "list_runs_for_user",
+                return_value=[build_run(user.id, "Mine")],
+            ):
+                response = client.get("/api/runs")
 
-        serialized = response.runs[0].model_dump()
-        self.assertNotIn("thread_id", serialized)
-        self.assertNotIn("user_id", serialized)
+        listed = response.json()["runs"][0]
+        self.assertNotIn("thread_id", listed)
+        self.assertNotIn("user_id", listed)
 
 
 if __name__ == "__main__":

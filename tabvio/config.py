@@ -7,14 +7,6 @@ PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "server" / "static"
 DATABASE_PATH = PROJECT_DIRECTORY / "data" / "tabvio.db"
 
-SESSION_COOKIE_NAME = "wos_session"
-SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
-
-LOGIN_STATE_COOKIE_NAME = "wos_login_state"
-LOGIN_STATE_COOKIE_MAX_AGE_SECONDS = 60 * 10
-
-SIGNED_IN_PATH = "/app"
-
 
 def read_headless_setting() -> bool:
     configured_value = os.getenv("TABVIO_HEADLESS", "true").strip().lower()

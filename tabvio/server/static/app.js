@@ -1,4 +1,5 @@
 const SCREEN_REFRESH_INTERVAL_MS = 750;
+const PENDING_TASK_KEY = "tabvio.pending-task";
 
 const taskForm = document.querySelector("#task-form");
 const taskInput = document.querySelector("#task-input");
@@ -578,7 +579,6 @@ async function loadSignedInAccount() {
     const account = await response.json();
     accountEmail.textContent = account.email;
   } catch (error) {
-    // The masthead simply stays blank if the account cannot be loaded.
   }
 }
 
@@ -679,16 +679,15 @@ historyRefresh.addEventListener("click", () => {
 function restorePendingTask() {
   // Written by the landing page before it sent the visitor to sign up.
   try {
-    const pendingTask = window.sessionStorage.getItem("tabvio.pending-task");
+    const pendingTask = window.sessionStorage.getItem(PENDING_TASK_KEY);
     if (!pendingTask) {
       return;
     }
 
-    window.sessionStorage.removeItem("tabvio.pending-task");
+    window.sessionStorage.removeItem(PENDING_TASK_KEY);
     taskInput.value = pendingTask;
     taskInput.focus();
   } catch (error) {
-    // Storage can be unavailable; the task box simply starts empty.
   }
 }
 

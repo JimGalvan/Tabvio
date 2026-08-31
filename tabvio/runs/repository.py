@@ -4,6 +4,7 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
+from tabvio.db import connect
 from tabvio.runs.models import RunEvent, RunRecord, RunStatus
 
 
@@ -129,7 +130,7 @@ class RunRepository:
                 SELECT *
                 FROM runs
                 WHERE user_id = ?
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 """,
                 (str(user_id), limit),
@@ -210,7 +211,4 @@ class RunRepository:
         return events
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        return connect(self._database_path)

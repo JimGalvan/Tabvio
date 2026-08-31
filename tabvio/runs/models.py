@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from tabvio.clock import utc_now
+
 if TYPE_CHECKING:
     from tabvio.agent.runtime import AgentRuntime
-
-
-def utc_now() -> datetime:
-    return datetime.now(UTC)
 
 
 class RunStatus(StrEnum):

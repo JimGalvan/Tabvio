@@ -2,83 +2,95 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from fastapi import HTTPException
-
-from tabvio.auth.models import User
-from tabvio.runs.models import RunRecord
 from tabvio.server import routes as app_module
+from tests.support import anonymous_client, build_run, signed_in_client
+
+# Every run endpoint, as a table, so a new one cannot quietly arrive without
+# an ownership test.
+RUN_ENDPOINTS = [
+    ("GET", ""),
+    ("GET", "/stream"),
+    ("GET", "/screen.jpg"),
+    ("GET", "/screen.mjpeg"),
+    ("POST", "/cancel"),
+    ("POST", "/end"),
+    ("POST", "/input"),
+    ("POST", "/follow-ups"),
+]
+
+REQUEST_BODIES = {
+    "/input": {"answer": "Yes"},
+    "/follow-ups": {"task": "Add an item"},
+}
 
 
-def build_user() -> User:
-    return User(workos_user_id=f"user_{uuid4().hex}", email="owner@example.com")
+def call(client, method: str, run_id, suffix: str):
+    url = f"/api/runs/{run_id}{suffix}"
+    if method == "POST":
+        return client.post(url, json=REQUEST_BODIES.get(suffix, {}))
+    return client.get(url)
 
 
-def build_run(user_id) -> RunRecord:
-    return RunRecord(
-        task="Open example.com",
-        max_runtime_seconds=300,
-        user_id=user_id,
-    )
+class AnonymousAccessTests(unittest.TestCase):
+    def test_every_run_endpoint_requires_a_session(self) -> None:
+        run_id = uuid4()
+        with anonymous_client() as client:
+            for method, suffix in RUN_ENDPOINTS:
+                with self.subTest(endpoint=suffix or "/"):
+                    self.assertEqual(call(client, method, run_id, suffix).status_code, 401)
+
+    def test_listing_and_creating_runs_require_a_session(self) -> None:
+        with anonymous_client() as client:
+            self.assertEqual(client.get("/api/runs").status_code, 401)
+            self.assertEqual(
+                client.post("/api/runs", json={"task": "Open example.com"}).status_code,
+                401,
+            )
+
+    def test_the_dashboard_redirects_to_sign_in(self) -> None:
+        with anonymous_client() as client:
+            response = client.get("/app", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/login")
+
+    def test_the_landing_page_stays_public(self) -> None:
+        with anonymous_client() as client:
+            self.assertEqual(client.get("/").status_code, 200)
 
 
-class RunOwnershipTests(unittest.IsolatedAsyncioTestCase):
-    async def test_owner_can_load_their_run(self) -> None:
-        user = build_user()
-        run = build_run(user.id)
+class RunOwnershipTests(unittest.TestCase):
+    def test_another_accounts_run_is_reported_missing_everywhere(self) -> None:
+        """The manager is left real, so this exercises the ownership check itself."""
+        with signed_in_client() as (client, _):
+            run = build_run(uuid4())
+            with patch.object(app_module.repository, "get_run", return_value=run):
+                for method, suffix in RUN_ENDPOINTS:
+                    with self.subTest(endpoint=suffix or "/"):
+                        self.assertEqual(
+                            call(client, method, run.id, suffix).status_code, 404
+                        )
 
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            response = await app_module.get_run(run.id, user)
+    def test_a_run_without_an_owner_is_reported_missing(self) -> None:
+        """Runs recorded before accounts existed belong to nobody."""
+        with signed_in_client() as (client, _):
+            run = build_run(None)
+            with patch.object(app_module.repository, "get_run", return_value=run):
+                self.assertEqual(client.get(f"/api/runs/{run.id}").status_code, 404)
 
-        self.assertEqual(response.run.id, run.id)
+    def test_a_missing_run_is_reported_missing(self) -> None:
+        with signed_in_client() as (client, _):
+            with patch.object(app_module.repository, "get_run", return_value=None):
+                self.assertEqual(client.get(f"/api/runs/{uuid4()}").status_code, 404)
 
-    async def test_another_accounts_run_is_reported_missing(self) -> None:
-        user = build_user()
-        run = build_run(uuid4())
+    def test_the_owner_can_load_their_run(self) -> None:
+        with signed_in_client() as (client, user):
+            run = build_run(user.id)
+            with patch.object(app_module.repository, "get_run", return_value=run):
+                response = client.get(f"/api/runs/{run.id}")
 
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            with self.assertRaises(HTTPException) as raised_exception:
-                await app_module.get_run(run.id, user)
-
-        self.assertEqual(raised_exception.exception.status_code, 404)
-
-    async def test_run_without_an_owner_is_reported_missing(self) -> None:
-        """Runs recorded before sign-in existed belong to nobody."""
-        user = build_user()
-        run = build_run(None)
-
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            with self.assertRaises(HTTPException) as raised_exception:
-                await app_module.get_run(run.id, user)
-
-        self.assertEqual(raised_exception.exception.status_code, 404)
-
-    async def test_screen_frames_are_refused_to_other_accounts(self) -> None:
-        user = build_user()
-        run = build_run(uuid4())
-
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            with patch.object(
-                app_module.run_manager,
-                "get_latest_frame",
-                return_value=b"jpeg-frame",
-            ) as get_latest_frame:
-                with self.assertRaises(HTTPException) as raised_exception:
-                    await app_module.get_run_screen(run.id, user)
-
-        self.assertEqual(raised_exception.exception.status_code, 404)
-        get_latest_frame.assert_not_called()
-
-    async def test_cancel_is_refused_to_other_accounts(self) -> None:
-        user = build_user()
-        run = build_run(uuid4())
-
-        with patch.object(app_module.run_manager, "get_run", return_value=run):
-            with patch.object(app_module.run_manager, "cancel_run") as cancel_run:
-                with self.assertRaises(HTTPException) as raised_exception:
-                    await app_module.cancel_run(run.id, user)
-
-        self.assertEqual(raised_exception.exception.status_code, 404)
-        cancel_run.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["run"]["id"], str(run.id))
 
 
 if __name__ == "__main__":

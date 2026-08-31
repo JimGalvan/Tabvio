@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 from tabvio.runs.exceptions import RunCapacityReachedError, RunNotReadyForFollowUpError
 from tabvio.runs.models import RunContext, RunRecord, RunStatus
@@ -43,6 +44,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
         database_path = Path(self._temporary_directory.name) / "tabvio.db"
         self._repository = RunRepository(database_path)
         self._repository.initialize()
+        self._owner_id = uuid4()
 
     async def asyncTearDown(self) -> None:
         self._temporary_directory.cleanup()
@@ -51,7 +53,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
         self,
         manager: RunManager,
     ) -> tuple[RunContext, FollowUpAgent, FollowUpBrowser]:
-        run = RunRecord(task="First task", max_runtime_seconds=60)
+        run = RunRecord(task="First task", max_runtime_seconds=60, user_id=self._owner_id)
         agent = FollowUpAgent()
         browser = FollowUpBrowser()
         runtime = SimpleNamespace(
@@ -89,6 +91,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
 
         await manager.submit_follow_up(
             context.run.id,
+            self._owner_id,
             "Add the first item to the cart",
         )
         await self._wait_for_status(
@@ -104,7 +107,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(browser.closed)
 
-        ended_run = await manager.end_session(context.run.id)
+        ended_run = await manager.end_session(context.run.id, self._owner_id)
 
         self.assertEqual(ended_run.status, RunStatus.SUCCEEDED)
         self.assertIsNone(ended_run.follow_up_expires_at)
@@ -141,7 +144,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
         context, _, _ = self._build_context(manager)
 
         with self.assertRaises(RunNotReadyForFollowUpError):
-            await manager.submit_follow_up(context.run.id, "Another task")
+            await manager.submit_follow_up(context.run.id, self._owner_id, "Another task")
 
         await manager.shutdown()
 

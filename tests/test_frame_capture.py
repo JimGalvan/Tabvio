@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 from tabvio.runs import constants
 from tabvio.runs.exceptions import RunNotFoundError
@@ -34,6 +35,7 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
         self._repository = RunRepository(database_path)
         self._repository.initialize()
         self._manager = RunManager(self._repository)
+        self._owner_id = uuid4()
         self._constant_patchers = [
             patch.object(constants, "FRAME_CAPTURE_TIMEOUT_SECONDS", self.WAIT_TIMEOUT_SECONDS),
             patch.object(constants, "FRAME_RETRY_INTERVAL_SECONDS", self.TEST_INTERVAL_SECONDS),
@@ -47,7 +49,7 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
         self._temporary_directory.cleanup()
 
     async def test_capture_retries_and_recovers_after_a_failure(self) -> None:
-        run = RunRecord(task="Capture a frame", max_runtime_seconds=300)
+        run = RunRecord(task="Capture a frame", max_runtime_seconds=300, user_id=self._owner_id)
         browser = RecoveringBrowser()
         context = RunContext(
             run=run,
@@ -69,20 +71,26 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(browser.capture_attempts, 2)
         self.assertIn("browser.capture.failed", event_types)
         self.assertIn("browser.capture.recovered", event_types)
-        self.assertEqual(self._manager.get_latest_frame(run.id), b"jpeg-frame")
+        self.assertEqual(self._manager.get_latest_frame(run.id, self._owner_id), b"jpeg-frame")
 
     async def test_latest_frame_distinguishes_unknown_and_uncached_runs(self) -> None:
-        run = RunRecord(task="Stored run", max_runtime_seconds=300)
+        run = RunRecord(
+            task="Stored run", max_runtime_seconds=300, user_id=self._owner_id
+        )
         self._repository.save_run(run)
 
-        self.assertIsNone(self._manager.get_latest_frame(run.id))
+        self.assertIsNone(self._manager.get_latest_frame(run.id, self._owner_id))
         with self.assertRaises(RunNotFoundError):
-            self._manager.get_latest_frame(
-                RunRecord(
-                    task="Unknown run",
-                    max_runtime_seconds=300,
-                ).id
-            )
+            self._manager.get_latest_frame(uuid4(), self._owner_id)
+
+    async def test_another_accounts_frames_are_refused(self) -> None:
+        run = RunRecord(
+            task="Stored run", max_runtime_seconds=300, user_id=self._owner_id
+        )
+        self._repository.save_run(run)
+
+        with self.assertRaises(RunNotFoundError):
+            self._manager.get_latest_frame(run.id, uuid4())
 
     async def _wait_for_latest_frame(self, context: RunContext) -> None:
         while context.latest_frame is None:

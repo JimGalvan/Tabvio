@@ -1,6 +1,7 @@
 :root {
   --paper: #eef4f7;
   --paper-bright: #f8fbfc;
+  --masthead-height: 78px;
   --ink: #132638;
   --ink-soft: #5d7180;
   --line: #c7d6de;
@@ -68,7 +69,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 78px;
+  min-height: var(--masthead-height);
   border-bottom: 1px solid var(--line);
 }
 
@@ -116,7 +117,7 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
   gap: clamp(40px, 6vw, 104px);
   align-items: start;
-  min-height: calc(100vh - 78px);
+  min-height: calc(100vh - var(--masthead-height));
   padding: 7vh 0 9vh;
 }
 
@@ -314,7 +315,7 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(420px, 0.82fr);
   gap: clamp(56px, 9vw, 150px);
   align-items: end;
-  min-height: calc(100vh - 78px);
+  min-height: calc(100vh - var(--masthead-height));
   padding: 8vh 4vw 11vh;
 }
 

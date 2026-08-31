@@ -6,6 +6,11 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
+from tabvio.auth.constants import (
+    LOGIN_STATE_COOKIE_NAME,
+    SESSION_COOKIE_NAME,
+    SIGNED_IN_PATH,
+)
 from tabvio.auth.models import CurrentUserResponse
 from tabvio.auth.sessions import (
     CurrentUser,
@@ -19,11 +24,6 @@ from tabvio.auth.sessions import (
     read_return_path,
     set_login_state_cookie,
     set_session_cookie,
-)
-from tabvio.config import (
-    LOGIN_STATE_COOKIE_NAME,
-    SESSION_COOKIE_NAME,
-    SIGNED_IN_PATH,
 )
 
 logger = logging.getLogger(__name__)

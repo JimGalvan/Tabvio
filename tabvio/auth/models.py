@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from tabvio.runs.models import utc_now
+from tabvio.clock import utc_now
 
 
 class User(BaseModel):
