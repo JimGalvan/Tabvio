@@ -111,10 +111,30 @@ a:focus-visible {
   opacity: 0.85;
 }
 
+.console {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  gap: clamp(40px, 6vw, 104px);
+  align-items: start;
+  min-height: calc(100vh - 78px);
+  padding: 7vh 0 9vh;
+}
+
+.console-heading {
+  max-width: 640px;
+  margin: 14px 0 30px;
+  font-family: var(--display-font);
+  font-size: clamp(2.1rem, 3.6vw, 3.3rem);
+  font-weight: 680;
+  letter-spacing: -0.05em;
+  line-height: 1.02;
+}
+
 .history {
-  margin-top: 34px;
-  padding-top: 22px;
-  border-top: 1px solid var(--line);
+  position: sticky;
+  top: 26px;
+  padding-top: 24px;
+  border-top: 3px solid var(--ink);
 }
 
 .history-heading {
@@ -147,7 +167,7 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 320px;
+  max-height: min(58vh, 540px);
   overflow-y: auto;
 }
 
@@ -718,6 +738,16 @@ a:focus-visible {
 
   .brief h1 {
     font-size: clamp(3.5rem, 16vw, 6.4rem);
+  }
+
+  .console {
+    grid-template-columns: 1fr;
+    gap: 44px;
+    padding: 5vh 0 7vh;
+  }
+
+  .history {
+    position: static;
   }
 
   .workspace {

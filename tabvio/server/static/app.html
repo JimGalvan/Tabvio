@@ -27,37 +27,36 @@
       </div>
     </header>
 
-    <section class="brief" id="brief-section">
-      <div class="brief-copy">
+    <section class="console" id="brief-section">
+      <div class="console-composer">
         <p class="eyebrow">New run</p>
-        <h1>What should<br><span>the agent do?</span></h1>
-        <p class="brief-note">Describe the task in plain language. Include the URL to get the most relevant result.</p>
+        <h1 class="console-heading">What should the agent do?</h1>
 
-        <section class="history" id="history">
-          <div class="history-heading">
-            <p class="stage-label">Your runs</p>
-            <button class="history-refresh" type="button" id="history-refresh">Refresh</button>
+        <form class="task-form" id="task-form">
+          <label class="visually-hidden" for="task-input">Task</label>
+          <textarea id="task-input" name="task" rows="4" required placeholder="Open example.com and summarize what is on the page."></textarea>
+          <p class="task-hint">Tip: include the URL — e.g. <code>example.com</code> — to get the most relevant result.</p>
+          <div class="task-examples">
+            <button class="example-chip" type="button" data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">Try an example: Top 5 on Hacker News</button>
           </div>
-          <ol class="history-list" id="history-list"></ol>
-          <p class="history-empty" id="history-empty">Runs you start will be listed here.</p>
-        </section>
+          <div class="task-actions">
+            <p id="form-message" role="alert"></p>
+            <button class="primary-button" type="submit" id="start-button">
+              Start run
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </form>
       </div>
 
-      <form class="task-form" id="task-form">
-        <label class="visually-hidden" for="task-input">Task</label>
-        <textarea id="task-input" name="task" rows="4" required placeholder="Open example.com and summarize what is on the page."></textarea>
-        <p class="task-hint">Tip: include the URL — e.g. <code>example.com</code> — to get the most relevant result.</p>
-        <div class="task-examples">
-          <button class="example-chip" type="button" data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">Try an example: Top 5 on Hacker News</button>
+      <aside class="history" id="history" aria-label="Your runs">
+        <div class="history-heading">
+          <p class="stage-label">Your runs</p>
+          <button class="history-refresh" type="button" id="history-refresh">Refresh</button>
         </div>
-        <div class="task-actions">
-          <p id="form-message" role="alert"></p>
-          <button class="primary-button" type="submit" id="start-button">
-            Start run
-            <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </form>
+        <ol class="history-list" id="history-list"></ol>
+        <p class="history-empty" id="history-empty">Runs you start will be listed here.</p>
+      </aside>
     </section>
 
     <section class="workspace" id="workspace" hidden>
