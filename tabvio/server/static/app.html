@@ -61,7 +61,7 @@
           <div class="credential-manager-heading">
             <div>
               <p class="stage-label">Credential keyring</p>
-              <p>Passwords stay encrypted and can only be used on the domains you allow.</p>
+              <p>Passwords stay encrypted and can only be used on the domains you allow. Write <code>*.example.com</code> to cover subdomains such as a separate login page.</p>
             </div>
             <button class="history-refresh" type="button" id="credential-manager-close">Close</button>
           </div>
@@ -69,7 +69,7 @@
             <label>Name<input id="credential-name" required maxlength="80" placeholder="Personal GitHub"></label>
             <label>Login<input id="credential-login" autocomplete="username" placeholder="you@example.com"></label>
             <label>Password<input id="credential-password" type="password" autocomplete="new-password" placeholder="Enter password"></label>
-            <label>Allowed domains<input id="credential-domains" required placeholder="github.com, gist.github.com"></label>
+            <label>Allowed domains<input id="credential-domains" required placeholder="github.com, *.github.com"></label>
             <label class="credential-default-toggle">
               <input id="credential-default" type="checkbox">
               <span>Preselect this credential for new runs</span>

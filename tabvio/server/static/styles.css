@@ -561,6 +561,14 @@ a:focus-visible {
   font-size: 0.8rem;
 }
 
+.credential-manager-heading code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(134, 152, 164, 0.16);
+  font-family: var(--utility-font);
+  font-size: 0.9em;
+}
+
 .credential-form {
   display: grid;
   grid-template-columns: 1fr 1fr;

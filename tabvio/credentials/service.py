@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from tabvio.clock import utc_now
 from tabvio.credentials.cipher import CredentialCipher
+from tabvio.credentials.domains import (
+    matches_allowlist,
+    normalize_allowlist_entry,
+    normalize_hostname,
+    suggest_allowlist_entries,
+)
 from tabvio.credentials.exceptions import (
     CredentialConflictError,
     CredentialDomainDeniedError,
@@ -99,10 +104,12 @@ class CredentialService:
         self, credential_id: UUID, user_id: UUID, hostname: str
     ) -> CredentialSecret:
         credential = self._require_owned(credential_id, user_id)
-        normalized_host = self.normalize_domain(hostname)
-        if normalized_host not in credential.allowed_domains:
+        normalized_host = normalize_hostname(hostname)
+        if not matches_allowlist(normalized_host, credential.allowed_domains):
+            exact, wildcard = suggest_allowlist_entries(normalized_host)
             raise CredentialDomainDeniedError(
-                f"Credential {credential.name!r} is not allowed on {normalized_host}"
+                f"Credential {credential.name!r} is not allowed on {normalized_host}. "
+                f"Add {exact} or {wildcard} to its allowed domains."
             )
         return self._decrypt(credential)
 
@@ -127,21 +134,12 @@ class CredentialService:
         normalized = []
         for domain in domains:
             try:
-                value = cls.normalize_domain(domain)
+                value = normalize_allowlist_entry(domain)
             except ValueError as exception:
                 raise CredentialInvalidError(str(exception)) from exception
             if value not in normalized:
                 normalized.append(value)
         return normalized
-
-    @staticmethod
-    def normalize_domain(domain: str) -> str:
-        candidate = domain.strip().lower()
-        parsed = urlsplit(candidate if "://" in candidate else f"//{candidate}")
-        hostname = parsed.hostname
-        if not hostname or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            raise ValueError(f"Invalid domain: {domain}")
-        return hostname.rstrip(".").encode("idna").decode("ascii")
 
     @staticmethod
     def _mask_login(login: str) -> str:
