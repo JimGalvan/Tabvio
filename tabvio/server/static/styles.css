@@ -408,6 +408,175 @@ a:focus-visible {
   margin-top: 18px;
 }
 
+.credential-keyring {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  margin: 22px 0 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.credential-keyring legend {
+  grid-column: 1 / -1;
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.credential-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-form .credential-chip {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0;
+  padding: 7px 11px;
+  color: var(--ink);
+  font-family: var(--body-font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.credential-chip:has(input:checked) {
+  color: var(--signal);
+  background: var(--signal-soft);
+  border-color: var(--signal);
+}
+
+.credential-chip input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--signal);
+}
+
+.credential-empty {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.credential-manage-button {
+  align-self: start;
+  padding: 7px 0;
+  color: var(--signal);
+  font-family: var(--utility-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+}
+
+.credential-manager {
+  margin-top: 28px;
+  padding: 20px;
+  background: #e4edf2;
+  border-left: 4px solid var(--ink);
+}
+
+.credential-manager-heading,
+.credential-form-actions,
+.credential-list li,
+.credential-list li > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.credential-manager-heading p:last-child {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.credential-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.credential-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.credential-form input {
+  min-width: 0;
+  padding: 10px 11px;
+  color: var(--ink);
+  font-family: var(--body-font);
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+}
+
+.credential-form-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.credential-form-actions p {
+  flex: 1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+.credential-list {
+  display: grid;
+  gap: 1px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--line);
+}
+
+.credential-list li {
+  padding: 11px 0;
+  background: #e4edf2;
+}
+
+.credential-list li > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.credential-list strong {
+  font-size: 0.84rem;
+}
+
+.credential-list span {
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.66rem;
+}
+
+.credential-delete {
+  color: var(--danger);
+}
+
 .example-chip {
   padding: 9px 16px;
   color: var(--ink-soft);
@@ -572,11 +741,48 @@ a:focus-visible {
 }
 
 .answer-panel,
-.result-panel {
+.result-panel,
+.secure-input-panel {
   margin-top: 18px;
   padding: 20px;
   border-left: 4px solid var(--signal);
   background: var(--signal-soft);
+}
+
+.secure-input-panel {
+  border-left-color: var(--live);
+  background: #f8e7df;
+}
+
+.secure-input-label {
+  margin: 0;
+  color: var(--live);
+  font-family: var(--utility-font);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.secure-input-panel form {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.secure-input-panel input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 14px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid #d7a48f;
+}
+
+.secure-input-note {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
 }
 
 .answer-question,
@@ -781,9 +987,20 @@ a:focus-visible {
   }
 
   .task-actions,
-  .answer-panel form {
+  .answer-panel form,
+  .secure-input-panel form,
+  .credential-form-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .credential-keyring,
+  .credential-form {
+    grid-template-columns: 1fr;
+  }
+
+  .credential-form-actions {
+    grid-column: auto;
   }
 
   .primary-button {

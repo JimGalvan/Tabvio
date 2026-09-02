@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#dce8f0">
   <title>Tabvio · Dashboard</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/legal.css">
   <link rel="stylesheet" href="/static/live-view.css">
 </head>
 <body>
@@ -39,6 +40,13 @@
           <div class="task-examples">
             <button class="example-chip" type="button" data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">Try an example: Top 5 on Hacker News</button>
           </div>
+          <fieldset class="credential-keyring">
+            <legend>Credentials available to this run</legend>
+            <div class="credential-picker" id="credential-picker">
+              <span class="credential-empty">No saved credentials.</span>
+            </div>
+            <button class="credential-manage-button" type="button" id="credential-manage-button">Manage credentials</button>
+          </fieldset>
           <div class="task-actions">
             <p id="form-message" role="alert"></p>
             <button class="primary-button" type="submit" id="start-button">
@@ -47,6 +55,28 @@
             </button>
           </div>
         </form>
+
+        <section class="credential-manager" id="credential-manager" hidden>
+          <div class="credential-manager-heading">
+            <div>
+              <p class="stage-label">Credential keyring</p>
+              <p>Passwords stay encrypted and can only be used on the domains you allow.</p>
+            </div>
+            <button class="history-refresh" type="button" id="credential-manager-close">Close</button>
+          </div>
+          <form class="credential-form" id="credential-form">
+            <label>Name<input id="credential-name" required maxlength="80" placeholder="Personal GitHub"></label>
+            <label>Login<input id="credential-login" autocomplete="username" placeholder="you@example.com"></label>
+            <label>Password<input id="credential-password" type="password" autocomplete="new-password" placeholder="Enter password"></label>
+            <label>Allowed domains<input id="credential-domains" required placeholder="github.com, gist.github.com"></label>
+            <div class="credential-form-actions">
+              <p id="credential-message" role="alert"></p>
+              <button class="primary-button" type="submit" id="credential-save-button">Save credential</button>
+              <button class="quiet-button" type="button" id="credential-edit-cancel" hidden>Cancel edit</button>
+            </div>
+          </form>
+          <ol class="credential-list" id="credential-list"></ol>
+        </section>
       </div>
 
       <aside class="history" id="history" aria-label="Your runs">
@@ -89,6 +119,19 @@
             <input id="answer-input" autocomplete="off" required placeholder="Type your answer">
             <button class="primary-button" type="submit">Send answer</button>
           </form>
+          <p class="secure-input-note">Do not enter passwords or verification codes here. Tabvio provides separate secure inputs for those.</p>
+        </section>
+
+        <section class="secure-input-panel" id="secure-input-panel" hidden>
+          <p class="secure-input-label">Secure verification</p>
+          <p class="answer-question" id="secure-input-question"></p>
+          <form id="secure-input-form">
+            <label class="visually-hidden" for="secure-input-code">Verification code</label>
+            <input id="secure-input-code" type="password" inputmode="text" autocomplete="one-time-code" required maxlength="128" placeholder="Enter verification code">
+            <button class="primary-button" type="submit">Enter code</button>
+          </form>
+          <p class="secure-input-note">The code goes directly to the browser and is not added to the run history.</p>
+          <p class="answer-question" id="secure-input-message" role="alert"></p>
         </section>
 
         <section class="result-panel" id="result-panel" hidden>
@@ -129,6 +172,17 @@
       </aside>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <p><span class="footer-wordmark">Tabvio</span> <span aria-hidden="true">/</span> User-directed browser automation</p>
+      <nav aria-label="Legal">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+      </nav>
+      <p class="footer-year">© 2026 Tabvio</p>
+    </div>
+  </footer>
 
   <script src="/static/app.js" defer></script>
   <script src="/static/run-reconnect.js" defer></script>

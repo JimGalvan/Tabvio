@@ -34,6 +34,24 @@ const accountEmail = document.querySelector("#account-email");
 const historyList = document.querySelector("#history-list");
 const historyEmpty = document.querySelector("#history-empty");
 const historyRefresh = document.querySelector("#history-refresh");
+const credentialPicker = document.querySelector("#credential-picker");
+const credentialManageButton = document.querySelector("#credential-manage-button");
+const credentialManager = document.querySelector("#credential-manager");
+const credentialManagerClose = document.querySelector("#credential-manager-close");
+const credentialForm = document.querySelector("#credential-form");
+const credentialName = document.querySelector("#credential-name");
+const credentialLogin = document.querySelector("#credential-login");
+const credentialPassword = document.querySelector("#credential-password");
+const credentialDomains = document.querySelector("#credential-domains");
+const credentialMessage = document.querySelector("#credential-message");
+const credentialSaveButton = document.querySelector("#credential-save-button");
+const credentialEditCancel = document.querySelector("#credential-edit-cancel");
+const credentialList = document.querySelector("#credential-list");
+const secureInputPanel = document.querySelector("#secure-input-panel");
+const secureInputQuestion = document.querySelector("#secure-input-question");
+const secureInputForm = document.querySelector("#secure-input-form");
+const secureInputCode = document.querySelector("#secure-input-code");
+const secureInputMessage = document.querySelector("#secure-input-message");
 
 const eventTypes = [
   "run.created",
@@ -50,6 +68,8 @@ const eventTypes = [
   "agent.message.delta",
   "input.required",
   "input.received",
+  "sensitive_input.required",
+  "sensitive_input.received",
   "follow_up.started",
   "follow_up.ended",
   "follow_up.expired",
@@ -78,6 +98,9 @@ let screenRefreshTimer = null;
 let screenRequestInFlight = false;
 let displayedEventCount = 0;
 let streamedMessage = "";
+let credentials = [];
+let editingCredentialId = null;
+let activeSensitiveRequestId = null;
 
 const exampleChips = document.querySelectorAll(".example-chip");
 
@@ -103,7 +126,10 @@ taskForm.addEventListener("submit", async (formEvent) => {
     const response = await fetch("/api/runs", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({task}),
+      body: JSON.stringify({
+        task,
+        credential_ids: selectedCredentialIds(),
+      }),
     });
     const responseBody = await readResponseBody(response);
     if (!response.ok) {
@@ -115,6 +141,221 @@ taskForm.addEventListener("submit", async (formEvent) => {
   } catch (error) {
     formMessage.textContent = error.message;
     setFormBusy(false);
+  }
+});
+
+credentialManageButton.addEventListener("click", () => {
+  credentialManager.hidden = false;
+  credentialName.focus();
+});
+
+credentialManagerClose.addEventListener("click", () => {
+  credentialManager.hidden = true;
+  resetCredentialForm();
+});
+
+credentialEditCancel.addEventListener("click", resetCredentialForm);
+
+credentialForm.addEventListener("submit", async (formEvent) => {
+  formEvent.preventDefault();
+  const domains = credentialDomains.value
+    .split(",")
+    .map((domain) => domain.trim())
+    .filter(Boolean);
+  const body = {
+    name: credentialName.value.trim(),
+    allowed_domains: domains,
+  };
+  if (credentialLogin.value.trim()) {
+    body.login = credentialLogin.value.trim();
+  }
+  if (credentialPassword.value) {
+    body.password = credentialPassword.value;
+  }
+  if (!editingCredentialId && (!body.login || !body.password)) {
+    credentialMessage.textContent = "Login and password are required for a new credential.";
+    return;
+  }
+
+  credentialSaveButton.disabled = true;
+  credentialMessage.textContent = "";
+  try {
+    const response = await fetch(
+      editingCredentialId
+        ? `/api/credentials/${editingCredentialId}`
+        : "/api/credentials",
+      {
+        method: editingCredentialId ? "PATCH" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+      },
+    );
+    const responseBody = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(responseBody.detail || "The credential could not be saved");
+    }
+    resetCredentialForm();
+    await loadCredentials(responseBody.id);
+  } catch (error) {
+    credentialMessage.textContent = error.message;
+  } finally {
+    credentialSaveButton.disabled = false;
+  }
+});
+
+function selectedCredentialIds() {
+  return [...credentialPicker.querySelectorAll("input:checked")]
+    .map((input) => input.value);
+}
+
+async function loadCredentials(selectCredentialId = null) {
+  const selectedIds = new Set(selectedCredentialIds());
+  if (selectCredentialId) {
+    selectedIds.add(selectCredentialId);
+  }
+  try {
+    const response = await fetch("/api/credentials");
+    const body = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(body.detail || "Credentials could not be loaded");
+    }
+    credentials = body.credentials || [];
+    renderCredentialPicker(selectedIds);
+    renderCredentialList();
+  } catch (error) {
+    credentialPicker.replaceChildren();
+    const message = document.createElement("span");
+    message.className = "credential-empty";
+    message.textContent = error.message;
+    credentialPicker.append(message);
+  }
+}
+
+function renderCredentialPicker(selectedIds = new Set()) {
+  credentialPicker.replaceChildren();
+  if (!credentials.length) {
+    const empty = document.createElement("span");
+    empty.className = "credential-empty";
+    empty.textContent = "No saved credentials.";
+    credentialPicker.append(empty);
+    return;
+  }
+  for (const credential of credentials) {
+    const label = document.createElement("label");
+    label.className = "credential-chip";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = credential.id;
+    checkbox.checked = selectedIds.has(credential.id);
+    const text = document.createElement("span");
+    text.textContent = credential.name;
+    label.append(checkbox, text);
+    credentialPicker.append(label);
+  }
+}
+
+function renderCredentialList() {
+  credentialList.replaceChildren();
+  for (const credential of credentials) {
+    const item = document.createElement("li");
+    const summary = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = credential.name;
+    const detail = document.createElement("span");
+    detail.textContent = `${credential.login_hint} · ${credential.allowed_domains.join(", ")}`;
+    summary.append(name, detail);
+
+    const actions = document.createElement("div");
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "history-refresh";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => beginCredentialEdit(credential));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "history-refresh credential-delete";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => void deleteCredential(credential));
+    actions.append(edit, remove);
+    item.append(summary, actions);
+    credentialList.append(item);
+  }
+}
+
+function beginCredentialEdit(credential) {
+  editingCredentialId = credential.id;
+  credentialName.value = credential.name;
+  credentialLogin.value = "";
+  credentialLogin.placeholder = `Keep ${credential.login_hint}`;
+  credentialPassword.value = "";
+  credentialPassword.placeholder = "Leave blank to keep current password";
+  credentialDomains.value = credential.allowed_domains.join(", ");
+  credentialSaveButton.textContent = "Save changes";
+  credentialEditCancel.hidden = false;
+  credentialMessage.textContent = "";
+  credentialName.focus();
+}
+
+function resetCredentialForm() {
+  editingCredentialId = null;
+  credentialForm.reset();
+  credentialLogin.placeholder = "you@example.com";
+  credentialPassword.placeholder = "Enter password";
+  credentialSaveButton.textContent = "Save credential";
+  credentialEditCancel.hidden = true;
+  credentialMessage.textContent = "";
+}
+
+async function deleteCredential(credential) {
+  if (!window.confirm(`Delete ${credential.name}? Existing runs will no longer be able to use it.`)) {
+    return;
+  }
+  credentialMessage.textContent = "";
+  try {
+    const response = await fetch(`/api/credentials/${credential.id}`, {method: "DELETE"});
+    if (!response.ok) {
+      const body = await readResponseBody(response);
+      throw new Error(body.detail || "The credential could not be deleted");
+    }
+    if (editingCredentialId === credential.id) {
+      resetCredentialForm();
+    }
+    await loadCredentials();
+  } catch (error) {
+    credentialMessage.textContent = error.message;
+  }
+}
+
+secureInputForm.addEventListener("submit", async (formEvent) => {
+  formEvent.preventDefault();
+  const code = secureInputCode.value.trim();
+  if (!code || !activeRunId || !activeSensitiveRequestId) {
+    return;
+  }
+
+  const requestId = activeSensitiveRequestId;
+  const submitButton = secureInputForm.querySelector("button");
+  submitButton.disabled = true;
+  secureInputMessage.textContent = "";
+  try {
+    const response = await fetch(`/api/runs/${activeRunId}/sensitive-input`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({request_id: requestId, code}),
+    });
+    secureInputCode.value = "";
+    const responseBody = await readResponseBody(response);
+    if (!response.ok) {
+      throw new Error(responseBody.detail || "The verification code could not be entered");
+    }
+    activeSensitiveRequestId = null;
+    secureInputPanel.hidden = true;
+  } catch (error) {
+    secureInputCode.value = "";
+    secureInputMessage.textContent = error.message;
+    secureInputCode.focus();
+  } finally {
+    submitButton.disabled = false;
   }
 });
 
@@ -248,6 +489,8 @@ function openRun(responseBody) {
   activityEmpty.hidden = false;
   resultPanel.hidden = true;
   answerPanel.hidden = true;
+  secureInputPanel.hidden = true;
+  activeSensitiveRequestId = null;
   followUpPanel.hidden = true;
   followUpMessage.textContent = "";
   cancelButton.disabled = false;
@@ -371,6 +614,16 @@ function handleRunEvent(serverEvent) {
     answerQuestion.textContent = payload.question || "The agent needs more information.";
     answerPanel.hidden = false;
     answerInput.focus();
+  } else if (eventType === "sensitive_input.required") {
+    activeSensitiveRequestId = payload.request_id;
+    secureInputQuestion.textContent = payload.prompt || "Enter your verification code.";
+    secureInputMessage.textContent = "";
+    secureInputPanel.hidden = false;
+    answerPanel.hidden = true;
+    secureInputCode.focus();
+  } else if (eventType === "sensitive_input.received") {
+    secureInputCode.value = "";
+    secureInputPanel.hidden = true;
   } else if (eventType === "run.completed") {
     resultOutput.textContent = payload.output || streamedMessage;
     resultPanel.hidden = false;
@@ -443,6 +696,8 @@ function describeEvent(eventType, payload) {
     "browser.capture.recovered": {title: "Live view resumed", detail: payload.message},
     "input.required": {title: "Waiting for your answer", detail: payload.question},
     "input.received": {title: "Answer received", detail: "The agent is continuing the task."},
+    "sensitive_input.required": {title: "Verification required", detail: "Waiting for a secure code."},
+    "sensitive_input.received": {title: "Verification code entered", detail: "The code was sent directly to the browser."},
     "follow_up.started": {title: "Follow-up started", detail: payload.task},
     "follow_up.ended": {title: "Browser session ended", detail: "The browser was closed."},
     "follow_up.expired": {title: "Browser session expired", detail: "The follow-up window ended."},
@@ -484,6 +739,8 @@ function updateStatus(status, followUpExpiresAt = null) {
 function showFollowUpPanel(expiresAt) {
   cancelButton.disabled = true;
   answerPanel.hidden = true;
+  secureInputPanel.hidden = true;
+  activeSensitiveRequestId = null;
   followUpPanel.hidden = false;
   followUpMessage.textContent = "";
   followUpDeadline.textContent = formatFollowUpDeadline(expiresAt);
@@ -542,6 +799,9 @@ function updateStatusWithoutCompletion(status) {
 function setFormBusy(isBusy) {
   taskInput.disabled = isBusy;
   startButton.disabled = isBusy;
+  for (const input of credentialPicker.querySelectorAll("input")) {
+    input.disabled = isBusy;
+  }
 }
 
 function capitalize(value) {
@@ -694,3 +954,4 @@ function restorePendingTask() {
 restorePendingTask();
 void loadSignedInAccount();
 void loadRunHistory();
+void loadCredentials();

@@ -52,6 +52,9 @@ function resetRunViewer() {
   resultPanel.hidden = true;
   terminalActions.hidden = true;
   answerPanel.hidden = true;
+  secureInputPanel.hidden = true;
+  secureInputCode.value = "";
+  activeSensitiveRequestId = null;
   followUpPanel.hidden = true;
   followUpInput.value = "";
   followUpMessage.textContent = "";
