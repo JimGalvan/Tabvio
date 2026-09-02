@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, Header, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
@@ -25,26 +26,45 @@ from tabvio.auth.sessions import (
 from tabvio.config import (
     DATABASE_PATH,
     STATIC_DIRECTORY,
+    read_credential_encryption_key,
     read_follow_up_window_seconds,
     read_headless_setting,
     read_max_concurrent_runs,
 )
+from tabvio.credentials.cipher import (
+    LocalAesGcmCredentialCipher,
+    UnavailableCredentialCipher,
+)
+from tabvio.credentials.exceptions import (
+    CredentialConfigurationError,
+    CredentialConflictError,
+    CredentialInvalidError,
+    CredentialNotFoundError,
+)
+from tabvio.credentials.repository import CredentialRepository
+from tabvio.credentials.service import CredentialService
 from tabvio.runs import constants
 from tabvio.runs.exceptions import (
     RunCapacityReachedError,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
+    SensitiveInputNotPendingError,
 )
 from tabvio.runs.models import RunEvent, RunRecord
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
 from tabvio.server.schemas import (
+    CreateCredentialRequest,
     CreateRunRequest,
+    CredentialListResponse,
+    CredentialMetadata,
     FollowUpRequest,
     RunListResponse,
     RunResponse,
     RunSummary,
+    SensitiveInputRequest,
+    UpdateCredentialRequest,
     UserInputRequest,
 )
 
@@ -56,8 +76,17 @@ SCREEN_CACHE_HEADERS = {
 
 
 repository = RunRepository(DATABASE_PATH)
+credential_repository = CredentialRepository(DATABASE_PATH)
+credential_encryption_key = read_credential_encryption_key()
+credential_cipher = (
+    LocalAesGcmCredentialCipher(credential_encryption_key)
+    if credential_encryption_key
+    else UnavailableCredentialCipher()
+)
+credential_service = CredentialService(credential_repository, credential_cipher)
 run_manager = RunManager(
     repository,
+    credential_service=credential_service,
     headless=read_headless_setting(),
     max_concurrent_runs=read_max_concurrent_runs(constants.DEFAULT_MAX_CONCURRENT_RUNS),
     follow_up_window_seconds=read_follow_up_window_seconds(constants.DEFAULT_FOLLOW_UP_WINDOW_SECONDS),
@@ -69,6 +98,7 @@ async def lifespan(application: FastAPI):
     verify_auth_configuration()
     repository.initialize()
     user_repository.initialize()
+    credential_repository.initialize()
     yield
     await run_manager.shutdown()
 
@@ -92,6 +122,11 @@ _RUN_ERROR_STATUSES = {
     RunCapacityReachedError: status.HTTP_429_TOO_MANY_REQUESTS,
     RunNotWaitingForInputError: status.HTTP_409_CONFLICT,
     RunNotReadyForFollowUpError: status.HTTP_409_CONFLICT,
+    SensitiveInputNotPendingError: status.HTTP_409_CONFLICT,
+    CredentialNotFoundError: status.HTTP_404_NOT_FOUND,
+    CredentialConflictError: status.HTTP_409_CONFLICT,
+    CredentialInvalidError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    CredentialConfigurationError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 
@@ -105,6 +140,26 @@ def _register_run_error_handlers(application: FastAPI) -> None:
 
 
 _register_run_error_handlers(app)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(
+    request: Request, exception: RequestValidationError
+) -> JSONResponse:
+    """Return validation details without reflecting submitted values."""
+    errors = []
+    for error in exception.errors():
+        errors.append(
+            {
+                key: value
+                for key, value in error.items()
+                if key not in {"input", "url"}
+            }
+        )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": errors},
+    )
 
 
 class RevalidatedStaticFiles(StaticFiles):
@@ -153,6 +208,42 @@ async def list_runs(user: CurrentUser) -> RunListResponse:
     )
 
 
+@app.get("/api/credentials", response_model=CredentialListResponse)
+async def list_credentials(user: CurrentUser) -> CredentialListResponse:
+    credentials = await run_in_threadpool(credential_service.list, user.id)
+    return CredentialListResponse(credentials=credentials)
+
+
+@app.post(
+    "/api/credentials",
+    response_model=CredentialMetadata,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_credential(
+    request: CreateCredentialRequest, user: CurrentUser
+) -> CredentialMetadata:
+    return await run_in_threadpool(credential_service.create, user.id, request)
+
+
+@app.patch("/api/credentials/{credential_id}", response_model=CredentialMetadata)
+async def update_credential(
+    credential_id: UUID,
+    request: UpdateCredentialRequest,
+    user: CurrentUser,
+) -> CredentialMetadata:
+    return await run_in_threadpool(
+        credential_service.update, credential_id, user.id, request
+    )
+
+
+@app.delete(
+    "/api/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_credential(credential_id: UUID, user: CurrentUser) -> Response:
+    await run_in_threadpool(credential_service.revoke, credential_id, user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post(
     "/api/runs",
     response_model=RunResponse,
@@ -163,6 +254,7 @@ async def create_run(request: CreateRunRequest, user: CurrentUser) -> RunRespons
         task=request.task,
         max_runtime_seconds=request.max_runtime_seconds,
         user_id=user.id,
+        credential_ids=request.credential_ids,
     )
     return _build_run_response(run)
 
@@ -247,6 +339,21 @@ async def submit_run_input(
     user: CurrentUser,
 ) -> RunResponse:
     run = await run_manager.submit_input(run_id, user.id, request.answer)
+    return _build_run_response(run)
+
+
+@app.post("/api/runs/{run_id}/sensitive-input", response_model=RunResponse)
+async def submit_sensitive_input(
+    run_id: UUID,
+    request: SensitiveInputRequest,
+    user: CurrentUser,
+) -> RunResponse:
+    run = await run_manager.submit_sensitive_input(
+        run_id,
+        user.id,
+        request.request_id,
+        request.code.get_secret_value(),
+    )
     return _build_run_response(run)
 
 
