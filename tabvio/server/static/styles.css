@@ -189,6 +189,44 @@ a:focus-visible {
   background: rgba(134, 152, 164, 0.12);
 }
 
+.history-item {
+  position: relative;
+}
+
+/* Sits over the history entry, which is itself a button. */
+.history-rerun {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--paper-bright);
+  font-family: var(--utility-font);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.history-item:hover .history-rerun,
+.history-rerun:focus-visible {
+  opacity: 1;
+}
+
+.history-rerun:hover {
+  color: var(--signal);
+  border-color: var(--signal);
+}
+
+.history-rerun[disabled] {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .history-task {
   color: var(--ink);
   font-size: 0.9rem;
@@ -263,6 +301,25 @@ a:focus-visible {
 
 .account-link:hover {
   color: var(--ink);
+}
+
+.masthead-home {
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: var(--utility-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.masthead-home:hover {
+  color: var(--ink);
+  border-color: currentColor;
 }
 
 .run-state {
@@ -521,6 +578,40 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+/* A checkbox row, unlike the stacked label/field pairs around it. */
+.credential-form label.credential-default-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.78rem;
+  font-family: var(--body-font);
+  cursor: pointer;
+}
+
+.credential-form .credential-default-toggle input {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+
+.credential-default-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--signal);
+  background: var(--signal-soft);
+  font-family: var(--utility-font);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 .credential-form input {
   min-width: 0;
   padding: 10px 11px;
@@ -593,6 +684,33 @@ a:focus-visible {
   color: var(--signal);
   background: var(--signal-soft);
   border-color: var(--signal);
+}
+
+.terminal-buttons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.rerun-button {
+  padding: 9px 0;
+  border: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 680;
+  background: transparent;
+  border-bottom: 1px solid currentColor;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.rerun-button:hover {
+  color: var(--ink);
+}
+
+.rerun-button[disabled] {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .task-actions {

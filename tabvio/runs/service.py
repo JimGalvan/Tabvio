@@ -10,12 +10,14 @@ from langgraph.types import Command
 
 from tabvio.agent.runtime import build_agent_runtime
 from tabvio.clock import utc_now
+from tabvio.credentials.exceptions import CredentialNotFoundError
 from tabvio.credentials.service import CredentialService
 from tabvio.runs import constants
 from tabvio.runs.exceptions import (
     RunCapacityReachedError,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
+    RunNotRerunnableError,
     RunNotWaitingForInputError,
     SensitiveInputNotPendingError,
 )
@@ -96,6 +98,27 @@ class RunManager:
                 raise
 
             return run
+
+    async def rerun_run(self, run_id: UUID, user_id: UUID) -> RunRecord:
+        """Start a fresh run from a finished one, reusing its task and credentials.
+
+        The original record is left untouched so history keeps both attempts.
+        """
+        _, run = self._resolve_owned(run_id, user_id)
+        if not run.status.is_terminal:
+            raise RunNotRerunnableError("Only a finished run can be started again")
+
+        try:
+            return await self.create_run(
+                task=run.task,
+                max_runtime_seconds=run.max_runtime_seconds,
+                user_id=user_id,
+                credential_ids=list(run.credential_ids),
+            )
+        except CredentialNotFoundError as exception:
+            raise RunNotRerunnableError(
+                "A credential this run used is no longer available"
+            ) from exception
 
     def list_runs(
             self,

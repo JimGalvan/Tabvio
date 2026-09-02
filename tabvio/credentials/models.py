@@ -15,6 +15,7 @@ class CredentialRecord(BaseModel):
     allowed_domains: list[str]
     login_hint: str
     encrypted_payload: bytes
+    is_default: bool = False
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     revoked_at: datetime | None = None
@@ -25,6 +26,7 @@ class CredentialMetadata(BaseModel):
     name: str
     allowed_domains: list[str]
     login_hint: str
+    is_default: bool
     created_at: datetime
     updated_at: datetime
 
@@ -34,6 +36,7 @@ class CreateCredentialRequest(BaseModel):
     login: str = Field(min_length=1, max_length=320)
     password: SecretStr = Field(min_length=1, max_length=2_000)
     allowed_domains: list[str] = Field(min_length=1, max_length=20)
+    is_default: bool = False
 
     @field_validator("name", "login")
     @classmethod
@@ -46,6 +49,7 @@ class UpdateCredentialRequest(BaseModel):
     login: str | None = Field(default=None, min_length=1, max_length=320)
     password: SecretStr | None = Field(default=None, min_length=1, max_length=2_000)
     allowed_domains: list[str] | None = Field(default=None, min_length=1, max_length=20)
+    is_default: bool | None = None
 
     @field_validator("name", "login")
     @classmethod

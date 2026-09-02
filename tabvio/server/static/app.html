@@ -17,10 +17,11 @@
         <span>Tabvio</span>
       </a>
       <div class="masthead-side">
-        <div class="run-state" aria-live="polite">
+        <div class="run-state" id="run-state" aria-live="polite" hidden>
           <span class="run-state-dot" id="status-dot"></span>
-          <span id="status-label">Ready</span>
+          <span id="status-label"></span>
         </div>
+        <button class="masthead-home" type="button" id="home-button">Home</button>
         <div class="account">
           <span class="account-email" id="account-email"></span>
           <a class="account-link" href="/logout">Sign out</a>
@@ -69,6 +70,10 @@
             <label>Login<input id="credential-login" autocomplete="username" placeholder="you@example.com"></label>
             <label>Password<input id="credential-password" type="password" autocomplete="new-password" placeholder="Enter password"></label>
             <label>Allowed domains<input id="credential-domains" required placeholder="github.com, gist.github.com"></label>
+            <label class="credential-default-toggle">
+              <input id="credential-default" type="checkbox">
+              <span>Preselect this credential for new runs</span>
+            </label>
             <div class="credential-form-actions">
               <p id="credential-message" role="alert"></p>
               <button class="primary-button" type="submit" id="credential-save-button">Save credential</button>
@@ -152,11 +157,16 @@
         </section>
 
         <div class="task-actions" id="terminal-actions" hidden>
-          <span></span>
-          <button class="primary-button" type="button" id="new-run-button">
-            Start another run
-            <span aria-hidden="true">↗</span>
-          </button>
+          <p id="terminal-message" role="alert"></p>
+          <div class="terminal-buttons">
+            <button class="rerun-button" type="button" id="rerun-button">
+              Run this task again
+            </button>
+            <button class="primary-button" type="button" id="new-run-button">
+              Start another run
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
         </div>
       </div>
 

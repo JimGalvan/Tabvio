@@ -26,6 +26,7 @@ class CredentialRepository:
                     allowed_domains_json TEXT NOT NULL,
                     login_hint TEXT NOT NULL,
                     encrypted_payload BLOB,
+                    is_default INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     revoked_at TEXT
@@ -39,6 +40,13 @@ class CredentialRepository:
                 WHERE revoked_at IS NULL;
                 """
             )
+            credential_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(credentials)")
+            }
+            if "is_default" not in credential_columns:
+                connection.execute(
+                    "ALTER TABLE credentials ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"
+                )
             connection.commit()
 
     def save(self, credential: CredentialRecord) -> None:
@@ -48,13 +56,14 @@ class CredentialRepository:
                     """
                     INSERT INTO credentials (
                         id, user_id, name, allowed_domains_json, login_hint,
-                        encrypted_payload, created_at, updated_at, revoked_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        encrypted_payload, is_default, created_at, updated_at, revoked_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         allowed_domains_json = excluded.allowed_domains_json,
                         login_hint = excluded.login_hint,
                         encrypted_payload = excluded.encrypted_payload,
+                        is_default = excluded.is_default,
                         updated_at = excluded.updated_at,
                         revoked_at = excluded.revoked_at
                     """,
@@ -65,6 +74,7 @@ class CredentialRepository:
                         json.dumps(credential.allowed_domains),
                         credential.login_hint,
                         credential.encrypted_payload,
+                        int(credential.is_default),
                         credential.created_at.isoformat(),
                         credential.updated_at.isoformat(),
                         credential.revoked_at.isoformat() if credential.revoked_at else None,
@@ -91,7 +101,7 @@ class CredentialRepository:
                 """
                 SELECT * FROM credentials
                 WHERE user_id = ? AND revoked_at IS NULL
-                ORDER BY name COLLATE NOCASE, created_at
+                ORDER BY is_default DESC, name COLLATE NOCASE, created_at
                 """,
                 (str(user_id),),
             ).fetchall()
@@ -119,6 +129,7 @@ class CredentialRepository:
             allowed_domains=json.loads(row["allowed_domains_json"]),
             login_hint=row["login_hint"],
             encrypted_payload=row["encrypted_payload"],
+            is_default=bool(row["is_default"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             revoked_at=row["revoked_at"],

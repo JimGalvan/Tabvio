@@ -48,6 +48,7 @@ from tabvio.runs.exceptions import (
     RunCapacityReachedError,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
+    RunNotRerunnableError,
     RunNotWaitingForInputError,
     SensitiveInputNotPendingError,
 )
@@ -122,6 +123,7 @@ _RUN_ERROR_STATUSES = {
     RunCapacityReachedError: status.HTTP_429_TOO_MANY_REQUESTS,
     RunNotWaitingForInputError: status.HTTP_409_CONFLICT,
     RunNotReadyForFollowUpError: status.HTTP_409_CONFLICT,
+    RunNotRerunnableError: status.HTTP_409_CONFLICT,
     SensitiveInputNotPendingError: status.HTTP_409_CONFLICT,
     CredentialNotFoundError: status.HTTP_404_NOT_FOUND,
     CredentialConflictError: status.HTTP_409_CONFLICT,
@@ -364,6 +366,16 @@ async def submit_sensitive_input(
         request.request_id,
         request.code.get_secret_value(),
     )
+    return _build_run_response(run)
+
+
+@app.post(
+    "/api/runs/{run_id}/rerun",
+    response_model=RunResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def rerun_run(run_id: UUID, user: CurrentUser) -> RunResponse:
+    run = await run_manager.rerun_run(run_id, user.id)
     return _build_run_response(run)
 
 

@@ -5,12 +5,7 @@ const observedRunId = document.querySelector("#run-id");
 const observedRunStatus = document.querySelector("#status-dot");
 const terminalActions = document.querySelector("#terminal-actions");
 const newRunButton = document.querySelector("#new-run-button");
-const terminalRunStatuses = new Set([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "timed_out",
-]);
+const homeButton = document.querySelector("#home-button");
 
 const runIdObserver = new MutationObserver(() => {
   const runId = observedRunId.textContent.trim();
@@ -34,6 +29,11 @@ newRunButton.addEventListener("click", () => {
   resetRunViewer();
 });
 
+// Leaving a run does not stop it; it stays reachable from the history list.
+homeButton.addEventListener("click", () => {
+  resetRunViewer();
+});
+
 function resetRunViewer() {
   stopScreenRefresh();
   if (eventSource) {
@@ -51,6 +51,7 @@ function resetRunViewer() {
   resultOutput.textContent = "";
   resultPanel.hidden = true;
   terminalActions.hidden = true;
+  terminalMessage.textContent = "";
   answerPanel.hidden = true;
   secureInputPanel.hidden = true;
   secureInputCode.value = "";
@@ -66,7 +67,8 @@ function resetRunViewer() {
 
   statusDot.className = "run-state-dot";
   delete statusDot.dataset.status;
-  statusLabel.textContent = "Ready";
+  statusLabel.textContent = "";
+  runState.hidden = true;
   window.history.replaceState(
     null,
     "",

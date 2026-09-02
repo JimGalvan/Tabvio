@@ -34,6 +34,7 @@ class CredentialService:
             allowed_domains=self._normalize_domains(request.allowed_domains),
             login_hint=self._mask_login(request.login),
             encrypted_payload=b"",
+            is_default=request.is_default,
         )
         secret = CredentialSecret(
             login=request.login,
@@ -65,6 +66,8 @@ class CredentialService:
             credential.login_hint = self._mask_login(request.login)
         if request.password is not None:
             secret.password = request.password.get_secret_value()
+        if request.is_default is not None:
+            credential.is_default = request.is_default
         credential.encrypted_payload = self._cipher.encrypt(
             secret.model_dump_json().encode(), self._associated_data(credential)
         )

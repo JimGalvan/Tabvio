@@ -15,11 +15,14 @@ RUN_ENDPOINTS = [
     ("POST", "/cancel"),
     ("POST", "/end"),
     ("POST", "/input"),
+    ("POST", "/sensitive-input"),
     ("POST", "/follow-ups"),
+    ("POST", "/rerun"),
 ]
 
 REQUEST_BODIES = {
     "/input": {"answer": "Yes"},
+    "/sensitive-input": {"request_id": str(uuid4()), "code": "123456"},
     "/follow-ups": {"task": "Add an item"},
 }
 

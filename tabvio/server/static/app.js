@@ -1,12 +1,20 @@
 const SCREEN_REFRESH_INTERVAL_MS = 750;
 const PENDING_TASK_KEY = "tabvio.pending-task";
 
+const terminalRunStatuses = new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "timed_out",
+]);
+
 const taskForm = document.querySelector("#task-form");
 const taskInput = document.querySelector("#task-input");
 const startButton = document.querySelector("#start-button");
 const formMessage = document.querySelector("#form-message");
 const briefSection = document.querySelector("#brief-section");
 const workspace = document.querySelector("#workspace");
+const runState = document.querySelector("#run-state");
 const statusDot = document.querySelector("#status-dot");
 const statusLabel = document.querySelector("#status-label");
 const runIdLabel = document.querySelector("#run-id");
@@ -30,6 +38,8 @@ const followUpForm = document.querySelector("#follow-up-form");
 const followUpInput = document.querySelector("#follow-up-input");
 const followUpMessage = document.querySelector("#follow-up-message");
 const endSessionButton = document.querySelector("#end-session-button");
+const rerunButton = document.querySelector("#rerun-button");
+const terminalMessage = document.querySelector("#terminal-message");
 const accountEmail = document.querySelector("#account-email");
 const historyList = document.querySelector("#history-list");
 const historyEmpty = document.querySelector("#history-empty");
@@ -43,6 +53,7 @@ const credentialName = document.querySelector("#credential-name");
 const credentialLogin = document.querySelector("#credential-login");
 const credentialPassword = document.querySelector("#credential-password");
 const credentialDomains = document.querySelector("#credential-domains");
+const credentialDefault = document.querySelector("#credential-default");
 const credentialMessage = document.querySelector("#credential-message");
 const credentialSaveButton = document.querySelector("#credential-save-button");
 const credentialEditCancel = document.querySelector("#credential-edit-cancel");
@@ -165,6 +176,7 @@ credentialForm.addEventListener("submit", async (formEvent) => {
   const body = {
     name: credentialName.value.trim(),
     allowed_domains: domains,
+    is_default: credentialDefault.checked,
   };
   if (credentialLogin.value.trim()) {
     body.login = credentialLogin.value.trim();
@@ -208,7 +220,7 @@ function selectedCredentialIds() {
     .map((input) => input.value);
 }
 
-async function loadCredentials(selectCredentialId = null) {
+async function loadCredentials(selectCredentialId = null, applyDefaults = false) {
   const selectedIds = new Set(selectedCredentialIds());
   if (selectCredentialId) {
     selectedIds.add(selectCredentialId);
@@ -220,6 +232,13 @@ async function loadCredentials(selectCredentialId = null) {
       throw new Error(body.detail || "Credentials could not be loaded");
     }
     credentials = body.credentials || [];
+    if (applyDefaults) {
+      for (const credential of credentials) {
+        if (credential.is_default) {
+          selectedIds.add(credential.id);
+        }
+      }
+    }
     renderCredentialPicker(selectedIds);
     renderCredentialList();
   } catch (error) {
@@ -261,6 +280,12 @@ function renderCredentialList() {
     const summary = document.createElement("div");
     const name = document.createElement("strong");
     name.textContent = credential.name;
+    if (credential.is_default) {
+      const badge = document.createElement("span");
+      badge.className = "credential-default-badge";
+      badge.textContent = "Default";
+      name.append(" ", badge);
+    }
     const detail = document.createElement("span");
     detail.textContent = `${credential.login_hint} · ${credential.allowed_domains.join(", ")}`;
     summary.append(name, detail);
@@ -290,6 +315,7 @@ function beginCredentialEdit(credential) {
   credentialPassword.value = "";
   credentialPassword.placeholder = "Leave blank to keep current password";
   credentialDomains.value = credential.allowed_domains.join(", ");
+  credentialDefault.checked = Boolean(credential.is_default);
   credentialSaveButton.textContent = "Save changes";
   credentialEditCancel.hidden = false;
   credentialMessage.textContent = "";
@@ -473,6 +499,36 @@ cancelButton.addEventListener("click", async () => {
     addActivity("run.failed", {error: error.message}, new Date());
   }
 });
+
+rerunButton.addEventListener("click", async () => {
+  if (!activeRunId) {
+    return;
+  }
+
+  rerunButton.disabled = true;
+  terminalMessage.textContent = "";
+  try {
+    await startRerun(activeRunId);
+  } catch (error) {
+    terminalMessage.textContent = error.message;
+  } finally {
+    rerunButton.disabled = false;
+  }
+});
+
+/* Start a finished run again. The original stays in history untouched. */
+async function startRerun(runId) {
+  const response = await fetch(`/api/runs/${runId}/rerun`, {method: "POST"});
+  const responseBody = await readResponseBody(response);
+  if (!response.ok) {
+    throw new Error(
+      responseBody.detail || "The task could not be started again",
+    );
+  }
+
+  openRun(responseBody);
+  void loadRunHistory();
+}
 
 browserScreen.addEventListener("load", () => {
   browserScreen.hidden = false;
@@ -721,6 +777,7 @@ function updateStatus(status, followUpExpiresAt = null) {
     timed_out: "Timed out",
   };
 
+  runState.hidden = false;
   statusDot.className = `run-state-dot ${status}`;
   statusDot.dataset.status = status;
   statusLabel.textContent = labels[status] || status;
@@ -791,6 +848,7 @@ function updateStatusWithoutCompletion(status) {
     cancelled: "Cancelled",
     timed_out: "Timed out",
   };
+  runState.hidden = false;
   statusDot.className = `run-state-dot ${status}`;
   statusDot.dataset.status = status;
   statusLabel.textContent = labels[status] || status;
@@ -900,6 +958,26 @@ function renderRunHistory(runs) {
 
     button.append(task, meta);
     item.append(button);
+
+    if (terminalRunStatuses.has(run.status)) {
+      const rerun = document.createElement("button");
+      rerun.type = "button";
+      rerun.className = "history-rerun";
+      rerun.textContent = "Run again";
+      rerun.title = "Start this task again";
+      rerun.addEventListener("click", async (clickEvent) => {
+        clickEvent.stopPropagation();
+        rerun.disabled = true;
+        try {
+          await startRerun(run.id);
+        } catch (error) {
+          formMessage.textContent = error.message;
+          rerun.disabled = false;
+        }
+      });
+      item.append(rerun);
+    }
+
     historyList.append(item);
   }
 }
@@ -954,4 +1032,4 @@ function restorePendingTask() {
 restorePendingTask();
 void loadSignedInAccount();
 void loadRunHistory();
-void loadCredentials();
+void loadCredentials(null, true);

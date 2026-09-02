@@ -23,3 +23,7 @@ class RunNotReadyForFollowUpError(RuntimeError):
 
 class SensitiveInputNotPendingError(RuntimeError):
     pass
+
+
+class RunNotRerunnableError(RuntimeError):
+    pass
