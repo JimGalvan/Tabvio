@@ -187,6 +187,16 @@ async def get_landing_page() -> FileResponse:
     return _serve_page("index.html")
 
 
+@app.get("/privacy", include_in_schema=False)
+async def get_privacy_page() -> FileResponse:
+    return _serve_page("privacy.html")
+
+
+@app.get("/terms", include_in_schema=False)
+async def get_terms_page() -> FileResponse:
+    return _serve_page("terms.html")
+
+
 @app.get("/app", include_in_schema=False)
 async def get_dashboard(request: Request) -> Response:
     if read_session_state(request) is None:

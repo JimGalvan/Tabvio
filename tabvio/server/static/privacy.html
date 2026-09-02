@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#dce8f0">
+  <meta name="description" content="How Tabvio collects, uses, and protects information when you use its browser agent.">
+  <title>Privacy · Tabvio</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/legal.css">
+</head>
+<body>
+  <main class="shell legal-shell">
+    <header class="masthead">
+      <a class="wordmark" href="/" aria-label="Tabvio home">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Tabvio</span>
+      </a>
+      <div class="masthead-side"><a class="account-link" href="/app">Open app</a></div>
+    </header>
+
+    <article class="legal-document">
+      <header class="legal-intro">
+        <div>
+          <p class="eyebrow">The fine print, in plain English</p>
+          <h1>Privacy</h1>
+          <p class="legal-intro-copy">Tabvio needs context to operate a browser for you. This notice explains what that context includes, where it goes, and the controls you have.</p>
+          <p class="legal-meta">Effective August 31, 2026</p>
+        </div>
+        <div class="legal-scope">
+          <strong>The boundary</strong>
+          <span>You choose the task. Tabvio processes the information needed to carry it out.</span>
+        </div>
+      </header>
+
+      <div class="legal-layout">
+        <nav class="legal-index" aria-label="Privacy sections">
+          <p>In this notice</p>
+          <ol>
+            <li><a href="#scope">Scope</a></li>
+            <li><a href="#collect">Information we collect</a></li>
+            <li><a href="#use">How we use it</a></li>
+            <li><a href="#share">How information is shared</a></li>
+            <li><a href="#retention">Retention</a></li>
+            <li><a href="#security">Security</a></li>
+            <li><a href="#choices">Your choices</a></li>
+            <li><a href="#international">International processing</a></li>
+            <li><a href="#changes">Changes and contact</a></li>
+          </ol>
+        </nav>
+
+        <div class="legal-copy">
+          <section id="scope">
+            <h2>1. Scope</h2>
+            <p>This Privacy Notice applies to Tabvio’s website, accounts, and autonomous browser-agent service. It does not govern websites that you ask Tabvio to visit or third-party services you connect to; their own privacy notices apply.</p>
+            <p>Tabvio is not designed for children, and we do not knowingly collect personal information from children.</p>
+          </section>
+
+          <section id="collect">
+            <h2>2. Information we collect</h2>
+            <h3>Account information</h3>
+            <p>We receive and store your email address, an account identifier, and sign-in information needed to keep you authenticated. Authentication is provided through WorkOS.</p>
+            <h3>Tasks and run records</h3>
+            <p>We process the instructions, answers, and follow-ups you submit, along with run status, actions, outputs, errors, timestamps, and technical details needed to operate and troubleshoot the service.</p>
+            <h3>Browser content</h3>
+            <p>To complete a task, Tabvio processes the pages you direct it to visit, including page text, links, form fields, and other content visible to the browser. Live browser images may contain information shown on those pages. These images are held temporarily in application memory for live viewing and recent-run continuity; they are not written to Tabvio’s main run database.</p>
+            <h3>Saved credentials and verification codes</h3>
+            <p>If you save a credential, we store its name, login hint, allowed domains, and an encrypted payload containing the login and password. Credential secrets are decrypted only for an allowed domain you selected. Verification codes submitted through the secure verification control are sent directly to the active browser and are not added to run history.</p>
+            <h3>Technical information</h3>
+            <p>Like most online services, Tabvio and its infrastructure providers may process request metadata, IP address, device and browser information, cookies, and logs for authentication, security, reliability, and debugging.</p>
+          </section>
+
+          <section id="use">
+            <h2>3. How we use information</h2>
+            <p>We use information to:</p>
+            <ul>
+              <li>create and secure your account;</li>
+              <li>understand your instructions and operate the browser agent;</li>
+              <li>show live progress, preserve run history, and support follow-ups;</li>
+              <li>provide domain-limited access to credentials you select;</li>
+              <li>prevent abuse, investigate failures, and improve reliability; and</li>
+              <li>comply with law and protect users, Tabvio, and others.</li>
+            </ul>
+            <p>We do not sell personal information or use it for cross-context behavioral advertising.</p>
+          </section>
+
+          <section id="share">
+            <h2>4. How information is shared</h2>
+            <p>We disclose information only as needed to operate the service, follow your directions, protect the service, or comply with law. Relevant recipients may include:</p>
+            <ul>
+              <li><strong>WorkOS</strong>, for account authentication;</li>
+              <li><strong>OpenAI</strong>, for model processing that interprets tasks and produces agent actions and responses;</li>
+              <li><strong>hosting, database, logging, and security providers</strong> that run Tabvio’s infrastructure; and</li>
+              <li><strong>websites and services you direct Tabvio to use</strong>, which receive browser requests and any information you instruct the agent to submit.</li>
+            </ul>
+            <p>We may also disclose information in a business transaction, such as a merger or acquisition, or when reasonably necessary to comply with legal process, enforce our terms, or protect rights and safety.</p>
+          </section>
+
+          <section id="retention">
+            <h2>5. Retention</h2>
+            <p>Run instructions, events, results, and account records are kept while needed to provide account history, operate the service, resolve disputes, meet legal obligations, and protect the service. The exact period depends on the type of record and why it is needed.</p>
+            <p>Live browser images are held only temporarily in memory. When you remove a saved credential, Tabvio removes its encrypted secret payload and retains limited revocation metadata. Authentication cookies expire or are cleared when you sign out. Service providers may retain data under their own contracts and policies.</p>
+          </section>
+
+          <section id="security">
+            <h2>6. Security</h2>
+            <p>We use administrative, technical, and organizational safeguards appropriate to the information we process. Saved credential payloads are encrypted with AES-256-GCM before they are stored, each payload is cryptographically bound to the account and the credential it belongs to, access is scoped to your account, and credentials can be used only on domains you allow. No system is completely secure, so we cannot guarantee that information will never be accessed, lost, or disclosed improperly.</p>
+            <p class="legal-callout"><strong>Keep sensitive data out of ordinary task prompts.</strong> Use Tabvio’s credential manager and secure verification control for passwords and one-time codes.</p>
+          </section>
+
+          <section id="choices">
+            <h2>7. Your choices</h2>
+            <ul>
+              <li>You can choose what instructions, sites, and information to provide.</li>
+              <li>You can remove saved credentials from the credential manager.</li>
+              <li>You can sign out to clear the local Tabvio session.</li>
+              <li>You may ask to access, correct, or delete personal information, subject to applicable exceptions.</li>
+            </ul>
+            <p>Depending on where you live, you may have additional privacy rights and the right to appeal a response. We will not discriminate against you for exercising a privacy right.</p>
+          </section>
+
+          <section id="international">
+            <h2>8. International processing</h2>
+            <p>Tabvio and its providers may process information in the United States and other countries. Those locations may have different data-protection laws than your home country. Where required, we use appropriate safeguards for international transfers.</p>
+          </section>
+
+          <section id="changes">
+            <h2>9. Changes and contact</h2>
+            <p>We may update this notice as Tabvio changes. We will revise the effective date and provide additional notice when required by law.</p>
+            <p>For privacy questions or requests, email <a href="mailto:privacy@tabvio.com">privacy@tabvio.com</a>.</p>
+          </section>
+        </div>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <p><span class="footer-wordmark">Tabvio</span> <span aria-hidden="true">/</span> User-directed browser automation</p>
+      <nav aria-label="Legal"><a href="/privacy" aria-current="page">Privacy</a><a href="/terms">Terms</a></nav>
+      <p class="footer-year">© 2026 Tabvio</p>
+    </div>
+  </footer>
+</body>
+</html>
