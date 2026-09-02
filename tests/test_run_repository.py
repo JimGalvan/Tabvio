@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import UTC
 from pathlib import Path
+from uuid import uuid4
 
 from tabvio.runs.models import RunEvent, RunRecord, RunStatus, utc_now
 from tabvio.runs.repository import RunRepository
@@ -73,6 +74,17 @@ class RunRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(stored_run.created_at.utcoffset(), UTC.utcoffset(None))
         self.assertEqual(stored_run.updated_at.utcoffset(), UTC.utcoffset(None))
+
+    def test_selected_credential_references_are_persisted(self) -> None:
+        credential_ids = [uuid4(), uuid4()]
+        run = RunRecord(
+            task="Sign in", max_runtime_seconds=300, credential_ids=credential_ids
+        )
+        self._repository.save_run(run)
+
+        stored_run = self._repository.get_run(run.id)
+
+        self.assertEqual(stored_run.credential_ids, credential_ids)
 
 
 if __name__ == "__main__":

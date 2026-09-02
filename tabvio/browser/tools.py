@@ -1,25 +1,65 @@
+import asyncio
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
+from uuid import UUID
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, tool
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from tabvio.agent.context import AgentContext
+from tabvio.agent.sensitive_input import SensitiveInputChannel
 from tabvio.browser.session import BrowserSession
+from tabvio.credentials.service import CredentialService
 
 
-class BrowserStep(BaseModel):
-    action: Literal["click", "fill", "select", "press"]
+class StrictStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ClickStep(StrictStep):
+    action: Literal["click"]
     element_index: int = Field(ge=0)
-    value: str | None = None
 
-    @model_validator(mode="after")
-    def require_value(self):
-        if self.action != "click" and self.value is None:
-            raise ValueError(f"{self.action} requires a value")
 
-        return self
+class FillStep(StrictStep):
+    action: Literal["fill"]
+    element_index: int = Field(ge=0)
+    value: str
+
+
+class SelectStep(StrictStep):
+    action: Literal["select"]
+    element_index: int = Field(ge=0)
+    value: str
+
+
+class PressStep(StrictStep):
+    action: Literal["press"]
+    element_index: int = Field(ge=0)
+    value: str
+
+
+class CredentialFillStep(StrictStep):
+    action: Literal["fill_credential"]
+    credential_id: UUID
+    username_element_index: int = Field(ge=0)
+    password_element_index: int = Field(ge=0)
+
+
+class MfaCodeStep(StrictStep):
+    action: Literal["request_mfa_code"]
+    element_index: int = Field(ge=0)
+    prompt: str = Field(min_length=1, max_length=240)
+
+
+BrowserStep = Annotated[
+    ClickStep | FillStep | SelectStep | PressStep | CredentialFillStep | MfaCodeStep,
+    Field(discriminator="action"),
+]
+_BROWSER_STEP_ADAPTER = TypeAdapter(BrowserStep)
 
 
 class StepPlan(BaseModel):
@@ -31,42 +71,84 @@ def _publish_custom_event(event_type: str, payload: dict[str, Any]) -> None:
     writer({"event_type": event_type, "payload": payload})
 
 
+def _require_fillable_element(
+    browser: BrowserSession, element_index: int, *, password: bool = False
+) -> None:
+    element = browser.get_stored_element(element_index)
+    if element is None:
+        raise ValueError(f"element [{element_index}] is not in the latest observation")
+    if element.tag.lower() not in {"input", "textarea"}:
+        raise ValueError(
+            f"fill[{element_index}] targets <{element.tag}>, not an input or textarea"
+        )
+    if password and "type=password" not in element.attrs.lower():
+        raise ValueError(
+            f"password field [{element_index}] is not an input with type=password"
+        )
+
+
 def _validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
     for step in steps[:-1]:
-        if step.action in {"click", "select", "press"}:
+        if isinstance(step, (ClickStep, SelectStep, PressStep, MfaCodeStep)):
             raise ValueError(
-                f"{step.action}[{step.element_index}] must be final; observe before planning more actions"
+                f"{step.action} must be final; observe before planning more actions"
             )
 
     for step in steps:
+        if isinstance(step, CredentialFillStep):
+            _require_fillable_element(browser, step.username_element_index)
+            _require_fillable_element(
+                browser, step.password_element_index, password=True
+            )
+            continue
+
         element = browser.get_stored_element(step.element_index)
         if element is None:
             raise ValueError(
                 f"element [{step.element_index}] is not in the latest observation"
             )
-
-        if step.action == "fill" and element.tag.lower() not in {"input", "textarea"}:
-            raise ValueError(
-                f"fill[{step.element_index}] targets <{element.tag}>, not an input or textarea"
-            )
+        if isinstance(step, FillStep):
+            _require_fillable_element(browser, step.element_index)
+        if isinstance(step, MfaCodeStep):
+            _require_fillable_element(browser, step.element_index)
 
 
 def _element_label(browser: BrowserSession, element_index: int) -> str:
     element = browser.get_stored_element(element_index)
     if element is None:
         return f"Element {element_index}"
-
     text = " ".join(element.text.split())
-    if text:
-        return text[:80]
-
-    return f"{element.tag} element {element_index}"
+    return text[:80] if text else f"{element.tag} element {element_index}"
 
 
-def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
-    """Build the browser tools for the main agent, bound to one session."""
+def _step_reference(step: BrowserStep) -> str:
+    if isinstance(step, CredentialFillStep):
+        return (
+            f"fill_credential[{step.username_element_index},"
+            f"{step.password_element_index}]"
+        )
+    return f"{step.action}[{step.element_index}]"
 
-    # TODO: put this in a reusable place
+
+def _step_event_payload(browser: BrowserSession, step: BrowserStep) -> dict[str, Any]:
+    if isinstance(step, CredentialFillStep):
+        target = (
+            f"{_element_label(browser, step.username_element_index)} and "
+            f"{_element_label(browser, step.password_element_index)}"
+        )
+    else:
+        target = _element_label(browser, step.element_index)
+    return {"action": step.action, "target": target}
+
+
+def build_browser_tools(
+    browser: BrowserSession,
+    credential_service: CredentialService | None = None,
+    sensitive_inputs: SensitiveInputChannel | None = None,
+) -> list[BaseTool]:
+    """Build the tools for one browser run and its security boundaries."""
+    sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
+
     @tool
     async def get_text_in_viewport() -> str:
         """Return text visible in the current browser viewport."""
@@ -98,21 +180,47 @@ def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
 
     @tool
     def request_user_input(question: str) -> str:
-        """Pause and ask the user for required information."""
+        """Pause and ask the user for required non-sensitive information."""
         _publish_custom_event("input.required", {"question": question})
         answer = interrupt({"kind": "question", "question": question})
         return str(answer)
 
-    @tool(args_schema=StepPlan)
-    async def execute_steps(steps: list[BrowserStep]) -> str:
-        """Validate and execute browser steps sequentially without another LLM."""
-        normalized_steps = []
-        for step in steps:
-            if isinstance(step, BrowserStep):
-                normalized_steps.append(step)
-            else:
-                normalized_steps.append(BrowserStep.model_validate(step))
+    @tool
+    async def list_selected_credentials(
+        runtime: ToolRuntime[AgentContext],
+    ) -> str:
+        """List safe metadata for credentials selected for this run."""
+        if not runtime.context.credential_ids:
+            return "[]"
+        if credential_service is None or runtime.context.user_id is None:
+            raise RuntimeError("Credential storage is not configured")
+        metadata = await asyncio.to_thread(
+            credential_service.require_selected,
+            runtime.context.credential_ids,
+            runtime.context.user_id,
+        )
+        return json.dumps(
+            [
+                {
+                    "id": str(item.id),
+                    "name": item.name,
+                    "allowed_domains": item.allowed_domains,
+                }
+                for item in metadata
+            ]
+        )
 
+    @tool(args_schema=StepPlan)
+    async def execute_steps(
+        steps: list[BrowserStep], runtime: ToolRuntime[AgentContext]
+    ) -> str:
+        """Validate and execute browser steps, including credential and MFA steps."""
+        normalized_steps = [
+            step
+            if isinstance(step, BaseModel)
+            else _BROWSER_STEP_ADAPTER.validate_python(step)
+            for step in steps
+        ]
         try:
             _validate_plan(browser, normalized_steps)
         except ValueError as exception:
@@ -128,30 +236,54 @@ def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
 
         completed: list[str] = []
         for step in normalized_steps:
-            step_reference = f"{step.action}[{step.element_index}]"
-            event_payload = {
-                "action": step.action,
-                "element_index": step.element_index,
-                "target": _element_label(browser, step.element_index),
-            }
+            step_reference = _step_reference(step)
+            event_payload = _step_event_payload(browser, step)
             _publish_custom_event("browser.action.started", event_payload)
-
             try:
-                if step.action == "click":
+                if isinstance(step, ClickStep):
                     await browser.click(step.element_index)
-                elif step.action == "fill" and step.value is not None:
+                elif isinstance(step, FillStep):
                     await browser.fill(step.element_index, step.value)
-                elif step.action == "select" and step.value is not None:
+                elif isinstance(step, SelectStep):
                     await browser.select(step.element_index, step.value)
-                elif step.action == "press" and step.value is not None:
+                elif isinstance(step, PressStep):
                     await browser.press(step.element_index, step.value)
+                elif isinstance(step, CredentialFillStep):
+                    if credential_service is None or runtime.context.user_id is None:
+                        raise RuntimeError("Credential storage is not configured")
+                    if step.credential_id not in runtime.context.credential_ids:
+                        raise ValueError("Credential is not selected for this run")
+                    secret = await asyncio.to_thread(
+                        credential_service.resolve_for_domain,
+                        step.credential_id,
+                        runtime.context.user_id,
+                        browser.current_hostname,
+                    )
+                    await browser.fill(step.username_element_index, secret.login)
+                    await browser.fill(step.password_element_index, secret.password)
+                    del secret
+                elif isinstance(step, MfaCodeStep):
+                    request = sensitive_inputs.begin(step.element_index, step.prompt)
+                    _publish_custom_event(
+                        "sensitive_input.required",
+                        {
+                            "request_id": str(request.id),
+                            "kind": request.kind,
+                            "prompt": request.prompt,
+                        },
+                    )
+                    result = interrupt(
+                        {"kind": request.kind, "request_id": str(request.id)}
+                    )
+                    if not isinstance(result, dict) or result.get("entered") is not True:
+                        raise RuntimeError("The verification code was not entered")
+                    sensitive_inputs.clear(request.id)
 
                 completed.append(step_reference)
                 _publish_custom_event("browser.action.completed", event_payload)
             except Exception as exception:
                 _publish_custom_event(
-                    "browser.action.failed",
-                    {**event_payload, "error": str(exception)},
+                    "browser.action.failed", {**event_payload, "error": str(exception)}
                 )
                 return json.dumps(
                     {
@@ -173,6 +305,7 @@ def build_browser_tools(browser: BrowserSession) -> list[BaseTool]:
         navigate_and_observe,
         observe_page,
         execute_steps,
+        list_selected_credentials,
         switch_tab,
         request_user_input,
     ]

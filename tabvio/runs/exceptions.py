@@ -20,3 +20,6 @@ class RunNotWaitingForInputError(RuntimeError):
 class RunNotReadyForFollowUpError(RuntimeError):
     pass
 
+
+class SensitiveInputNotPendingError(RuntimeError):
+    pass

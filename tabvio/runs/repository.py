@@ -22,6 +22,7 @@ class RunRepository:
                     id TEXT PRIMARY KEY,
                     thread_id TEXT NOT NULL,
                     user_id TEXT,
+                    credential_ids_json TEXT NOT NULL DEFAULT '[]',
                     task TEXT NOT NULL,
                     status TEXT NOT NULL,
                     max_runtime_seconds INTEGER NOT NULL,
@@ -58,6 +59,10 @@ class RunRepository:
                 # Runs recorded before sign-in existed stay unowned, which
                 # leaves them unreachable rather than visible to everyone.
                 connection.execute("ALTER TABLE runs ADD COLUMN user_id TEXT")
+            if "credential_ids_json" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE runs ADD COLUMN credential_ids_json TEXT NOT NULL DEFAULT '[]'"
+                )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_runs_user_id ON runs(user_id)"
             )
@@ -71,6 +76,7 @@ class RunRepository:
                     id,
                     thread_id,
                     user_id,
+                    credential_ids_json,
                     task,
                     status,
                     max_runtime_seconds,
@@ -79,10 +85,11 @@ class RunRepository:
                     follow_up_expires_at,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     thread_id = excluded.thread_id,
                     user_id = excluded.user_id,
+                    credential_ids_json = excluded.credential_ids_json,
                     task = excluded.task,
                     status = excluded.status,
                     max_runtime_seconds = excluded.max_runtime_seconds,
@@ -95,6 +102,7 @@ class RunRepository:
                     str(run.id),
                     str(run.thread_id),
                     str(run.user_id) if run.user_id is not None else None,
+                    json.dumps([str(item) for item in run.credential_ids]),
                     run.task,
                     run.status.value,
                     run.max_runtime_seconds,
@@ -143,6 +151,7 @@ class RunRepository:
             id=row["id"],
             thread_id=row["thread_id"],
             user_id=row["user_id"],
+            credential_ids=json.loads(row["credential_ids_json"]),
             task=row["task"],
             status=RunStatus(row["status"]),
             max_runtime_seconds=row["max_runtime_seconds"],

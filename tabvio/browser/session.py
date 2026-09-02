@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from playwright.async_api import (
     Browser,
@@ -42,6 +43,15 @@ class BrowserSession:
     @property
     def is_open(self) -> bool:
         return self._page is not None and not self._page.is_closed()
+
+    @property
+    def current_hostname(self) -> str:
+        if not self.is_open or self._page is None:
+            raise RuntimeError("No page is open")
+        hostname = urlsplit(self._page.url).hostname
+        if not hostname:
+            raise RuntimeError("The current page has no valid hostname")
+        return hostname
 
     async def _initialize_browser(self) -> Browser:
         if self._playwright is None:
@@ -288,6 +298,25 @@ class BrowserSession:
         await self._page.keyboard.press("Control+A")
         await self._page.keyboard.insert_text(value)
         return f"Filled element [{element_index}]"
+
+    async def fill_sensitive(self, element_index: int, value: str) -> str:
+        """Mask a field in browser captures before inserting sensitive text."""
+        element = self.get_stored_element(element_index)
+        if element is None:
+            raise ValueError(f"Element [{element_index}] is not available")
+        await self._active_frame().evaluate(
+            """
+            ({x, y}) => {
+                const hit = document.elementFromPoint(x, y);
+                const field = hit?.closest('input, textarea');
+                if (!field) throw new Error('Sensitive target is not an input');
+                field.dataset.tabvioSensitive = 'true';
+                field.style.setProperty('-webkit-text-security', 'disc', 'important');
+            }
+            """,
+            {"x": element.cx, "y": element.cy},
+        )
+        return await self.fill(element_index, value)
 
     async def select(self, element_index: int, value: str) -> str:
         if self._page is None:

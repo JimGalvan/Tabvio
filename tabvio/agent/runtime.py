@@ -8,11 +8,14 @@ from langchain.agents.middleware import ModelFallbackMiddleware, ModelRetryMiddl
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
+from tabvio.agent.context import AgentContext
 from tabvio.agent.llm import strong_model
 from tabvio.agent.prompts import SYSTEM_PROMPT
+from tabvio.agent.sensitive_input import SensitiveInputChannel
 from tabvio.agent.subagents import build_page_navigator
 from tabvio.browser.session import BrowserSession
 from tabvio.browser.tools import build_browser_tools
+from tabvio.credentials.service import CredentialService
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 
@@ -22,10 +25,20 @@ class AgentRuntime:
     agent: Any
     config: dict[str, dict[str, str]]
     browser: BrowserSession
+    context: AgentContext
+    sensitive_inputs: SensitiveInputChannel
 
 
-def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
+def build_agent_runtime(
+    thread_id: UUID,
+    user_id: UUID | None,
+    credential_ids: tuple[UUID, ...] = (),
+    credential_service: CredentialService | None = None,
+    headless: bool = True,
+) -> AgentRuntime:
     browser = BrowserSession(headless=headless)
+    agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
+    sensitive_inputs = SensitiveInputChannel()
 
     fallback_model = ChatOpenAI(
         model="gpt-5.6-terra",
@@ -39,7 +52,11 @@ def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
         model=strong_model,
         checkpointer=InMemorySaver(),
         system_prompt=SYSTEM_PROMPT,
-        tools=build_browser_tools(browser),
+        tools=build_browser_tools(
+            browser,
+            credential_service=credential_service,
+            sensitive_inputs=sensitive_inputs,
+        ),
         subagents=[build_page_navigator(browser)],
         middleware=[
             ModelRetryMiddleware(
@@ -49,6 +66,13 @@ def build_agent_runtime(thread_id: UUID, headless: bool = True) -> AgentRuntime:
             ),
             ModelFallbackMiddleware(fallback_model),
         ],
+        context_schema=AgentContext,
     )
     config = {"configurable": {"thread_id": str(thread_id)}}
-    return AgentRuntime(agent=agent, config=config, browser=browser)
+    return AgentRuntime(
+        agent=agent,
+        config=config,
+        browser=browser,
+        context=agent_context,
+        sensitive_inputs=sensitive_inputs,
+    )

@@ -45,7 +45,7 @@
 
         push(element.getAttribute('aria-label'));
         push(element.getAttribute('placeholder'));
-        if (element.tagName === 'INPUT') push(element.value);
+        if (element.tagName === 'INPUT' && element.type !== 'password' && !element.dataset.tabvioSensitive) push(element.value);
 
         let budget = MAX_ROLLUP_LABELS;
         for (const descendant of element.querySelectorAll('[aria-label]')) {

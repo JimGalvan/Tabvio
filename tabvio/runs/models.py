@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from tabvio.clock import utc_now
 
@@ -39,6 +39,7 @@ class RunRecord(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     thread_id: UUID = Field(default_factory=uuid4)
     user_id: UUID | None = None
+    credential_ids: list[UUID] = Field(default_factory=list, max_length=25)
     task: str
     status: RunStatus = RunStatus.QUEUED
     max_runtime_seconds: int
@@ -77,10 +78,16 @@ class RunContext:
 class CreateRunRequest(BaseModel):
     task: str = Field(min_length=1, max_length=10_000)
     max_runtime_seconds: int = Field(default=600, ge=30, le=1_800)
+    credential_ids: list[UUID] = Field(default_factory=list, max_length=25)
 
 
 class UserInputRequest(BaseModel):
     answer: str = Field(min_length=1, max_length=10_000)
+
+
+class SensitiveInputRequest(BaseModel):
+    request_id: UUID
+    code: SecretStr = Field(min_length=1, max_length=128)
 
 
 class FollowUpRequest(BaseModel):

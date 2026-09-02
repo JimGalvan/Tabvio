@@ -10,12 +10,14 @@ from langgraph.types import Command
 
 from tabvio.agent.runtime import build_agent_runtime
 from tabvio.clock import utc_now
+from tabvio.credentials.service import CredentialService
 from tabvio.runs import constants
 from tabvio.runs.exceptions import (
     RunCapacityReachedError,
     RunNotFoundError,
     RunNotReadyForFollowUpError,
     RunNotWaitingForInputError,
+    SensitiveInputNotPendingError,
 )
 from tabvio.runs.models import RunContext, RunEvent, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
@@ -28,6 +30,7 @@ class RunManager:
             headless: bool = True,
             max_concurrent_runs: int = constants.DEFAULT_MAX_CONCURRENT_RUNS,
             follow_up_window_seconds: float = constants.DEFAULT_FOLLOW_UP_WINDOW_SECONDS,
+            credential_service: CredentialService | None = None,
     ):
         if max_concurrent_runs < 1:
             raise ValueError("max_concurrent_runs must be at least 1")
@@ -40,6 +43,7 @@ class RunManager:
         self._manager_lock = asyncio.Lock()
         self._max_concurrent_runs = max_concurrent_runs
         self._follow_up_window_seconds = follow_up_window_seconds
+        self._credential_service = credential_service
         self._active_run_ids: set[UUID] = set()
         self._completed_frames: OrderedDict[UUID, bytes] = OrderedDict()
         self._resuming_run_ids: set[UUID] = set()
@@ -49,17 +53,31 @@ class RunManager:
             task: str,
             max_runtime_seconds: int,
             user_id: UUID | None = None,
+            credential_ids: list[UUID] | None = None,
     ) -> RunRecord:
         async with self._manager_lock:
             if len(self._active_run_ids) >= self._max_concurrent_runs:
                 raise RunCapacityReachedError("The demo is currently at capacity. Try again shortly.")
 
+            selected_credential_ids = list(dict.fromkeys(credential_ids or []))
+            if selected_credential_ids:
+                if user_id is None or self._credential_service is None:
+                    raise ValueError("Credential selection requires an authenticated user")
+                self._credential_service.require_selected(selected_credential_ids, user_id)
+
             run = RunRecord(
                 task=task.strip(),
                 max_runtime_seconds=max_runtime_seconds,
                 user_id=user_id,
+                credential_ids=selected_credential_ids,
             )
-            runtime = build_agent_runtime(run.thread_id, headless=self._headless)
+            runtime = build_agent_runtime(
+                run.thread_id,
+                user_id=user_id,
+                credential_ids=tuple(selected_credential_ids),
+                credential_service=self._credential_service,
+                headless=self._headless,
+            )
             context = RunContext(run=run, runtime=runtime)
             self._contexts[run.id] = context
             self._active_run_ids.add(run.id)
@@ -124,12 +142,53 @@ class RunManager:
 
         if context.run.status != RunStatus.WAITING_FOR_INPUT:
             raise RunNotWaitingForInputError("The run is not waiting for user input")
+        sensitive_inputs = getattr(context.runtime, "sensitive_inputs", None)
+        if sensitive_inputs is not None and sensitive_inputs.pending is not None:
+            raise RunNotWaitingForInputError(
+                "The run is waiting for a verification code"
+            )
 
         self._resuming_run_ids.add(run_id)
         try:
-            await self._publish(context, "input.received", {"answer": answer.strip()})
+            await self._publish(context, "input.received", {})
             context.execution_task = asyncio.create_task(
                 self._execute(context, Command(resume=answer.strip())), name=f"resume-{run_id}"
+            )
+            return context.run
+        except Exception:
+            self._resuming_run_ids.discard(run_id)
+            raise
+
+    async def submit_sensitive_input(
+            self,
+            run_id: UUID,
+            user_id: UUID,
+            request_id: UUID,
+            code: str,
+    ) -> RunRecord:
+        context, _ = self._resolve_owned(run_id, user_id)
+        if context is None:
+            raise RunNotFoundError(f"Run {run_id} was not found")
+        if context.run.status != RunStatus.WAITING_FOR_INPUT:
+            raise SensitiveInputNotPendingError(
+                "The run is not waiting for sensitive input"
+            )
+        try:
+            pending = context.runtime.sensitive_inputs.require(request_id)
+        except ValueError as exception:
+            raise SensitiveInputNotPendingError(str(exception)) from exception
+
+        await context.runtime.browser.fill_sensitive(pending.element_index, code)
+        self._resuming_run_ids.add(run_id)
+        try:
+            await self._publish(
+                context,
+                "sensitive_input.received",
+                {"request_id": str(request_id), "kind": pending.kind},
+            )
+            context.execution_task = asyncio.create_task(
+                self._execute(context, Command(resume={"entered": True})),
+                name=f"sensitive-resume-{run_id}",
             )
             return context.run
         except Exception:
@@ -336,6 +395,7 @@ class RunManager:
                         config=context.runtime.config,
                         stream_mode=["messages", "custom", "updates"],
                         version="v2",
+                        context=getattr(context.runtime, "context", None),
                 ):
                     await self._handle_stream_part(context, stream_part)
 
@@ -529,14 +589,17 @@ class RunManager:
 
         if stream_type == "custom" and isinstance(data, dict):
             event_type = data.get("event_type")
-            if event_type == "input.required" and context.run.id in self._resuming_run_ids:
+            if (
+                    event_type in {"input.required", "sensitive_input.required"}
+                    and context.run.id in self._resuming_run_ids
+            ):
                 self._resuming_run_ids.discard(context.run.id)
                 return
 
             payload = data.get("payload", {})
             if isinstance(event_type, str) and isinstance(payload, dict):
                 await self._publish(context, event_type, payload)
-                if event_type == "input.required":
+                if event_type in {"input.required", "sensitive_input.required"}:
                     await self._set_status(context, RunStatus.WAITING_FOR_INPUT)
             return
 
