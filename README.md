@@ -57,3 +57,30 @@ Every run belongs to the account that started it, and runs recorded before
 accounts existed belong to nobody, so they are no longer reachable.
 
 Runtime configuration is documented in `.env.example`. SQLite data is stored in the ignored `data/` directory.
+
+## Browser credentials
+
+Saved browser credentials are owned by one Tabvio account and encrypted before
+they reach SQLite. Each credential has an exact allowlist of hostnames; the
+agent cannot decrypt it on another site. Runs select zero or more credential
+references, and verification codes use a separate one-time input that is never
+written to run events.
+
+To enable credential storage:
+
+Encryption is AES-256-GCM with a single key the application holds, so a
+stolen database file is useless on its own. To enable credential storage,
+generate a key and set `TABVIO_CREDENTIAL_KEY` to it:
+
+```
+openssl rand -base64 32
+```
+
+Without that variable the credential endpoints stay reachable but every
+encrypt and decrypt is refused, so nothing is ever stored in the clear.
+
+Treat the key as permanent. Losing it makes every saved credential
+unrecoverable, and changing it locks out everything already stored. Stored
+payloads carry a key id, so a future rotation can add a second key rather than
+rewrite the table. `WORKOS_COOKIE_PASSWORD` is intentionally separate and must
+not be reused for credential encryption.

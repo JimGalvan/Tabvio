@@ -4531,6 +4531,7 @@ name = "tabvio"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "deepagents" },
     { name = "deepagents-code" },
     { name = "fastapi" },
@@ -4566,6 +4567,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=43.0" },
     { name = "deepagents", specifier = "==0.7.0" },
     { name = "deepagents-code" },
     { name = "fastapi", specifier = ">=0.116.0,<1.0" },

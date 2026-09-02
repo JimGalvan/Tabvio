@@ -1,11 +1,14 @@
 """Application settings and filesystem paths."""
 
+import base64
+import binascii
 import os
 from pathlib import Path
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "server" / "static"
 DATABASE_PATH = PROJECT_DIRECTORY / "data" / "tabvio.db"
+CREDENTIAL_KEY_LENGTH_BYTES = 32
 
 
 def read_headless_setting() -> bool:
@@ -35,6 +38,37 @@ def read_follow_up_window_seconds(default: int) -> int:
     if value < 1:
         raise RuntimeError("TABVIO_FOLLOW_UP_WINDOW_SECONDS must be at least 1")
     return value
+
+
+def read_credential_encryption_key() -> bytes | None:
+    """Read the key that encrypts saved browser credentials, when configured.
+
+    This is a base64-encoded 32-byte key, kept separate from
+    WORKOS_COOKIE_PASSWORD so that sessions and stored credentials never share
+    one secret. Generate one with:
+
+        openssl rand -base64 32
+
+    Losing it makes every saved credential unrecoverable, so treat it as
+    permanent rather than something to regenerate.
+    """
+    configured_value = os.getenv("TABVIO_CREDENTIAL_KEY", "").strip()
+    if not configured_value:
+        return None
+
+    try:
+        key = base64.b64decode(configured_value, validate=True)
+    except (binascii.Error, ValueError) as exception:
+        raise RuntimeError(
+            "TABVIO_CREDENTIAL_KEY must be base64. Generate one with: openssl rand -base64 32"
+        ) from exception
+
+    if len(key) != CREDENTIAL_KEY_LENGTH_BYTES:
+        raise RuntimeError(
+            f"TABVIO_CREDENTIAL_KEY must decode to {CREDENTIAL_KEY_LENGTH_BYTES} bytes, "
+            f"got {len(key)}. Generate one with: openssl rand -base64 32"
+        )
+    return key
 
 
 def read_required_setting(name: str) -> str:
