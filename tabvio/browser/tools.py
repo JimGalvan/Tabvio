@@ -4,6 +4,7 @@ import time
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from anyio.functools import initial_missing
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, tool
 from langgraph.config import get_stream_writer
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from tabvio.agent.context import AgentContext
 from tabvio.agent.sensitive_input import SensitiveInputChannel
 from tabvio.agent.page_load_detector import build_page_loader_detector_subagent
+from tabvio.agent.utils import Utils
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
@@ -189,10 +191,27 @@ def build_browser_tools(
     async def observe_page() -> str:
         """Return the current page snapshot without navigating."""
         observation = await browser.attempt_observe_page()
+        initial_hash_observation = Utils.hash_string(observation)
+        delays = [0.5, 1, 2, 3]
+        has_page_changed = False
+        final_observation = ""
+        for delay in delays:
+            if has_page_changed:
+                break
+
+            time.sleep(delay)
+            print(f"Observation delay {delay}")
+            new_observation = await browser.attempt_observe_page()
+            new_hash_observation = Utils.hash_string(new_observation)
+
+            if new_hash_observation != initial_hash_observation:
+                has_page_changed = True
+                final_observation = new_observation
+
         _publish_custom_event(
             "browser.observation", {"message": "Observed the current page"}
         )
-        return observation
+        return final_observation
 
     @tool
     async def switch_tab(tab_id: str) -> str:
