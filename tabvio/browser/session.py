@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -74,7 +75,7 @@ class BrowserSession:
         self._next_frame_id = 0
         self._elements = []
 
-    async def navigate_and_observe(self, url: str) -> str:
+    async def attempt_navigate_and_observe(self, url: str) -> str:
         await self._initialize_browser()
 
         if self._context is None:
@@ -85,9 +86,10 @@ class BrowserSession:
 
         await self._page.goto(url, timeout=self.LOAD_TIMEOUT_MS)
         self._reset_page_state(self._page)
+        # time.sleep(3)
         return await self._observe_current_page()
 
-    async def observe_page(self) -> str:
+    async def attempt_observe_page(self) -> str:
         if not self.is_open:
             raise RuntimeError("No page is open")
 

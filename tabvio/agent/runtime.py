@@ -1,9 +1,11 @@
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
 from langchain.agents.middleware import ModelFallbackMiddleware, ModelRetryMiddleware
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
@@ -19,6 +21,8 @@ from tabvio.credentials.service import CredentialService
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 
+AGENT_FILES_DIR = Path(__file__).resolve().parent.parent / "agent-files"
+
 
 @dataclass
 class AgentRuntime:
@@ -30,11 +34,11 @@ class AgentRuntime:
 
 
 def build_agent_runtime(
-    thread_id: UUID,
-    user_id: UUID | None,
-    credential_ids: tuple[UUID, ...] = (),
-    credential_service: CredentialService | None = None,
-    headless: bool = True,
+        thread_id: UUID,
+        user_id: UUID | None,
+        credential_ids: tuple[UUID, ...] = (),
+        credential_service: CredentialService | None = None,
+        headless: bool = True,
 ) -> AgentRuntime:
     browser = BrowserSession(headless=headless)
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
@@ -48,15 +52,19 @@ def build_agent_runtime(
         },
     )
 
+    backend = FilesystemBackend(root_dir=AGENT_FILES_DIR, virtual_mode=True)
+    tools = build_browser_tools(
+        browser,
+        credential_service=credential_service,
+        sensitive_inputs=sensitive_inputs,
+    )
     agent = create_deep_agent(
         model=strong_model,
+        backend=backend,
         checkpointer=InMemorySaver(),
         system_prompt=SYSTEM_PROMPT,
-        tools=build_browser_tools(
-            browser,
-            credential_service=credential_service,
-            sensitive_inputs=sensitive_inputs,
-        ),
+        skills=["/skills"],
+        tools=tools,
         subagents=[build_page_navigator(browser)],
         middleware=[
             ModelRetryMiddleware(

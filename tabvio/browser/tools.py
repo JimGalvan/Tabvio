@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from tabvio.agent.context import AgentContext
 from tabvio.agent.sensitive_input import SensitiveInputChannel
+from tabvio.agent.page_load_detector import build_page_loader_detector_subagent
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
@@ -72,7 +74,7 @@ def _publish_custom_event(event_type: str, payload: dict[str, Any]) -> None:
 
 
 def _require_fillable_element(
-    browser: BrowserSession, element_index: int, *, password: bool = False
+        browser: BrowserSession, element_index: int, *, password: bool = False
 ) -> None:
     element = browser.get_stored_element(element_index)
     if element is None:
@@ -142,12 +144,14 @@ def _step_event_payload(browser: BrowserSession, step: BrowserStep) -> dict[str,
 
 
 def build_browser_tools(
-    browser: BrowserSession,
-    credential_service: CredentialService | None = None,
-    sensitive_inputs: SensitiveInputChannel | None = None,
+        browser: BrowserSession,
+        credential_service: CredentialService | None = None,
+        sensitive_inputs: SensitiveInputChannel | None = None,
 ) -> list[BaseTool]:
     """Build the tools for one browser run and its security boundaries."""
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
+
+    page_load_detector_subagent = build_page_loader_detector_subagent()
 
     @tool
     async def get_text_in_viewport() -> str:
@@ -158,14 +162,33 @@ def build_browser_tools(
     async def navigate_and_observe(url: str) -> str:
         """Navigate to a URL and return the resulting page snapshot."""
         _publish_custom_event("browser.navigation.started", {"url": url})
-        observation = await browser.navigate_and_observe(url)
+
+        delays = [1, 2, 3, 5]
+        is_page_loaded = False
+        observation = ""
+        for delay in delays:
+            if is_page_loaded:
+                break
+
+            time.sleep(delay)
+            if delay == 1:
+                observation = await browser.attempt_navigate_and_observe(url)
+            else:
+                observation = await browser.attempt_observe_page()
+            USER_PROMPT = f"""Determine whether this page is loaded.
+                        Page snapshot:
+                        {observation}
+                        """
+            result = await page_load_detector_subagent.ainvoke({"messages": [{"role": "user", "content": USER_PROMPT}]})
+            is_page_loaded = "true" in result["messages"][-1].content
+
         _publish_custom_event("browser.navigation.completed", {"url": url})
         return observation
 
     @tool
     async def observe_page() -> str:
         """Return the current page snapshot without navigating."""
-        observation = await browser.observe_page()
+        observation = await browser.attempt_observe_page()
         _publish_custom_event(
             "browser.observation", {"message": "Observed the current page"}
         )
@@ -187,7 +210,7 @@ def build_browser_tools(
 
     @tool
     async def list_selected_credentials(
-        runtime: ToolRuntime[AgentContext],
+            runtime: ToolRuntime[AgentContext],
     ) -> str:
         """List safe metadata for credentials selected for this run."""
         if not runtime.context.credential_ids:
@@ -212,7 +235,7 @@ def build_browser_tools(
 
     @tool(args_schema=StepPlan)
     async def execute_steps(
-        steps: list[BrowserStep], runtime: ToolRuntime[AgentContext]
+            steps: list[BrowserStep], runtime: ToolRuntime[AgentContext]
     ) -> str:
         """Validate and execute browser steps, including credential and MFA steps."""
         normalized_steps = [
