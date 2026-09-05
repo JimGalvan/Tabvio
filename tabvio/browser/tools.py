@@ -4,7 +4,6 @@ import time
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from anyio.functools import initial_missing
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, tool
 from langgraph.config import get_stream_writer
@@ -13,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from tabvio.agent.context import AgentContext
 from tabvio.agent.sensitive_input import SensitiveInputChannel
-from tabvio.agent.page_load_detector import build_page_loader_detector_subagent
 from tabvio.agent.utils import Utils
+from tabvio.agents.page_load_detector.page_load_detector import build_page_loader_detector_subagent
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
@@ -353,17 +352,4 @@ def build_browser_tools(
     ]
 
 
-def build_page_navigator_tools(browser: BrowserSession) -> list[BaseTool]:
-    """Build the viewport tools for the page-navigator subagent."""
 
-    @tool
-    async def get_text_in_viewport() -> str:
-        """Return text visible in the current browser viewport."""
-        return await browser.get_text_in_viewport()
-
-    @tool
-    async def scroll(amount: float) -> str:
-        """Scroll by a multiple of the viewport height."""
-        return await browser.scroll(amount)
-
-    return [get_text_in_viewport, scroll]

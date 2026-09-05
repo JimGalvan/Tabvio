@@ -9,7 +9,7 @@ from typing import Any
 from langchain.agents import create_agent
 
 from tabvio.agent.llm import model
-from tabvio.agent.prompts import PAGE_LOAD_DETECTOR_PROMPT
+from tabvio.agents.page_load_detector.prompts import PAGE_LOAD_DETECTOR_PROMPT
 
 
 def build_page_loader_detector_subagent() -> Any:

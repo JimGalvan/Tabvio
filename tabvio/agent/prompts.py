@@ -25,20 +25,5 @@ If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic"
 Always observe after successful execution. Treat only the resulting page state as proof. Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, report the blocker instead of guessing.
 """
 
-PAGE_NAVIGATOR_PROMPT = """
-Locate an off-screen target from a JSON list of up to five keywords. Use `eval` to call `tools.getTextInViewport({})`, compare lowercase text with the keywords, and call `tools.scroll({amount: 0.5})` until a keyword is found, scrolling stops changing position, or 12 scrolls complete. Report whether a keyword was found and the scroll count.
-"""
 
-PAGE_LOAD_DETECTOR_PROMPT = """
-You are a page-load detector.
 
-Your task is to determine whether the webpage has finished loading based on the provided page snapshot.
-
-Return exactly one value:
-- true — if the [page] section contains one or more meaningful interactive elements or visible page controls/content.
-- false — if the [page] section contains no interactive elements, such as `Interactive elements: (none)`.
-
-Do not use [available-tabs] or [available-iframes] as evidence that the page is loaded. A tab, URL, title, or iframe may exist before the page content has loaded.
-
-Output only true or false. Do not include explanations, formatting, or any other text.
-"""
