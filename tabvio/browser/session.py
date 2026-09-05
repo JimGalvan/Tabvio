@@ -287,15 +287,7 @@ class BrowserSession:
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
         await self._active_frame().evaluate(
-            """
-            ({x, y}) => {
-                const hit = document.elementFromPoint(x, y);
-                const field = hit?.closest('input, textarea');
-                if (!field) throw new Error('Sensitive target is not an input');
-                field.dataset.tabvioSensitive = 'true';
-                field.style.setProperty('-webkit-text-security', 'disc', 'important');
-            }
-            """,
+            self._script("mask-sensitive-field.js"),
             {"x": element.cx, "y": element.cy},
         )
         return await self.fill(element_index, value)
