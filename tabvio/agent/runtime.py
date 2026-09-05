@@ -1,28 +1,15 @@
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend
-from langchain.agents.middleware import ModelFallbackMiddleware, ModelRetryMiddleware
-from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
-
 from tabvio.agent.context import AgentContext
-from tabvio.agent.llm import strong_model
-from tabvio.agent.prompts import SYSTEM_PROMPT
 from tabvio.agent.sensitive_input import SensitiveInputChannel
-from tabvio.agent.subagents import build_page_navigator
 from tabvio.agents.browser_agent.browser_agent import build_browser_agent
 from tabvio.browser.session import BrowserSession
-from tabvio.browser.tools import build_browser_tools
 from tabvio.credentials.service import CredentialService
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
-
-AGENT_FILES_DIR = Path(__file__).resolve().parent.parent / "agent-files"
 
 
 @dataclass
@@ -44,7 +31,11 @@ def build_agent_runtime(
     browser = BrowserSession(headless=headless)
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
     sensitive_inputs = SensitiveInputChannel()
-    agent = build_browser_agent(credential_service=credential_service, headless=True)
+    agent = build_browser_agent(
+        browser,
+        sensitive_inputs,
+        credential_service=credential_service,
+    )
     config = {"configurable": {"thread_id": str(thread_id)}}
     return AgentRuntime(
         agent=agent,

@@ -1,17 +1,12 @@
-import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from uuid import UUID
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from langchain.agents.middleware import ModelFallbackMiddleware, ModelRetryMiddleware
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
 from tabvio.agent.context import AgentContext
-from tabvio.agent.llm import strong_model, model
+from tabvio.agent.llm import strong_model
 from tabvio.agent.prompts import SYSTEM_PROMPT
 from tabvio.agent.sensitive_input import SensitiveInputChannel
 from tabvio.agent.subagents import build_page_navigator
@@ -21,13 +16,12 @@ from tabvio.credentials.service import CredentialService
 
 
 def build_browser_agent(
+        browser_session: BrowserSession,
+        sensitive_inputs: SensitiveInputChannel,
         credential_service: CredentialService | None = None,
-        headless: bool = True,
 ):
     agent_files = Path(__file__).resolve().parent / "files"
 
-    browser_session = BrowserSession(headless=headless)
-    sensitive_inputs = SensitiveInputChannel()
     backend = FilesystemBackend(root_dir=agent_files, virtual_mode=True)
     tools = build_browser_tools(
         browser_session,
