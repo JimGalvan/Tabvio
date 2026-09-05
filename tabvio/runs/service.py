@@ -8,7 +8,7 @@ from uuid import UUID
 
 from langgraph.types import Command
 
-from tabvio.agent.runtime import build_agent_runtime
+from tabvio.runs.runtime import build_agent_runtime
 from tabvio.clock import utc_now
 from tabvio.credentials.exceptions import CredentialNotFoundError
 from tabvio.credentials.service import CredentialService

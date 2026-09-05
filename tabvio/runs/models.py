@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, SecretStr
 from tabvio.clock import utc_now
 
 if TYPE_CHECKING:
-    from tabvio.agent.runtime import AgentRuntime
+    from tabvio.runs.runtime import AgentRuntime
 
 
 class RunStatus(StrEnum):
