@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from tabvio.agent.sensitive_input import SensitiveInputChannel
+from tabvio.runs.sensitive_input import SensitiveInputChannel
 from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager

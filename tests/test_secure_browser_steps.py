@@ -4,7 +4,8 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from tabvio.browser.models import Element
-from tabvio.browser.tools import StepPlan, _validate_plan, build_browser_tools
+from tabvio.agents.browser_agent.steps import StepPlan, validate_plan
+from tabvio.agents.browser_agent.tools import build_browser_tools
 
 
 class ObservedBrowser:
@@ -40,7 +41,7 @@ class SecureBrowserStepTests(unittest.TestCase):
             }
         )
 
-        _validate_plan(self._browser, plan.steps)
+        validate_plan(self._browser, plan.steps)
         serialized = plan.model_dump_json()
         self.assertIn(str(credential_id), serialized)
         self.assertNotIn("password\":", serialized)
@@ -68,7 +69,7 @@ class SecureBrowserStepTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "type=password"):
-            _validate_plan(self._browser, plan.steps)
+            validate_plan(self._browser, plan.steps)
 
     def test_mfa_step_must_be_final_and_has_no_code_field(self) -> None:
         with self.assertRaises(ValidationError):
@@ -98,7 +99,7 @@ class SecureBrowserStepTests(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(ValueError, "must be final"):
-            _validate_plan(self._browser, plan.steps)
+            validate_plan(self._browser, plan.steps)
 
 
 if __name__ == "__main__":

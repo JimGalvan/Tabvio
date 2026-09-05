@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from tabvio.agent.context import AgentContext
-from tabvio.agent.sensitive_input import SensitiveInputChannel
+from tabvio.agents.browser_agent.context import AgentContext
+from tabvio.runs.sensitive_input import SensitiveInputChannel
 from tabvio.agents.browser_agent.browser_agent import build_browser_agent
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService

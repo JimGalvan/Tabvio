@@ -13,6 +13,7 @@ from playwright.async_api import (
 )
 from playwright.async_api import Frame as PlaywrightFrame
 
+from tabvio.browser.constants import OBSERVE_ATTEMPTS, LOAD_TIMEOUT_MS, FRAME_QUALITY
 from tabvio.browser.formatting import Helpers
 from tabvio.browser.models import BrowserState, Element, Frame, Tab
 
@@ -20,11 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class BrowserSession:
-    LOAD_TIMEOUT_MS = 60_000
-    FRAME_WIDTH = 960
-    FRAME_HEIGHT = 540
-    FRAME_QUALITY = 55
-    OBSERVE_ATTEMPTS = 3
 
     def __init__(self, headless: bool = True):
         self._headless = headless
@@ -84,7 +80,7 @@ class BrowserSession:
         if self._page is None or self._page.is_closed():
             self._reset_page_state(await self._context.new_page())
 
-        await self._page.goto(url, timeout=self.LOAD_TIMEOUT_MS)
+        await self._page.goto(url, timeout=LOAD_TIMEOUT_MS)
         self._reset_page_state(self._page)
         # time.sleep(3)
         return await self._observe_current_page()
@@ -187,14 +183,14 @@ class BrowserSession:
             )
             self._scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
 
-        final_attempt = self.OBSERVE_ATTEMPTS - 1
-        for attempt in range(self.OBSERVE_ATTEMPTS):
+        final_attempt = OBSERVE_ATTEMPTS - 1
+        for attempt in range(OBSERVE_ATTEMPTS):
             try:
                 frame = self._active_frame()
                 await frame.wait_for_load_state(
-                    "domcontentloaded", timeout=self.LOAD_TIMEOUT_MS
+                    "domcontentloaded", timeout=LOAD_TIMEOUT_MS
                 )
-                await frame.wait_for_load_state("load", timeout=self.LOAD_TIMEOUT_MS)
+                await frame.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
                 return await frame.evaluate(self._scan_page_javascript)
             except Exception as exception:
                 if attempt == final_attempt:
@@ -357,7 +353,7 @@ class BrowserSession:
 
         return await self._page.screenshot(
             type="jpeg",
-            quality=self.FRAME_QUALITY,
+            quality=FRAME_QUALITY,
             scale="css",
         )
 

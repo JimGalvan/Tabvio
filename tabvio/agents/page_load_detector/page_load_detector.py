@@ -1,6 +1,6 @@
 """Page-load detector agent.
 
-Kept out of `subagents` so that `tabvio.browser.tools` can import it without
+Kept in its own module so that the browser agent's tools can import it without
 pulling in `build_page_navigator`, which imports the browser tools back.
 """
 
@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 
-from tabvio.agent.llm import model
+from tabvio.agents.shared.llm import model
 from tabvio.agents.page_load_detector.prompts import PAGE_LOAD_DETECTOR_PROMPT
 
 
