@@ -54,7 +54,7 @@ class BrowserSession:
             raise RuntimeError("No page is open")
         return self._page
 
-    def _script(self, name: str) -> str:
+    def _get_script(self, name: str) -> str:
         if name not in self._scripts:
             script_path = Path(__file__).resolve().parent / "scripts" / name
             self._scripts[name] = script_path.read_text(encoding="utf-8")
@@ -187,7 +187,7 @@ class BrowserSession:
                     "domcontentloaded", timeout=LOAD_TIMEOUT_MS
                 )
                 await frame.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
-                return await frame.evaluate(self._script("scan-page.js"))
+                return await frame.evaluate(self._get_script("scan-page.js"))
             except Exception as exception:
                 if attempt == final_attempt:
                     raise
@@ -221,18 +221,12 @@ class BrowserSession:
 
     async def get_text_in_viewport(self) -> str:
         return await self._active_frame().evaluate(
-            self._script("get-text-in-viewport.js")
+            self._get_script("get-text-in-viewport.js")
         )
 
     async def scroll(self, amount: float) -> str:
         position = await self._active_frame().evaluate(
-            """amount => {
-                window.scrollBy(0, innerHeight * amount);
-                return {
-                    current: scrollY,
-                    maximum: Math.max(document.documentElement.scrollHeight - innerHeight, 0)
-                };
-            }""",
+            self._get_script("scroll-by-pages.js"),
             amount,
         )
         return f"Scrolled to {position['current']} of {position['maximum']} pixels"
@@ -287,7 +281,7 @@ class BrowserSession:
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
         await self._active_frame().evaluate(
-            self._script("mask-sensitive-field.js"),
+            self._get_script("mask-sensitive-field.js"),
             {"x": element.cx, "y": element.cy},
         )
         return await self.fill(element_index, value)
