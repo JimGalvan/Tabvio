@@ -227,6 +227,11 @@ def build_browser_tools(
 
     execute_steps.handle_validation_error = True
 
+    @tool
+    def switch_to_iframe(iframe_id: str):
+        """ Switch iframe using iframe id """
+
+
     return [
         navigate_and_observe,
         observe_page,

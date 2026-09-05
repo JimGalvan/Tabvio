@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav Site — Home</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  nav a { margin-right: 12px; }
+  .code { font-weight: bold; }
+  hr { margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a id="nav-home" href="home.html">Home</a>
+  <a id="nav-catalog" href="catalog.html">Catalog</a>
+  <a id="nav-form" href="form.html">Order form</a>
+</nav>
+<hr>
+
+<h1>Page 1 of 5 — Home</h1>
+<p>Page code: <span class="code" id="page-code">HOME-7F3</span></p>
+<p id="page-note">This is the starting page of the five page test site.</p>
+
+<h2>Go somewhere</h2>
+<ul>
+  <li><a id="home-to-catalog" href="catalog.html">Browse the catalog</a></li>
+  <li><a id="home-to-form" href="form.html">Place an order</a></li>
+  <li><a id="home-catalog-new-tab" href="catalog.html" target="_blank">Open the catalog in a new tab</a></li>
+  <li><a id="home-self-new-tab" href="home.html" target="_blank">Open Home in a new tab</a></li>
+</ul>
+
+<h2>Counter</h2>
+<p id="home-count">count: 0</p>
+<button id="home-increment" onclick="window.homeCount = (window.homeCount || 0) + 1; document.getElementById('home-count').textContent = 'count: ' + window.homeCount">Increment</button>
+
+</body>
+</html>

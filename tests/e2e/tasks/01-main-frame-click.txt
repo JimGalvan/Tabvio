@@ -1,0 +1,2 @@
+Go to http://localhost:8001/index.html and click the "Click me (main frame)" button.
+Tell me what the status text near the top of the page says afterwards.

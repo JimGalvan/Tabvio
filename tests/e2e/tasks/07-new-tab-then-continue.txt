@@ -1,0 +1,3 @@
+Go to http://localhost:8001/index.html. In Frame C, use the "Open a new tab (link)"
+link to open a new tab. Come back to the first tab, press the Increment button in
+Frame C three times, and tell me the final count.

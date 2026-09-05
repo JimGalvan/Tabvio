@@ -1,0 +1,3 @@
+Go to http://localhost:8001/index.html. Inside the "Frame A" box, click the
+"Click me (Frame A)" button and tell me what the status line inside Frame A says
+afterwards.

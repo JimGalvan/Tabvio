@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav Site — Order form</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  nav a { margin-right: 12px; }
+  .code { font-weight: bold; }
+  hr { margin: 16px 0; }
+  p { margin: 8px 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a id="nav-home" href="home.html">Home</a>
+  <a id="nav-catalog" href="catalog.html">Catalog</a>
+  <a id="nav-form" href="form.html">Order form</a>
+</nav>
+<hr>
+
+<h1>Page 4 of 5 — Order form</h1>
+<p>Page code: <span class="code" id="page-code">FORM-9A5</span></p>
+<p id="page-note">Submitting this form loads the confirmation page.</p>
+
+<form id="order-form" method="get" action="confirm.html">
+  <p><label for="order-name">Name</label> <input id="order-name" name="name" type="text" placeholder="type a name"></p>
+  <p>
+    <label for="order-size">Size</label>
+    <select id="order-size" name="size">
+      <option value="">pick one</option>
+      <option value="small">Small</option>
+      <option value="medium">Medium</option>
+      <option value="large">Large</option>
+    </select>
+  </p>
+  <p><label><input id="order-gift" name="gift" type="checkbox" value="yes"> Gift wrap</label></p>
+  <p><button id="order-submit" type="submit">Place order</button></p>
+</form>
+
+<p><a id="form-to-home" href="home.html">Back to Home</a></p>
+
+</body>
+</html>

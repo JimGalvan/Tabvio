@@ -500,7 +500,7 @@ class RunManager:
 
         while not context.run.status.is_terminal:
             try:
-                frame = await asyncio.wait_for(context.runtime.browser.capture_frame(),
+                frame = await asyncio.wait_for(context.runtime.browser.capture_screen_frame(),
                                                timeout=constants.FRAME_CAPTURE_TIMEOUT_SECONDS)
             except asyncio.CancelledError:
                 raise

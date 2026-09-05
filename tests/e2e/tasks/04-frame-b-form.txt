@@ -1,0 +1,4 @@
+Go to http://localhost:8001/index.html. In the "Frame B" box, type "Ada" into the
+Name field, choose "Blue" from the Colour dropdown, tick the "I agree" checkbox,
+then press the Submit button. Tell me exactly what the result line in Frame B says
+after submitting.

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav Site — Confirmation</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  nav a { margin-right: 12px; }
+  .code { font-weight: bold; }
+  hr { margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a id="nav-home" href="home.html">Home</a>
+  <a id="nav-catalog" href="catalog.html">Catalog</a>
+  <a id="nav-form" href="form.html">Order form</a>
+</nav>
+<hr>
+
+<h1>Page 5 of 5 — Confirmation</h1>
+<p>Page code: <span class="code" id="page-code">CONFIRM-D4</span></p>
+
+<p id="confirm-status">Processing the order, please wait.</p>
+
+<p><a id="confirm-to-home" href="home.html">Start over</a></p>
+
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var name = params.get('name') || 'nobody';
+  var size = params.get('size') || 'none';
+  var gift = params.get('gift') ? 'yes' : 'no';
+  setTimeout(function () {
+    document.getElementById('confirm-status').textContent =
+      'Order confirmed for ' + name + ', size ' + size + ', gift wrap ' + gift + '.';
+  }, 1500);
+</script>
+
+</body>
+</html>

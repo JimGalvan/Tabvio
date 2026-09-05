@@ -1,0 +1,2 @@
+Go to http://localhost:8001/nav/home.html and tell me the page code shown near the
+top of the page.

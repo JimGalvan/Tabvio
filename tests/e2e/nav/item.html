@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav Site — Item</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  nav a { margin-right: 12px; }
+  .code { font-weight: bold; }
+  hr { margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a id="nav-home" href="home.html">Home</a>
+  <a id="nav-catalog" href="catalog.html">Catalog</a>
+  <a id="nav-form" href="form.html">Order form</a>
+</nav>
+<hr>
+
+<h1>Page 3 of 5 — Item detail</h1>
+<p>Page code: <span class="code" id="page-code">ITEM-PAGE-6C1</span></p>
+
+<h2 id="item-name">no item selected</h2>
+<p>Item code: <span class="code" id="item-code">none</span></p>
+<p id="item-note">Pick an item from the catalog to see its code.</p>
+
+<p><button id="item-next-new-tab">Open the next item in a new tab</button></p>
+<p><a id="item-to-catalog" href="catalog.html">Back to the catalog</a></p>
+
+<script>
+  var items = {
+    alpha: { name: 'Alpha Widget', code: 'ITEM-ALPHA-514', next: 'beta' },
+    beta:  { name: 'Beta Widget',  code: 'ITEM-BETA-822',  next: 'gamma' },
+    gamma: { name: 'Gamma Widget', code: 'ITEM-GAMMA-193', next: 'alpha' }
+  };
+  var id = new URLSearchParams(window.location.search).get('id');
+  var item = items[id];
+  if (item) {
+    document.getElementById('item-name').textContent = item.name;
+    document.getElementById('item-code').textContent = item.code;
+    document.getElementById('item-note').textContent = 'Showing the detail page for ' + item.name + '.';
+  }
+  document.getElementById('item-next-new-tab').onclick = function () {
+    window.open('item.html?id=' + (item ? item.next : 'alpha'), '_blank');
+  };
+</script>
+
+</body>
+</html>

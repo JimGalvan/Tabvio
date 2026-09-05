@@ -1,0 +1,3 @@
+Go to http://localhost:8001/index.html. In Frame C, press the "Open a new tab (button)"
+button. Switch to the tab that opens and tell me its URL. Then switch back to the
+original tab and tell me what the counter in Frame C reads.

@@ -1,0 +1,4 @@
+Go to http://localhost:8001/nav/home.html. Open the catalog, open the Alpha Widget
+and note its item code, go back to the catalog, then open the Beta Widget and note
+its item code. Report both codes and confirm you stayed in the same tab the whole
+time.

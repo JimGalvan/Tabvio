@@ -1,0 +1,3 @@
+Go to http://localhost:8001/nav/home.html and press the Increment button three times.
+Then use the link that opens Home in a new tab and tell me what the counter reads on
+that new tab. Switch back to the first tab and tell me what its counter reads.

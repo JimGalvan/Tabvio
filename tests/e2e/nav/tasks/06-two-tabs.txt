@@ -1,0 +1,2 @@
+Go to http://localhost:8001/nav/home.html and use the link that opens the catalog in
+a new tab. Tell me how many tabs are open, and the page code shown in each one.

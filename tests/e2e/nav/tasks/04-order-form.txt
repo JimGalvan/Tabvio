@@ -1,0 +1,3 @@
+Go to http://localhost:8001/nav/form.html. Type "Ada" into the Name field, choose
+"Large" for Size, tick the Gift wrap checkbox, then press "Place order". Wait for the
+page that loads to finish, and tell me exactly what the confirmation line says.

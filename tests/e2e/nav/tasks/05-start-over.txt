@@ -1,0 +1,4 @@
+Go to http://localhost:8001/nav/form.html, fill in the name "Bo", pick the size
+"Small", leave gift wrap unticked, and place the order. Once the confirmation line
+appears, read it to me, then use the "Start over" link and tell me the page code and
+URL you land on.

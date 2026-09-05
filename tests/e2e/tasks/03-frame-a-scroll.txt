@@ -1,0 +1,2 @@
+Go to http://localhost:8001/index.html. Frame A contains a small scrolling list.
+Scroll that list to the bottom and tell me the text of the last row.

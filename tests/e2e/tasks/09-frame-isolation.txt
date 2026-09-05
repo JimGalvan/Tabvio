@@ -1,0 +1,3 @@
+Go to http://localhost:8001/index.html. Click the button in Frame A only. Then check
+Frame B and the main page, and tell me whether either of their status lines changed.
+Do not click anything else.

@@ -1,0 +1,4 @@
+Go to http://localhost:8001/index.html. First click the button in Frame A, then move
+to Frame B and type "hello" into its Name field, then move back to Frame A and read
+its status line to me. Report the Frame A status line and the current value of the
+Frame B Name field.

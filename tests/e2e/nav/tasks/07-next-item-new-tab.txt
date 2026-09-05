@@ -1,0 +1,3 @@
+Go to http://localhost:8001/nav/item.html?id=alpha. Press the "Open the next item in
+a new tab" button, switch to the tab that opens, and tell me its item code. Then
+switch back to the first tab and tell me the item code there.

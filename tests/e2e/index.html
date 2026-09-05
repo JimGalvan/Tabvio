@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tabvio E2E Test Page</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  iframe { width: 100%; height: 260px; border: 2px solid #333; margin-bottom: 12px; }
+  h2 { font-size: 15px; margin: 12px 0 4px; }
+</style>
+</head>
+<body>
+
+<h1>Tabvio E2E Test Page</h1>
+<p id="page-status">Main frame. Each box below is a separate iframe.</p>
+
+<h2>Frame A — scrolling</h2>
+<iframe name="frame-a" title="Frame A" srcdoc="
+  <body style='font-family: sans-serif'>
+    <h3>Frame A</h3>
+    <p id='a-status'>nothing clicked yet</p>
+    <button id='a-button' onclick=&quot;document.getElementById('a-status').textContent = 'Frame A button was clicked'&quot;>Click me (Frame A)</button>
+    <div id='a-scroll' style='height: 120px; overflow-y: scroll; border: 1px solid #999; margin-top: 8px'>
+      <p>Scroll row 1</p><p>Scroll row 2</p><p>Scroll row 3</p><p>Scroll row 4</p>
+      <p>Scroll row 5</p><p>Scroll row 6</p><p>Scroll row 7</p><p>Scroll row 8</p>
+      <p>Scroll row 9</p><p id='a-scroll-bottom'>Scroll row 10 (bottom of Frame A)</p>
+    </div>
+  </body>
+"></iframe>
+
+<h2>Frame B — form fields</h2>
+<iframe name="frame-b" title="Frame B" srcdoc="
+  <body style='font-family: sans-serif'>
+    <h3>Frame B</h3>
+    <div id='b-box' style='width: 200px; height: 60px; border: 2px solid #333; padding: 4px'>A plain box in Frame B</div>
+    <p><label for='b-text'>Name</label> <input id='b-text' type='text' placeholder='type a name'></p>
+    <p>
+      <label for='b-select'>Colour</label>
+      <select id='b-select'>
+        <option value=''>pick one</option>
+        <option value='red'>Red</option>
+        <option value='green'>Green</option>
+        <option value='blue'>Blue</option>
+      </select>
+    </p>
+    <p><label><input id='b-check' type='checkbox'> I agree</label></p>
+    <p><button id='b-submit' onclick=&quot;document.getElementById('b-result').textContent = 'Submitted: ' + document.getElementById('b-text').value + ' / ' + document.getElementById('b-select').value + ' / agreed=' + document.getElementById('b-check').checked&quot;>Submit (Frame B)</button></p>
+    <p id='b-result'>not submitted</p>
+  </body>
+"></iframe>
+
+<h2>Frame C — new tabs and a nested iframe</h2>
+<iframe name="frame-c" title="Frame C" srcdoc="
+  <body style='font-family: sans-serif'>
+    <h3>Frame C</h3>
+    <p><a id='c-link' href='index.html#opened-from-frame-c' target='_blank'>Open a new tab (link)</a></p>
+    <p><button id='c-button' onclick=&quot;window.open('index.html#opened-by-button', '_blank')&quot;>Open a new tab (button)</button></p>
+    <p id='c-counter-value'>count: 0</p>
+    <button id='c-counter' onclick=&quot;window.count = (window.count || 0) + 1; document.getElementById('c-counter-value').textContent = 'count: ' + window.count&quot;>Increment</button>
+    <h4>Nested iframe inside Frame C</h4>
+    <iframe name='frame-c-nested' title='Frame C nested' style='width: 90%; height: 90px; border: 2px dashed #333' srcdoc=&quot;
+      <body style='font-family: sans-serif'>
+        <p id='nested-status'>Nested frame, two levels deep.</p>
+        <a id='nested-link' href='index.html#opened-from-nested' target='_blank'>Open a new tab (nested frame)</a>
+      </body>
+    &quot;></iframe>
+  </body>
+"></iframe>
+
+<h2>Main frame controls</h2>
+<button id="main-button" onclick="document.getElementById('page-status').textContent = 'Main frame button was clicked'">Click me (main frame)</button>
+<a id="main-link" href="index.html#opened-from-main" target="_blank">Open a new tab (main frame)</a>
+
+<div id="main-scroll" style="height: 120px; overflow-y: scroll; border: 1px solid #999; margin-top: 8px; width: 300px">
+  <p>Main row 1</p><p>Main row 2</p><p>Main row 3</p><p>Main row 4</p><p>Main row 5</p>
+  <p>Main row 6</p><p>Main row 7</p><p>Main row 8</p><p>Main row 9</p>
+  <p id="main-scroll-bottom">Main row 10 (bottom of main scroll area)</p>
+</div>
+
+<div style="height: 900px">
+  <p>Filler so the page itself scrolls.</p>
+</div>
+<p id="page-bottom">Bottom of the main page.</p>
+
+</body>
+</html>

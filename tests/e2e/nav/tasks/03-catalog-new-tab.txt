@@ -1,0 +1,3 @@
+Go to http://localhost:8001/nav/catalog.html and open the Gamma Widget, which opens
+in a new tab. Tell me the item code on the new tab, then go back to the first tab
+and tell me its page code.
