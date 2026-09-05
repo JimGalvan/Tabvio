@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -31,11 +30,10 @@ class BrowserSession:
         self._frame: PlaywrightFrame | None = None
         self._elements: list[Element] = []
         self._tabs_by_id: dict[str, Page] = {}
-        self._frames_by_id: dict[str, PlaywrightFrame] = {}
+        self._iframes_by_id: dict[str, PlaywrightFrame] = {}
         self._next_tab_id = 0
         self._next_frame_id = 0
-        self._browser_state = BrowserState([], [])
-        self._scan_page_javascript: str | None = None
+        self._scripts: dict[str, str] = {}
 
     @property
     def is_open(self) -> bool:
@@ -43,12 +41,21 @@ class BrowserSession:
 
     @property
     def current_hostname(self) -> str:
-        if not self.is_open or self._page is None:
-            raise RuntimeError("No page is open")
-        hostname = urlsplit(self._page.url).hostname
+        hostname = urlsplit(self._require_page().url).hostname
         if not hostname:
             raise RuntimeError("The current page has no valid hostname")
         return hostname
+
+    def _require_page(self) -> Page:
+        if self._page is None or self._page.is_closed():
+            raise RuntimeError("No page is open")
+        return self._page
+
+    def _script(self, name: str) -> str:
+        if name not in self._scripts:
+            script_path = Path(__file__).resolve().parent / "scripts" / name
+            self._scripts[name] = script_path.read_text(encoding="utf-8")
+        return self._scripts[name]
 
     async def _initialize_browser(self) -> Browser:
         if self._playwright is None:
@@ -67,43 +74,37 @@ class BrowserSession:
     def _reset_page_state(self, page: Page | None = None) -> None:
         self._page = page
         self._frame = page.main_frame if page else None
-        self._frames_by_id = {}
+        self._iframes_by_id = {}
         self._next_frame_id = 0
         self._elements = []
 
     async def attempt_navigate_and_observe(self, url: str) -> str:
         await self._initialize_browser()
 
-        if self._context is None:
-            raise RuntimeError("Browser context was not initialized")
-
         if self._page is None or self._page.is_closed():
             self._reset_page_state(await self._context.new_page())
 
         await self._page.goto(url, timeout=LOAD_TIMEOUT_MS)
         self._reset_page_state(self._page)
-        # time.sleep(3)
         return await self._observe_current_page()
 
     async def attempt_observe_page(self) -> str:
-        if not self.is_open:
-            raise RuntimeError("No page is open")
-
         return await self._observe_current_page()
 
     async def _collect_browser_state(self) -> BrowserState:
         if self._context is None:
-            self._browser_state = BrowserState([], [])
-            return self._browser_state
+            return BrowserState([], [])
 
         pages = [page for page in self._context.pages if not page.is_closed()]
 
         if self._page not in pages:
             self._reset_page_state(pages[-1] if pages else None)
 
-        self._tabs_by_id = {
-            tab_id: page for tab_id, page in self._tabs_by_id.items() if page in pages
-        }
+        open_tabs_by_id = {}
+        for tab_id, page in self._tabs_by_id.items():
+            if page in pages:
+                open_tabs_by_id[tab_id] = page
+        self._tabs_by_id = open_tabs_by_id
 
         registered_pages = list(self._tabs_by_id.values())
         for page in pages:
@@ -130,26 +131,25 @@ class BrowserSession:
             )
 
         if self._page is None:
-            self._frames_by_id = {}
-            self._browser_state = BrowserState(tabs, [])
-            return self._browser_state
+            self._iframes_by_id = {}
+            return BrowserState(tabs, [])
 
         page_frames = list(self._page.frames)
         if self._frame not in page_frames:
             self._frame = self._page.main_frame
 
-        self._frames_by_id = {
-            frame_id: frame
-            for frame_id, frame in self._frames_by_id.items()
-            if frame in page_frames
-        }
+        page_iframes_by_id = {}
+        for frame_id, frame in self._iframes_by_id.items():
+            if frame in page_frames:
+                page_iframes_by_id[frame_id] = frame
+        self._iframes_by_id = page_iframes_by_id
 
-        registered_frames = list(self._frames_by_id.values())
+        registered_frames = list(self._iframes_by_id.values())
         for frame in page_frames:
             if frame not in registered_frames:
                 frame_id = f"frame:{self._next_frame_id}"
                 self._next_frame_id += 1
-                self._frames_by_id[frame_id] = frame
+                self._iframes_by_id[frame_id] = frame
                 registered_frames.append(frame)
 
         frames = [
@@ -160,29 +160,21 @@ class BrowserSession:
                 name=frame.name or "",
                 url=frame.url,
             )
-            for frame_id, frame in self._frames_by_id.items()
+            for frame_id, frame in self._iframes_by_id.items()
         ]
 
-        self._browser_state = BrowserState(tabs, frames)
-        return self._browser_state
+        return BrowserState(tabs, frames)
 
     def _active_frame(self) -> PlaywrightFrame:
-        if not self.is_open or self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
-        if self._frame not in self._page.frames:
-            self._frame = self._page.main_frame
+        if self._frame not in page.frames:
+            self._frame = page.main_frame
 
         return self._frame
 
     async def _scan_page(self) -> str:
         """Scan the page, following it if it navigates mid-scan."""
-        if not self._scan_page_javascript:
-            scan_page_path = (
-                Path(__file__).resolve().parent / "scripts" / "scan-page.js"
-            )
-            self._scan_page_javascript = scan_page_path.read_text(encoding="utf-8")
-
         final_attempt = OBSERVE_ATTEMPTS - 1
         for attempt in range(OBSERVE_ATTEMPTS):
             try:
@@ -191,7 +183,7 @@ class BrowserSession:
                     "domcontentloaded", timeout=LOAD_TIMEOUT_MS
                 )
                 await frame.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
-                return await frame.evaluate(self._scan_page_javascript)
+                return await frame.evaluate(self._script("scan-page.js"))
             except Exception as exception:
                 if attempt == final_attempt:
                     raise
@@ -202,42 +194,33 @@ class BrowserSession:
         raise RuntimeError("The page kept navigating and could not be observed")
 
     async def _observe_current_page(self) -> str:
-        scan_result = await self._scan_page()
-        result = json.loads(scan_result)
+        result = json.loads(await self._scan_page())
 
-        self._elements = []
-        for index, raw_element in enumerate(result["elements"]):
-            self._elements.append(Element(index=index, **raw_element))
+        self._elements = [
+            Element(index=index, **raw_element)
+            for index, raw_element in enumerate(result["elements"])
+        ]
 
         page_content = Helpers.format_page_to_llm_output(result)
-        await self._collect_browser_state()
+        browser_state = await self._collect_browser_state()
         return (
             f"{page_content}\n"
-            f"<available-tabs>{self._browser_state.tabs}\n</available-tabs>"
-            f"<available-iframes>{self._browser_state.frames}</available-iframes>"
+            f"<available-tabs>{browser_state.tabs}\n</available-tabs>"
+            f"<available-iframes>{browser_state.frames}</available-iframes>"
         )
 
     def get_stored_element(self, element_index: int) -> Element | None:
-        for element in self._elements:
-            if element.index == element_index:
-                return element
+        if 0 <= element_index < len(self._elements):
+            return self._elements[element_index]
 
         return None
 
     async def get_text_in_viewport(self) -> str:
-        if not self.is_open:
-            raise RuntimeError("No page is open")
-
-        javascript_path = (
-            Path(__file__).resolve().parent / "scripts" / "get-text-in-viewport.js"
+        return await self._active_frame().evaluate(
+            self._script("get-text-in-viewport.js")
         )
-        javascript = javascript_path.read_text(encoding="utf-8")
-        return await self._active_frame().evaluate(javascript)
 
     async def scroll(self, amount: float) -> str:
-        if not self.is_open:
-            raise RuntimeError("No page is open")
-
         position = await self._active_frame().evaluate(
             """amount => {
                 window.scrollBy(0, innerHeight * amount);
@@ -253,11 +236,10 @@ class BrowserSession:
     async def _page_coordinates(
         self, horizontal: float, vertical: float
     ) -> tuple[float, float]:
-        if self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
         frame = self._active_frame()
-        if frame is self._page.main_frame:
+        if frame is page.main_frame:
             return horizontal, vertical
 
         frame_element = await frame.frame_element()
@@ -274,27 +256,25 @@ class BrowserSession:
         )
 
     async def _click_element(self, element_index: int) -> None:
-        if self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
         element = self.get_stored_element(element_index)
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
 
         horizontal, vertical = await self._page_coordinates(element.cx, element.cy)
-        await self._page.mouse.click(horizontal, vertical)
+        await page.mouse.click(horizontal, vertical)
 
     async def click(self, element_index: int) -> str:
         await self._click_element(element_index)
         return f"Clicked element [{element_index}]"
 
     async def fill(self, element_index: int, value: str) -> str:
-        if self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
         await self._click_element(element_index)
-        await self._page.keyboard.press("Control+A")
-        await self._page.keyboard.insert_text(value)
+        await page.keyboard.press("Control+A")
+        await page.keyboard.insert_text(value)
         return f"Filled element [{element_index}]"
 
     async def fill_sensitive(self, element_index: int, value: str) -> str:
@@ -317,37 +297,36 @@ class BrowserSession:
         return await self.fill(element_index, value)
 
     async def select(self, element_index: int, value: str) -> str:
-        if self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
         await self._click_element(element_index)
-        await self._page.keyboard.type(value)
-        await self._page.keyboard.press("Enter")
+        await page.keyboard.type(value)
+        await page.keyboard.press("Enter")
         return f"Selected an option in element [{element_index}]"
 
     async def press(self, element_index: int, value: str) -> str:
-        if self._page is None:
-            raise RuntimeError("No page is open")
+        page = self._require_page()
 
         await self._click_element(element_index)
-        await self._page.keyboard.press(value)
+        await page.keyboard.press(value)
         return f"Pressed {value} on element [{element_index}]"
 
     async def switch_tab(self, tab_id: str) -> str:
         if self._context is None:
             raise RuntimeError("No browser is open")
 
-        await self._collect_browser_state()
         page = self._tabs_by_id.get(tab_id)
         if page is None or page.is_closed():
             return f"Tab with id {tab_id} not found"
 
         await page.bring_to_front()
         self._reset_page_state(page)
-        await self._collect_browser_state()
         return f"Switched to tab with title {await page.title()} and url {page.url}"
 
-    async def capture_frame(self) -> bytes | None:
+    async def switch_to_iframe(self, iframe_id: str) -> str:
+        pass
+
+    async def capture_screen_frame(self) -> bytes | None:
         if not self.is_open or self._page is None:
             return None
 
@@ -372,7 +351,4 @@ class BrowserSession:
 
         self._reset_page_state()
         self._tabs_by_id = {}
-        self._frames_by_id = {}
         self._next_tab_id = 0
-        self._next_frame_id = 0
-        self._browser_state = BrowserState([], [])
