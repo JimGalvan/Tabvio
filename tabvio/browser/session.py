@@ -102,9 +102,10 @@ class BrowserSession:
         next_id: int,
     ) -> tuple[dict[str, Registered], int]:
         """Drop ids for items that are gone, keep the rest, and number the new ones."""
-        synced = {
-            item_id: item for item_id, item in registry.items() if item in live_items
-        }
+        synced = {}
+        for item_id, item in registry.items():
+            if item in live_items:
+                synced[item_id] = item
 
         registered = list(synced.values())
         for item in live_items:
@@ -119,7 +120,10 @@ class BrowserSession:
         if self._context is None:
             return BrowserState([], [])
 
-        pages = [page for page in self._context.pages if not page.is_closed()]
+        pages = []
+        for page in self._context.pages:
+            if not page.is_closed():
+                pages.append(page)
 
         if self._page not in pages:
             self._reset_page_state(pages[-1] if pages else None)
@@ -156,16 +160,17 @@ class BrowserSession:
             self._iframes_by_id, page_frames, "frame", self._next_frame_id
         )
 
-        frames = [
-            Frame(
-                id=frame_id,
-                selected=frame is self._frame,
-                main=frame is self._page.main_frame,
-                name=frame.name or "",
-                url=frame.url,
+        frames = []
+        for frame_id, frame in self._iframes_by_id.items():
+            frames.append(
+                Frame(
+                    id=frame_id,
+                    selected=frame is self._frame,
+                    main=frame is self._page.main_frame,
+                    name=frame.name or "",
+                    url=frame.url,
+                )
             )
-            for frame_id, frame in self._iframes_by_id.items()
-        ]
 
         return BrowserState(tabs, frames)
 
@@ -200,10 +205,9 @@ class BrowserSession:
     async def _observe_current_page(self) -> str:
         result = json.loads(await self._scan_page())
 
-        self._elements = [
-            Element(index=index, **raw_element)
-            for index, raw_element in enumerate(result["elements"])
-        ]
+        self._elements = []
+        for index, raw_element in enumerate(result["elements"]):
+            self._elements.append(Element(index=index, **raw_element))
 
         page_content = Helpers.format_page_to_llm_output(result)
         browser_state = await self._collect_browser_state()
