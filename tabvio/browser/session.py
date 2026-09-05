@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import TypeVar
 from urllib.parse import urlsplit
 
 from playwright.async_api import (
@@ -17,6 +18,8 @@ from tabvio.browser.formatting import Helpers
 from tabvio.browser.models import BrowserState, Element, Frame, Tab
 
 logger = logging.getLogger(__name__)
+
+Registered = TypeVar("Registered")
 
 
 class BrowserSession:
@@ -91,6 +94,27 @@ class BrowserSession:
     async def attempt_observe_page(self) -> str:
         return await self._observe_current_page()
 
+    @staticmethod
+    def _sync_registry(
+        registry: dict[str, Registered],
+        live_items: list[Registered],
+        prefix: str,
+        next_id: int,
+    ) -> tuple[dict[str, Registered], int]:
+        """Drop ids for items that are gone, keep the rest, and number the new ones."""
+        synced = {
+            item_id: item for item_id, item in registry.items() if item in live_items
+        }
+
+        registered = list(synced.values())
+        for item in live_items:
+            if item not in registered:
+                synced[f"{prefix}:{next_id}"] = item
+                next_id += 1
+                registered.append(item)
+
+        return synced, next_id
+
     async def _collect_browser_state(self) -> BrowserState:
         if self._context is None:
             return BrowserState([], [])
@@ -100,19 +124,9 @@ class BrowserSession:
         if self._page not in pages:
             self._reset_page_state(pages[-1] if pages else None)
 
-        open_tabs_by_id = {}
-        for tab_id, page in self._tabs_by_id.items():
-            if page in pages:
-                open_tabs_by_id[tab_id] = page
-        self._tabs_by_id = open_tabs_by_id
-
-        registered_pages = list(self._tabs_by_id.values())
-        for page in pages:
-            if page not in registered_pages:
-                tab_id = f"tab:{self._next_tab_id}"
-                self._next_tab_id += 1
-                self._tabs_by_id[tab_id] = page
-                registered_pages.append(page)
+        self._tabs_by_id, self._next_tab_id = self._sync_registry(
+            self._tabs_by_id, pages, "tab", self._next_tab_id
+        )
 
         tabs = []
         for tab_id, page in self._tabs_by_id.items():
@@ -138,19 +152,9 @@ class BrowserSession:
         if self._frame not in page_frames:
             self._frame = self._page.main_frame
 
-        page_iframes_by_id = {}
-        for frame_id, frame in self._iframes_by_id.items():
-            if frame in page_frames:
-                page_iframes_by_id[frame_id] = frame
-        self._iframes_by_id = page_iframes_by_id
-
-        registered_frames = list(self._iframes_by_id.values())
-        for frame in page_frames:
-            if frame not in registered_frames:
-                frame_id = f"frame:{self._next_frame_id}"
-                self._next_frame_id += 1
-                self._iframes_by_id[frame_id] = frame
-                registered_frames.append(frame)
+        self._iframes_by_id, self._next_frame_id = self._sync_registry(
+            self._iframes_by_id, page_frames, "frame", self._next_frame_id
+        )
 
         frames = [
             Frame(
