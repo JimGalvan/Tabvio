@@ -1,4 +1,6 @@
 const SCREEN_REFRESH_INTERVAL_MS = 750;
+const TAKEOVER_REFRESH_INTERVAL_MS = 120;
+const MAX_SCROLL_PIXELS = 2000;
 const PENDING_TASK_KEY = "tabvio.pending-task";
 
 const terminalRunStatuses = new Set([
@@ -19,7 +21,11 @@ const statusDot = document.querySelector("#status-dot");
 const statusLabel = document.querySelector("#status-label");
 const runIdLabel = document.querySelector("#run-id");
 const cancelButton = document.querySelector("#cancel-button");
+const browserViewport = document.querySelector("#browser-viewport");
 const browserScreen = document.querySelector("#browser-screen");
+const takeoverBar = document.querySelector("#takeover-bar");
+const takeoverNote = document.querySelector("#takeover-note");
+const takeoverButton = document.querySelector("#takeover-button");
 const browserWaiting = document.querySelector("#browser-waiting");
 const browserWaitingMessage = browserWaiting.querySelector("p");
 const latestAction = document.querySelector("#latest-action");
@@ -79,6 +85,8 @@ const eventTypes = [
   "agent.message.delta",
   "input.required",
   "input.received",
+  "takeover.started",
+  "takeover.ended",
   "sensitive_input.required",
   "sensitive_input.received",
   "follow_up.started",
@@ -103,6 +111,9 @@ const screenPausedStatuses = new Set([
 
 let activeRunId = null;
 let activeScreenUrl = null;
+let activeControlUrl = null;
+let controlSocket = null;
+let takeoverIsActive = false;
 let currentScreenObjectUrl = null;
 let eventSource = null;
 let screenRefreshTimer = null;
@@ -535,10 +546,197 @@ browserScreen.addEventListener("load", () => {
   browserWaiting.hidden = true;
 });
 
+const forwardedKeys = new Set([
+  "Enter",
+  "Tab",
+  "Backspace",
+  "Delete",
+  "Escape",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
+
+const takeoverCloseReasons = {
+  1008: "Sign in again to use this browser.",
+  4404: "That run is no longer available.",
+  4409: "The agent is no longer paused.",
+};
+
+function frameCoordinates(pointerEvent) {
+  const box = browserScreen.getBoundingClientRect();
+  if (!browserScreen.naturalWidth || !box.width || !box.height) {
+    return null;
+  }
+
+  // object-fit: contain letterboxes the frame inside the element, so the drawn
+  // image is not the element box and the offset has to come out first.
+  const frameWidth = browserScreen.naturalWidth;
+  const frameHeight = browserScreen.naturalHeight;
+  const scale = Math.min(box.width / frameWidth, box.height / frameHeight);
+  const left = box.left + (box.width - frameWidth * scale) / 2;
+  const top = box.top + (box.height - frameHeight * scale) / 2;
+
+  return {
+    x: Math.min(Math.max((pointerEvent.clientX - left) / scale, 0), frameWidth),
+    y: Math.min(Math.max((pointerEvent.clientY - top) / scale, 0), frameHeight),
+  };
+}
+
+function sendControlEvent(controlEvent) {
+  if (
+    !takeoverIsActive ||
+    !controlSocket ||
+    controlSocket.readyState !== WebSocket.OPEN
+  ) {
+    return;
+  }
+
+  controlSocket.send(JSON.stringify(controlEvent));
+}
+
+function startTakeover() {
+  if (takeoverIsActive || controlSocket || !activeControlUrl) {
+    return;
+  }
+
+  const socketUrl = new URL(activeControlUrl, window.location.href);
+  socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+  controlSocket = new WebSocket(socketUrl.toString());
+
+  controlSocket.addEventListener("open", () => {
+    takeoverIsActive = true;
+    browserViewport.classList.add("is-interactive");
+    browserViewport.tabIndex = 0;
+    browserViewport.focus();
+    takeoverButton.textContent = "Give control back";
+    takeoverNote.textContent =
+      "You have the browser. Click and type in the frame; the agent waits.";
+    requestImmediateFrame();
+  });
+
+  controlSocket.addEventListener("message", (socketEvent) => {
+    const acknowledgement = JSON.parse(socketEvent.data);
+    if (!acknowledgement.applied && acknowledgement.detail) {
+      takeoverNote.textContent = acknowledgement.detail;
+    }
+
+    requestImmediateFrame();
+  });
+
+  controlSocket.addEventListener("close", (closeEvent) => {
+    finishTakeover(takeoverCloseReasons[closeEvent.code]);
+  });
+}
+
+function stopTakeover(message = null) {
+  if (controlSocket) {
+    controlSocket.close();
+  }
+
+  finishTakeover(message);
+}
+
+function finishTakeover(message = null) {
+  controlSocket = null;
+  takeoverIsActive = false;
+  browserViewport.classList.remove("is-interactive");
+  browserViewport.removeAttribute("tabindex");
+  takeoverButton.textContent = "Take control";
+  takeoverNote.textContent =
+    message || "The agent is paused, so you can use its browser yourself.";
+}
+
+function showTakeoverBar(status) {
+  const canTakeControl = status === "waiting_for_input";
+  takeoverBar.hidden = !canTakeControl;
+  if (!canTakeControl && takeoverIsActive) {
+    stopTakeover();
+  }
+}
+
+takeoverButton.addEventListener("click", () => {
+  if (takeoverIsActive || controlSocket) {
+    stopTakeover();
+  } else {
+    startTakeover();
+  }
+});
+
+browserViewport.addEventListener("click", (pointerEvent) => {
+  if (!takeoverIsActive) {
+    return;
+  }
+
+  const coordinates = frameCoordinates(pointerEvent);
+  if (coordinates) {
+    sendControlEvent({type: "click", x: coordinates.x, y: coordinates.y});
+  }
+});
+
+browserViewport.addEventListener(
+  "wheel",
+  (wheelEvent) => {
+    if (!takeoverIsActive) {
+      return;
+    }
+
+    const coordinates = frameCoordinates(wheelEvent);
+    if (!coordinates) {
+      return;
+    }
+
+    wheelEvent.preventDefault();
+    sendControlEvent({
+      type: "scroll",
+      x: coordinates.x,
+      y: coordinates.y,
+      delta_y: Math.min(
+        Math.max(wheelEvent.deltaY, -MAX_SCROLL_PIXELS),
+        MAX_SCROLL_PIXELS,
+      ),
+    });
+  },
+  {passive: false},
+);
+
+browserViewport.addEventListener("keydown", (keyEvent) => {
+  if (!takeoverIsActive) {
+    return;
+  }
+
+  if ((keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.key.toLowerCase() === "a") {
+    keyEvent.preventDefault();
+    sendControlEvent({type: "key", key: keyEvent.ctrlKey ? "Control+A" : "Meta+A"});
+    return;
+  }
+
+  if (keyEvent.ctrlKey || keyEvent.metaKey || keyEvent.altKey) {
+    return;
+  }
+
+  if (keyEvent.key.length === 1) {
+    keyEvent.preventDefault();
+    sendControlEvent({type: "text", text: keyEvent.key});
+    return;
+  }
+
+  if (forwardedKeys.has(keyEvent.key)) {
+    keyEvent.preventDefault();
+    sendControlEvent({type: "key", key: keyEvent.key});
+  }
+});
+
 function openRun(responseBody) {
   stopScreenRefresh();
   activeRunId = responseBody.run.id;
   activeScreenUrl = responseBody.screen_url;
+  activeControlUrl = responseBody.control_url;
   displayedEventCount = 0;
   streamedMessage = "";
   activityList.replaceChildren();
@@ -629,10 +827,21 @@ async function refreshBrowserScreen(scheduleNextRefresh = true) {
     if (scheduleNextRefresh && runIsActive && !screenRefreshIsPaused) {
       screenRefreshTimer = window.setTimeout(
         refreshBrowserScreen,
-        SCREEN_REFRESH_INTERVAL_MS,
+        takeoverIsActive
+          ? TAKEOVER_REFRESH_INTERVAL_MS
+          : SCREEN_REFRESH_INTERVAL_MS,
       );
     }
   }
+}
+
+function requestImmediateFrame() {
+  if (screenRefreshTimer) {
+    window.clearTimeout(screenRefreshTimer);
+    screenRefreshTimer = null;
+  }
+
+  void refreshBrowserScreen();
 }
 
 function stopScreenRefresh() {
@@ -641,7 +850,9 @@ function stopScreenRefresh() {
     screenRefreshTimer = null;
   }
 
+  stopTakeover();
   activeScreenUrl = null;
+  activeControlUrl = null;
   screenRequestInFlight = false;
   if (currentScreenObjectUrl) {
     URL.revokeObjectURL(currentScreenObjectUrl);
@@ -752,6 +963,8 @@ function describeEvent(eventType, payload) {
     "browser.capture.recovered": {title: "Live view resumed", detail: payload.message},
     "input.required": {title: "Waiting for your answer", detail: payload.question},
     "input.received": {title: "Answer received", detail: "The agent is continuing the task."},
+    "takeover.started": {title: "You took control", detail: "The browser is yours until you hand it back."},
+    "takeover.ended": {title: "Control handed back", detail: "The agent has its browser again."},
     "sensitive_input.required": {title: "Verification required", detail: "Waiting for a secure code."},
     "sensitive_input.received": {title: "Verification code entered", detail: "The code was sent directly to the browser."},
     "follow_up.started": {title: "Follow-up started", detail: payload.task},
@@ -781,6 +994,7 @@ function updateStatus(status, followUpExpiresAt = null) {
   statusDot.className = `run-state-dot ${status}`;
   statusDot.dataset.status = status;
   statusLabel.textContent = labels[status] || status;
+  showTakeoverBar(status);
 
   if (status === "ready_for_follow_up") {
     showFollowUpPanel(followUpExpiresAt);
@@ -827,6 +1041,8 @@ function completeRun(status) {
   cancelButton.disabled = true;
   answerPanel.hidden = true;
   followUpPanel.hidden = true;
+  takeoverBar.hidden = true;
+  stopTakeover();
   setFormBusy(false);
 
   if (screenRefreshTimer) {

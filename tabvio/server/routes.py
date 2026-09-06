@@ -1,10 +1,19 @@
 import json
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, Header, Request, Response, status
+from fastapi import (
+    FastAPI,
+    Header,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
@@ -13,6 +22,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from tabvio.auth import routes as auth_routes
@@ -20,6 +30,7 @@ from tabvio.auth.sessions import (
     AuthKitSessionMiddleware,
     CurrentUser,
     read_session_state,
+    read_websocket_user,
     user_repository,
     verify_auth_configuration,
 )
@@ -52,10 +63,23 @@ from tabvio.runs.exceptions import (
     RunNotWaitingForInputError,
     SensitiveInputNotPendingError,
 )
-from tabvio.runs.models import RunEvent, RunRecord
+from tabvio.runs.models import RunContext, RunEvent, RunRecord
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
+from tabvio.server.constants import (
+    CONTROL_CLOSE_RUN_NOT_FOUND,
+    CONTROL_CLOSE_RUN_NOT_WAITING,
+    CONTROL_CLOSE_UNAUTHENTICATED,
+    CONTROL_EVENT_NOT_UNDERSTOOD,
+    CONTROL_MESSAGE_NOT_JSON,
+    MJPEG_BOUNDARY,
+    NO_CACHE,
+    NO_CACHE_HEADERS,
+    SCREEN_CACHE_HEADERS,
+    SSE_STREAM_HEADERS,
+)
 from tabvio.server.schemas import (
+    BrowserControlEvent,
     CreateCredentialRequest,
     CreateRunRequest,
     CredentialListResponse,
@@ -69,11 +93,7 @@ from tabvio.server.schemas import (
     UserInputRequest,
 )
 
-MJPEG_BOUNDARY = "tabvio-frame"
-SCREEN_CACHE_HEADERS = {
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-    "X-Accel-Buffering": "no",
-}
+logger = logging.getLogger(__name__)
 
 
 repository = RunRepository(DATABASE_PATH)
@@ -113,11 +133,6 @@ app = FastAPI(
 app.add_middleware(AuthKitSessionMiddleware)
 app.include_router(auth_routes.router)
 
-
-# The run layer already distinguishes these; mapping them once here keeps every
-# route free of the same four try/except blocks. A run belonging to somebody
-# else raises RunNotFoundError too, so it reports as missing rather than
-# forbidden and an identifier cannot be used to confirm a run exists.
 _RUN_ERROR_STATUSES = {
     RunNotFoundError: status.HTTP_404_NOT_FOUND,
     RunCapacityReachedError: status.HTTP_429_TOO_MANY_REQUESTS,
@@ -169,7 +184,7 @@ class RevalidatedStaticFiles(StaticFiles):
 
     def file_response(self, *args: Any, **kwargs: Any) -> Response:
         response = super().file_response(*args, **kwargs)
-        response.headers["cache-control"] = "no-cache"
+        response.headers["cache-control"] = NO_CACHE
         return response
 
 
@@ -177,10 +192,7 @@ app.mount("/static", RevalidatedStaticFiles(directory=STATIC_DIRECTORY), name="s
 
 
 def _serve_page(name: str) -> FileResponse:
-    return FileResponse(
-        STATIC_DIRECTORY / name,
-        headers={"cache-control": "no-cache"},
-    )
+    return FileResponse(STATIC_DIRECTORY / name, headers=NO_CACHE_HEADERS)
 
 
 @app.get("/", include_in_schema=False)
@@ -202,7 +214,10 @@ async def get_terms_page() -> FileResponse:
 @app.get("/app", include_in_schema=False)
 async def get_dashboard(request: Request) -> Response:
     if read_session_state(request) is None:
-        return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(
+            app.url_path_for("start_sign_in"),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
 
     return _serve_page("app.html")
 
@@ -301,10 +316,7 @@ async def stream_run_events(
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers=SSE_STREAM_HEADERS,
     )
 
 
@@ -342,6 +354,68 @@ async def stream_run_screen(run_id: UUID, user: CurrentUser) -> StreamingRespons
         media_type=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
         headers=SCREEN_CACHE_HEADERS,
     )
+
+
+@app.websocket("/api/runs/{run_id}/control")
+async def control_run_browser(websocket: WebSocket, run_id: UUID) -> None:
+    """Let the person watching a parked run drive its browser themselves.
+    """
+    user = read_websocket_user(websocket)
+    if user is None:
+        await websocket.close(code=CONTROL_CLOSE_UNAUTHENTICATED)
+        return
+
+    try:
+        context = await run_manager.open_control(run_id, user.id)
+    except RunNotFoundError:
+        await websocket.close(code=CONTROL_CLOSE_RUN_NOT_FOUND)
+        return
+    except RunNotWaitingForInputError:
+        await websocket.close(code=CONTROL_CLOSE_RUN_NOT_WAITING)
+        return
+
+    try:
+        await websocket.accept()
+        while True:
+            try:
+                payload = await websocket.receive_json()
+            except json.JSONDecodeError:
+                await _acknowledge(websocket, False, CONTROL_MESSAGE_NOT_JSON)
+                continue
+
+            await _handle_control_message(websocket, context, payload)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await run_manager.close_control(context)
+
+
+async def _handle_control_message(
+    websocket: WebSocket,
+    context: RunContext,
+    payload: Any,
+) -> None:
+    """Validate and play one action, answering with what became of it.
+    """
+    try:
+        event = BrowserControlEvent.model_validate(payload)
+    except ValidationError:
+        await _acknowledge(websocket, False, CONTROL_EVENT_NOT_UNDERSTOOD)
+        return
+
+    try:
+        outcome = await run_manager.apply_control(context, event)
+    except Exception as exception:
+        logger.warning("Takeover event failed for run %s: %s", context.run.id, exception)
+        await _acknowledge(websocket, False, str(exception))
+        return
+
+    await _acknowledge(websocket, True, outcome)
+
+
+async def _acknowledge(websocket: WebSocket, applied: bool, detail: str) -> None:
+    """Answer one control message. The dashboard reads both fields."""
+    await websocket.send_json({"applied": applied, "detail": detail})
 
 
 @app.post("/api/runs/{run_id}/input", response_model=RunResponse)
@@ -404,8 +478,9 @@ async def end_run_session(run_id: UUID, user: CurrentUser) -> RunResponse:
 def _build_run_response(run: RunRecord) -> RunResponse:
     return RunResponse(
         run=run,
-        stream_url=f"/api/runs/{run.id}/stream",
-        screen_url=f"/api/runs/{run.id}/screen.jpg",
+        stream_url=app.url_path_for("stream_run_events", run_id=run.id),
+        screen_url=app.url_path_for("get_run_screen", run_id=run.id),
+        control_url=app.url_path_for("control_run_browser", run_id=run.id),
     )
 
 

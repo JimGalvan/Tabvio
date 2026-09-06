@@ -7,6 +7,7 @@ from tabvio.credentials.models import (
     UpdateCredentialRequest,
 )
 from tabvio.runs.models import (
+    BrowserControlEvent,
     CreateRunRequest,
     FollowUpRequest,
     RunListResponse,
@@ -17,6 +18,7 @@ from tabvio.runs.models import (
 )
 
 __all__ = [
+    "BrowserControlEvent",
     "CreateRunRequest",
     "FollowUpRequest",
     "RunListResponse",

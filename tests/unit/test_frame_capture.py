@@ -17,7 +17,7 @@ class RecoveringBrowser:
     def __init__(self) -> None:
         self.capture_attempts = 0
 
-    async def capture_frame(self) -> bytes:
+    async def capture_screen_frame(self, quality: int = 0) -> bytes:
         self.capture_attempts += 1
         if self.capture_attempts == 1:
             raise RuntimeError("temporary screenshot failure")

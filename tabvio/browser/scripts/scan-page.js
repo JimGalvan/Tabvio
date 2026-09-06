@@ -4,10 +4,6 @@
     const INTERACTIVE_ROLES = ['button','link','checkbox','radio','tab','menuitem',
         'option','switch','combobox','searchbox','textbox'];
 
-    // Two confidence levels. 'strong' means the element declares itself
-    // actionable, so it survives even inside another actionable element (a
-    // Save button within a clickable card). 'weak' is inferred from styling or
-    // focusability and is dropped when an ancestor was already kept.
     const interactiveKind = (element) => {
         const tagName = element.tagName.toLowerCase();
         if (INTERACTIVE_TAGS.includes(tagName)) return 'strong';
@@ -15,9 +11,6 @@
         if (role && INTERACTIVE_ROLES.includes(role)) return 'strong';
         if (element.hasAttribute('onclick') || element.isContentEditable) return 'strong';
         if (element.tabIndex >= 0 && tagName !== 'body') return 'weak';
-
-        // cursor is an inherited property, so every div inside a clickable cell
-        // reports 'pointer' too. Only credit the element that introduces it.
         if (getComputedStyle(element).cursor !== 'pointer') return null;
         const parent = element.parentElement;
         if (parent && getComputedStyle(parent).cursor === 'pointer') return null;
@@ -31,9 +24,6 @@
         return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
     };
 
-    // Collapsing descendants would otherwise lose their labels: on a Google
-    // Flights date cell the visible text is "5 $307" while the full
-    // "Saturday, September 5, 2026" sits on a child. Absorb both.
     const MAX_ROLLUP_LABELS = 3;
 
     const label = (element) => {

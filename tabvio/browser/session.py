@@ -13,7 +13,13 @@ from playwright.async_api import (
 )
 from playwright.async_api import Frame as PlaywrightFrame
 
-from tabvio.browser.constants import OBSERVE_ATTEMPTS, LOAD_TIMEOUT_MS, FRAME_QUALITY
+from tabvio.browser.constants import (
+    FRAME_QUALITY,
+    LOAD_TIMEOUT_MS,
+    OBSERVE_ATTEMPTS,
+    VIEWPORT_HEIGHT,
+    VIEWPORT_WIDTH,
+)
 from tabvio.browser.formatting import Helpers
 from tabvio.browser.models import Element, Iframe, Tab
 
@@ -69,7 +75,7 @@ class BrowserSession:
                 headless=self._headless
             )
             self._context = await self._browser.new_context(
-                viewport={"width": 1365, "height": 768}
+                viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
             )
 
         return self._browser
@@ -198,12 +204,12 @@ class BrowserSession:
         final_attempt = OBSERVE_ATTEMPTS - 1
         for attempt in range(OBSERVE_ATTEMPTS):
             try:
-                frame = self._active_frame()
-                await frame.wait_for_load_state(
+                active_iframe = self._active_frame()
+                await active_iframe.wait_for_load_state(
                     "domcontentloaded", timeout=LOAD_TIMEOUT_MS
                 )
-                await frame.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
-                return await frame.evaluate(self._get_script("scan-page.js"))
+                await active_iframe.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
+                return await active_iframe.evaluate(self._get_script("scan-page.js"))
             except Exception as exception:
                 if attempt == final_attempt:
                     raise
@@ -333,13 +339,44 @@ class BrowserSession:
     async def switch_to_iframe(self, iframe_id: str) -> str:
         pass
 
-    async def capture_screen_frame(self) -> bytes | None:
+    def _invalidate_elements(self) -> None:
+        """A person moving the page leaves the agent's element indexes stale."""
+        self._elements = []
+
+    async def user_click(self, horizontal: float, vertical: float) -> str:
+        await self._require_page().mouse.click(horizontal, vertical)
+        self._invalidate_elements()
+        return f"Clicked at {horizontal:.0f}, {vertical:.0f}"
+
+    async def user_scroll(
+        self,
+        horizontal: float,
+        vertical: float,
+        amount: float,
+    ) -> str:
+        page = self._require_page()
+        await page.mouse.move(horizontal, vertical)
+        await page.mouse.wheel(0, amount)
+        self._invalidate_elements()
+        return f"Scrolled by {amount:.0f} pixels"
+
+    async def user_key(self, key: str) -> str:
+        await self._require_page().keyboard.press(key)
+        self._invalidate_elements()
+        return f"Pressed {key}"
+
+    async def user_text(self, text: str) -> str:
+        await self._require_page().keyboard.insert_text(text)
+        self._invalidate_elements()
+        return "Typed text"
+
+    async def capture_screen_frame(self, quality: int = FRAME_QUALITY) -> bytes | None:
         if not self.is_open or self._page is None:
             return None
 
         return await self._page.screenshot(
             type="jpeg",
-            quality=FRAME_QUALITY,
+            quality=quality,
             scale="css",
         )
 

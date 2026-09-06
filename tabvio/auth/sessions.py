@@ -17,9 +17,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, WebSocket, status
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
+from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Receive, Scope, Send
 from workos import WorkOSClient
 from workos.session import (
@@ -480,23 +481,37 @@ class AuthKitSessionMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self._app = app
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        path = scope.get("path", "")
-        if scope["type"] != "http" or path == "/static" or path.startswith("/static/"):
-            await self._app(scope, receive, send)
-            return
-
-        request = Request(scope)
-        sealed_session = request.cookies.get(SESSION_COOKIE_NAME)
+    async def _attach_session(
+        self, scope: Scope
+    ) -> tuple[SessionVerdict, SessionState | None, str | None]:
+        connection = HTTPConnection(scope)
+        sealed_session = connection.cookies.get(SESSION_COOKIE_NAME)
         verdict = SessionVerdict.REJECTED
         state: SessionState | None = None
 
         if sealed_session:
             verdict, state = await resolve_session(sealed_session)
 
-        request_state = scope.setdefault("state", {})
-        request_state["session"] = state
-        request_state["user"] = await resolve_user(state) if state is not None else None
+        connection_state = scope.setdefault("state", {})
+        connection_state["session"] = state
+        connection_state["user"] = (
+            await resolve_user(state) if state is not None else None
+        )
+        return verdict, state, sealed_session
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "websocket":
+            await self._attach_session(scope)
+            await self._app(scope, receive, send)
+            return
+
+        if scope["type"] != "http" or path == "/static" or path.startswith("/static/"):
+            await self._app(scope, receive, send)
+            return
+
+        request = Request(scope)
+        verdict, state, sealed_session = await self._attach_session(scope)
 
         cookie_headers: list[str] = []
         if sealed_session and verdict is SessionVerdict.REJECTED:
@@ -542,3 +557,7 @@ async def get_current_user(request: Request) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def read_websocket_user(websocket: WebSocket) -> User | None:
+    return getattr(websocket.state, "user", None)

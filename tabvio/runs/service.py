@@ -21,7 +21,14 @@ from tabvio.runs.exceptions import (
     RunNotWaitingForInputError,
     SensitiveInputNotPendingError,
 )
-from tabvio.runs.models import RunContext, RunEvent, RunRecord, RunStatus
+from tabvio.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
+from tabvio.runs.models import (
+    BrowserControlEvent,
+    RunContext,
+    RunEvent,
+    RunRecord,
+    RunStatus,
+)
 from tabvio.runs.repository import RunRepository
 
 
@@ -159,12 +166,7 @@ class RunManager:
         return run
 
     async def submit_input(self, run_id: UUID, user_id: UUID, answer: str) -> RunRecord:
-        context, _ = self._resolve_owned(run_id, user_id)
-        if context is None:
-            raise RunNotFoundError(f"Run {run_id} was not found")
-
-        if context.run.status != RunStatus.WAITING_FOR_INPUT:
-            raise RunNotWaitingForInputError("The run is not waiting for user input")
+        context = self._require_waiting_context(run_id, user_id)
         sensitive_inputs = getattr(context.runtime, "sensitive_inputs", None)
         if sensitive_inputs is not None and sensitive_inputs.pending is not None:
             raise RunNotWaitingForInputError(
@@ -217,6 +219,62 @@ class RunManager:
         except Exception:
             self._resuming_run_ids.discard(run_id)
             raise
+
+    def _require_waiting_context(self, run_id: UUID, user_id: UUID) -> RunContext:
+        """The live context of a run this account owns that is parked on input."""
+        context, _ = self._resolve_owned(run_id, user_id)
+        if context is None:
+            raise RunNotFoundError(f"Run {run_id} was not found")
+
+        if context.run.status != RunStatus.WAITING_FOR_INPUT:
+            raise RunNotWaitingForInputError("The run is not waiting for user input")
+
+        return context
+
+    async def open_control(self, run_id: UUID, user_id: UUID) -> RunContext:
+        """Hand the browser to the person watching it.
+
+        Checked at open only. A run waiting for a verification code is refused:
+        that flow holds element indexes captured before the person arrived.
+        """
+        context = self._require_waiting_context(run_id, user_id)
+
+        sensitive_inputs = getattr(context.runtime, "sensitive_inputs", None)
+        if sensitive_inputs is not None and sensitive_inputs.pending is not None:
+            raise RunNotWaitingForInputError(
+                "The run is waiting for a verification code"
+            )
+
+        context.controller_count += 1
+        if context.controller_count == 1:
+            await self._publish(context, "takeover.started", {})
+
+        return context
+
+    async def close_control(self, context: RunContext) -> None:
+        context.controller_count = max(context.controller_count - 1, 0)
+        if context.controller_count == 0 and not context.run.status.is_terminal:
+            await self._publish(context, "takeover.ended", {})
+
+    async def apply_control(
+            self,
+            context: RunContext,
+            event: BrowserControlEvent,
+    ) -> str:
+        """Play one of a person's actions into the browser.
+
+        Serialised per run so that two open dashboards cannot interleave a
+        click and a keystroke into the same page.
+        """
+        browser = context.runtime.browser
+        async with context.control_lock:
+            if event.type == "click":
+                return await browser.user_click(event.x, event.y)
+            if event.type == "scroll":
+                return await browser.user_scroll(event.x, event.y, event.delta_y)
+            if event.type == "key":
+                return await browser.user_key(event.key)
+            return await browser.user_text(event.text)
 
     async def submit_follow_up(self, run_id: UUID, user_id: UUID, task: str) -> RunRecord:
         expiry_task = None
@@ -499,8 +557,10 @@ class RunManager:
         capture_failure_active = False
 
         while not context.run.status.is_terminal:
+            taken_over = context.controller_count > 0
+            quality = FRAME_QUALITY_TAKEOVER if taken_over else FRAME_QUALITY
             try:
-                frame = await asyncio.wait_for(context.runtime.browser.capture_screen_frame(),
+                frame = await asyncio.wait_for(context.runtime.browser.capture_screen_frame(quality),
                                                timeout=constants.FRAME_CAPTURE_TIMEOUT_SECONDS)
             except asyncio.CancelledError:
                 raise
@@ -525,7 +585,11 @@ class RunManager:
                     await self._publish(context, "browser.capture.recovered",
                                         {"message": "Live view resumed"})
 
-            await asyncio.sleep(constants.FRAME_INTERVAL_SECONDS)
+            await asyncio.sleep(
+                constants.FRAME_INTERVAL_SECONDS_TAKEOVER
+                if taken_over
+                else constants.FRAME_INTERVAL_SECONDS
+            )
 
     async def _finish_context(self, context: RunContext) -> None:
         expiry_task = context.follow_up_expiry_task
