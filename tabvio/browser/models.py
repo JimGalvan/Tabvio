@@ -21,15 +21,9 @@ class Tab:
 
 
 @dataclass
-class Frame:
+class Iframe:
     id: str
     selected: bool
     main: bool
     name: str
     url: str
-
-
-@dataclass
-class BrowserState:
-    tabs: list[Tab]
-    frames: list[Frame]

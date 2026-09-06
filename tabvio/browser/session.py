@@ -15,7 +15,7 @@ from playwright.async_api import Frame as PlaywrightFrame
 
 from tabvio.browser.constants import OBSERVE_ATTEMPTS, LOAD_TIMEOUT_MS, FRAME_QUALITY
 from tabvio.browser.formatting import Helpers
-from tabvio.browser.models import BrowserState, Element, Frame, Tab
+from tabvio.browser.models import Element, Iframe, Tab
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,12 @@ class BrowserSession:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
-        self._frame: PlaywrightFrame | None = None
+        self._iframe: PlaywrightFrame | None = None
         self._elements: list[Element] = []
         self._tabs_by_id: dict[str, Page] = {}
         self._iframes_by_id: dict[str, PlaywrightFrame] = {}
         self._next_tab_id = 0
-        self._next_frame_id = 0
+        self._next_iframe_id = 0
         self._scripts: dict[str, str] = {}
 
     @property
@@ -76,9 +76,9 @@ class BrowserSession:
 
     def _reset_page_state(self, page: Page | None = None) -> None:
         self._page = page
-        self._frame = page.main_frame if page else None
+        self._iframe = page.main_frame if page else None
         self._iframes_by_id = {}
-        self._next_frame_id = 0
+        self._next_iframe_id = 0
         self._elements = []
 
     async def attempt_navigate_and_observe(self, url: str) -> str:
@@ -116,20 +116,28 @@ class BrowserSession:
 
         return synced, next_id
 
-    async def _collect_browser_state(self) -> BrowserState:
+    def _live_pages(self) -> list[Page]:
         if self._context is None:
-            return BrowserState([], [])
+            return []
 
         pages = []
         for page in self._context.pages:
             if not page.is_closed():
                 pages.append(page)
 
+        return pages
+
+    def _reconcile_current_page(self) -> None:
+        if self._context is None:
+            return
+
+        pages = self._live_pages()
         if self._page not in pages:
             self._reset_page_state(pages[-1] if pages else None)
 
+    async def _collect_tabs(self) -> list[Tab]:
         self._tabs_by_id, self._next_tab_id = self._sync_registry(
-            self._tabs_by_id, pages, "tab", self._next_tab_id
+            self._tabs_by_id, self._live_pages(), "tab", self._next_tab_id
         )
 
         tabs = []
@@ -148,39 +156,42 @@ class BrowserSession:
                 )
             )
 
+        return tabs
+
+    def _collect_iframes(self) -> list[Iframe]:
         if self._page is None:
             self._iframes_by_id = {}
-            return BrowserState(tabs, [])
+            return []
 
         page_frames = list(self._page.frames)
-        if self._frame not in page_frames:
-            self._frame = self._page.main_frame
+        if self._iframe not in page_frames:
+            self._iframe = self._page.main_frame
 
-        self._iframes_by_id, self._next_frame_id = self._sync_registry(
-            self._iframes_by_id, page_frames, "frame", self._next_frame_id
+        self._iframes_by_id, self._next_iframe_id = self._sync_registry(
+            self._iframes_by_id, page_frames, "frame", self._next_iframe_id
         )
 
         frames = []
         for frame_id, frame in self._iframes_by_id.items():
             frames.append(
-                Frame(
+                Iframe(
                     id=frame_id,
-                    selected=frame is self._frame,
+                    selected=frame is self._iframe,
                     main=frame is self._page.main_frame,
                     name=frame.name or "",
                     url=frame.url,
                 )
             )
 
-        return BrowserState(tabs, frames)
+        return frames
 
     def _active_frame(self) -> PlaywrightFrame:
         page = self._require_page()
 
-        if self._frame not in page.frames:
-            self._frame = page.main_frame
+        if self._iframe not in page.frames:
+            self._iframe = page.main_frame
 
-        return self._frame
+        return self._iframe
 
     async def _scan_page(self) -> str:
         """Scan the page, following it if it navigates mid-scan."""
@@ -209,12 +220,14 @@ class BrowserSession:
         for index, raw_element in enumerate(result["elements"]):
             self._elements.append(Element(index=index, **raw_element))
 
-        page_content = Helpers.format_page_to_llm_output(result)
-        browser_state = await self._collect_browser_state()
+        interactable_elements = Helpers.page_json_to_interactable_elements_for_llm(result)
+        self._reconcile_current_page()
+        tabs = await self._collect_tabs()
+        frames = self._collect_iframes()
         return (
-            f"{page_content}\n"
-            f"<available-tabs>{browser_state.tabs}\n</available-tabs>"
-            f"<available-iframes>{browser_state.frames}</available-iframes>"
+            f"{interactable_elements}\n"
+            f"<available-tabs>{tabs}\n</available-tabs>"
+            f"<available-iframes>{frames}</available-iframes>"
         )
 
     def get_stored_element(self, element_index: int) -> Element | None:

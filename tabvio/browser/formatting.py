@@ -26,7 +26,7 @@ class Helpers:
         return "\n".join(normalized_lines)
 
     @staticmethod
-    def format_page_to_llm_output(data: dict) -> str:
+    def page_json_to_interactable_elements_for_llm(data: dict) -> str:
         url = data.get("url", "")
 
         if "?" in url:
