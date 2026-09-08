@@ -1,0 +1,2 @@
+Buy a size 10 Trailhead Running Shoe from http://localhost:8001/shop/product.html.
+Ship it to Ada Lovelace, ada@example.com, 12 Analytical Way, Cambridge, MA, 02139.

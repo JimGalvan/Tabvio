@@ -1,0 +1,1 @@
+Go to http://localhost:8001/shop/cart.html and tell me what is in the cart.

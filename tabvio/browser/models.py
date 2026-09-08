@@ -12,6 +12,12 @@ class Element:
     cy: float
 
 
+@dataclass(frozen=True)
+class PaymentSignal:
+    kind: str
+    detail: str
+
+
 @dataclass
 class Tab:
     id: str

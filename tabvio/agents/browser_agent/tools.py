@@ -136,11 +136,30 @@ def build_browser_tools(
             ]
         )
 
+    def guard_payment_surface() -> None:
+        if not browser.needs_payment_handoff():
+            return
+
+        signals = [
+            f"{signal.kind}:{signal.detail}" for signal in browser.payment_signals
+        ]
+        question = (
+            "This page can take a payment, so I have stopped before touching it. "
+            "Take control of the browser, enter the payment details yourself, "
+            "then tell me how to continue."
+        )
+        publish_custom_event(
+            "input.required", {"question": question, "payment_signals": signals}
+        )
+        interrupt({"kind": "payment_handoff", "question": question})
+        browser.acknowledge_payment_surface()
+
     @tool(args_schema=StepPlan)
     async def execute_steps(
             steps: list[BrowserStep], runtime: ToolRuntime[AgentContext]
     ) -> str:
         """Validate and execute browser steps, including credential and MFA steps."""
+        guard_payment_surface()
         normalized_steps = [
             step
             if isinstance(step, BaseModel)

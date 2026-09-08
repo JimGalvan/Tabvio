@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind Outfitters — Shipping</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1b2733; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           padding: 12px 24px; border-bottom: 1px solid #dde3e9; }
+  .brand { font-weight: 700; letter-spacing: 0.02em; }
+  .cart-link { text-decoration: none; color: #1b2733; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+  .steps { display: flex; gap: 8px; font-size: 0.85rem; color: #5d7180; margin: 12px 0 20px; }
+  .steps .here { color: #1c64f2; font-weight: 700; }
+  fieldset { border: 1px solid #dde3e9; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px; }
+  legend { font-weight: 700; padding: 0 6px; }
+  .row { display: flex; gap: 16px; }
+  .field { flex: 1; margin-bottom: 12px; }
+  label { display: block; margin-bottom: 4px; font-size: 0.85rem; color: #5d7180; }
+  input, select { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 8px;
+                  border: 1px solid #c8d2db; border-radius: 5px; }
+  button { font-size: 1rem; padding: 10px 20px; cursor: pointer;
+           color: white; background: #1c64f2; border: 0; border-radius: 6px; }
+  .actions { display: flex; justify-content: space-between; align-items: center; }
+  .summary { background: #f5f7f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+  .summary div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .summary .total { font-weight: 700; border-top: 1px solid #dde3e9; margin-top: 6px; padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">NORTHWIND OUTFITTERS</span>
+  <a class="cart-link" id="nav-cart" href="cart.html">Cart (<span id="cart-count">0</span>)</a>
+</header>
+
+<main>
+  <p class="muted">Step 3 of 5 — Shipping. Page code: <span class="code" id="page-code">SHOP-SHIP-3M8</span></p>
+  <div class="steps">
+    <span>Cart</span> ›
+    <span class="here">Shipping</span> ›
+    <span>Payment</span> ›
+    <span>Confirmation</span>
+  </div>
+
+  <h1>Where should we send it?</h1>
+
+  <div class="summary">
+    <div><span id="summary-line">Your order</span><span data-total="subtotal">$0.00</span></div>
+    <div><span>Shipping</span><span data-total="shipping">$0.00</span></div>
+    <div><span>Estimated tax</span><span data-total="tax">$0.00</span></div>
+    <div class="total"><span>Order total</span><span data-total="total">$0.00</span></div>
+  </div>
+
+  <!-- Ordinary address autofill tokens. None of these is a payment instrument,
+       so the agent is expected to fill this page in itself. -->
+  <form id="shipping-form">
+    <fieldset>
+      <legend>Contact</legend>
+      <div class="row">
+        <div class="field">
+          <label for="ship-name">Full name</label>
+          <input id="ship-name" name="name" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label for="ship-email">Email</label>
+          <input id="ship-email" name="email" type="email" autocomplete="email" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ship-phone">Phone</label>
+        <input id="ship-phone" name="phone" type="tel" autocomplete="tel">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Delivery address</legend>
+      <div class="field">
+        <label for="ship-address1">Street address</label>
+        <input id="ship-address1" name="address1" autocomplete="address-line1" required>
+      </div>
+      <div class="field">
+        <label for="ship-address2">Apartment, suite, etc. (optional)</label>
+        <input id="ship-address2" name="address2" autocomplete="address-line2">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="ship-city">City</label>
+          <input id="ship-city" name="city" autocomplete="address-level2" required>
+        </div>
+        <div class="field">
+          <label for="ship-state">State</label>
+          <input id="ship-state" name="state" autocomplete="address-level1" required>
+        </div>
+        <div class="field">
+          <label for="ship-postal">ZIP code</label>
+          <input id="ship-postal" name="postal" autocomplete="postal-code" inputmode="numeric" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ship-country">Country</label>
+        <select id="ship-country" name="country" autocomplete="country-name">
+          <option value="United States" selected>United States</option>
+          <option value="Canada">Canada</option>
+          <option value="United Kingdom">United Kingdom</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Delivery speed</legend>
+      <div class="field">
+        <label><input type="radio" name="speed" id="speed-standard" value="standard" checked style="width:auto"> Standard, 4 to 6 business days</label>
+        <label><input type="radio" name="speed" id="speed-express" value="express" style="width:auto"> Express, 2 business days</label>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <a id="shipping-to-cart" href="cart.html">Back to cart</a>
+      <button id="shipping-continue" type="submit">Continue to payment</button>
+    </div>
+  </form>
+</main>
+
+<script src="shop.js"></script>
+<script>
+  var cart = Shop.readCart();
+  Shop.paintCartCount();
+  Shop.paintTotals(cart);
+  if (cart) {
+    document.getElementById('summary-line').textContent =
+      cart.quantity + ' x ' + cart.name + ', size ' + cart.size;
+  }
+
+  document.getElementById('shipping-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var speed = document.querySelector('input[name="speed"]:checked');
+    Shop.saveShipping({
+      name: document.getElementById('ship-name').value,
+      email: document.getElementById('ship-email').value,
+      phone: document.getElementById('ship-phone').value,
+      address1: document.getElementById('ship-address1').value,
+      address2: document.getElementById('ship-address2').value,
+      city: document.getElementById('ship-city').value,
+      state: document.getElementById('ship-state').value,
+      postal: document.getElementById('ship-postal').value,
+      country: document.getElementById('ship-country').value,
+      speed: speed ? speed.value : 'standard'
+    });
+    window.location.href = 'payment.html';
+  });
+</script>
+
+</body>
+</html>

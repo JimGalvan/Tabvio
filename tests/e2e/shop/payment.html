@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind Outfitters — Payment</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1b2733; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           padding: 12px 24px; border-bottom: 1px solid #dde3e9; }
+  .brand { font-weight: 700; letter-spacing: 0.02em; }
+  .cart-link { text-decoration: none; color: #1b2733; }
+  main { max-width: 880px; margin: 0 auto; padding: 24px;
+         display: grid; grid-template-columns: 1fr 300px; gap: 32px; align-items: start; }
+  .full { grid-column: 1 / -1; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+  .steps { display: flex; gap: 8px; font-size: 0.85rem; color: #5d7180; margin: 12px 0 20px; }
+  .steps .here { color: #1c64f2; font-weight: 700; }
+  fieldset { border: 1px solid #dde3e9; border-radius: 8px; padding: 16px 20px; margin: 0 0 20px; }
+  legend { font-weight: 700; padding: 0 6px; }
+  .row { display: flex; gap: 16px; }
+  .field { flex: 1; margin-bottom: 12px; }
+  label { display: block; margin-bottom: 4px; font-size: 0.85rem; color: #5d7180; }
+  input { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 8px;
+          border: 1px solid #c8d2db; border-radius: 5px; }
+  button { font-size: 1rem; padding: 12px 20px; width: 100%; cursor: pointer;
+           color: white; background: #1f7a4d; border: 0; border-radius: 6px; font-weight: 600; }
+  aside { border: 1px solid #dde3e9; border-radius: 8px; padding: 16px; }
+  aside div { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.95rem; }
+  aside .total { font-weight: 700; font-size: 1.05rem;
+                 border-top: 1px solid #dde3e9; margin-top: 8px; padding-top: 10px; }
+  .recap { background: #f5f7f9; border-radius: 6px; padding: 10px 12px;
+           font-size: 0.9rem; margin-bottom: 16px; }
+  .lock { font-size: 0.85rem; color: #5d7180; margin-top: 10px; text-align: center; }
+  .alt { font-size: 0.85rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">NORTHWIND OUTFITTERS</span>
+  <a class="cart-link" id="nav-cart" href="cart.html">Cart (<span id="cart-count">0</span>)</a>
+</header>
+
+<main>
+  <div class="full">
+    <p class="muted">Step 4 of 5 — Payment. Page code: <span class="code" id="page-code">SHOP-PAY-6R1</span></p>
+    <div class="steps">
+      <span>Cart</span> ›
+      <span>Shipping</span> ›
+      <span class="here">Payment</span> ›
+      <span>Confirmation</span>
+    </div>
+  </div>
+
+  <section>
+    <h1>Payment</h1>
+
+    <div class="recap" id="shipping-recap">Shipping to: not set</div>
+
+    <form id="payment-form">
+      <fieldset>
+        <legend>Card details</legend>
+        <!-- The autocomplete tokens here are what Tier 1 detection reads. They
+             are the same ones a real checkout sets so browser autofill works. -->
+        <div class="field">
+          <label for="pay-card-name">Name on card</label>
+          <input id="pay-card-name" name="cardName" autocomplete="cc-name" required>
+        </div>
+        <div class="field">
+          <label for="pay-card-number">Card number</label>
+          <input id="pay-card-number" name="cardNumber" autocomplete="cc-number"
+                 inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456" required>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="pay-card-exp">Expiry</label>
+            <input id="pay-card-exp" name="cardExpiry" autocomplete="cc-exp"
+                   inputmode="numeric" maxlength="5" placeholder="MM/YY" required>
+          </div>
+          <div class="field">
+            <label for="pay-card-csc">Security code</label>
+            <input id="pay-card-csc" name="cardCsc" autocomplete="cc-csc"
+                   inputmode="numeric" maxlength="4" placeholder="CVC" required>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Billing address</legend>
+        <div class="field">
+          <label><input type="checkbox" id="billing-same" checked style="width:auto"> Same as delivery address</label>
+        </div>
+        <div id="billing-fields" hidden>
+          <div class="field">
+            <label for="bill-address1">Street address</label>
+            <input id="bill-address1" name="billAddress1" autocomplete="billing address-line1">
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="bill-city">City</label>
+              <input id="bill-city" name="billCity" autocomplete="billing address-level2">
+            </div>
+            <div class="field">
+              <label for="bill-postal">ZIP code</label>
+              <input id="bill-postal" name="billPostal" autocomplete="billing postal-code" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <button id="place-order" type="submit">Place order &mdash; <span data-total="total">$0.00</span></button>
+      <p class="lock">Payments are encrypted. You will not be charged until the order ships.</p>
+      <p class="alt"><a id="pay-hosted-link" href="payment-hosted.html">Use the hosted card form instead</a></p>
+      <p class="alt"><a id="payment-to-shipping" href="shipping.html">Back to shipping</a></p>
+    </form>
+  </section>
+
+  <aside>
+    <h2 style="font-size:1rem;margin-top:0">Order summary</h2>
+    <div><span id="summary-line">Your order</span><span data-total="subtotal">$0.00</span></div>
+    <div><span>Shipping</span><span data-total="shipping">$0.00</span></div>
+    <div><span>Estimated tax</span><span data-total="tax">$0.00</span></div>
+    <div class="total"><span>Total</span><span data-total="total">$0.00</span></div>
+  </aside>
+</main>
+
+<script src="shop.js"></script>
+<script>
+  var cart = Shop.readCart();
+  var shipping = Shop.readShipping();
+  Shop.paintCartCount();
+  Shop.paintTotals(cart);
+
+  if (cart) {
+    document.getElementById('summary-line').textContent =
+      cart.quantity + ' x ' + cart.name + ', size ' + cart.size;
+  }
+  if (shipping) {
+    document.getElementById('shipping-recap').textContent =
+      'Shipping to: ' + shipping.name + ', ' + shipping.address1 + ', ' +
+      shipping.city + ' ' + shipping.state + ' ' + shipping.postal;
+  }
+
+  document.getElementById('billing-same').addEventListener('change', function (event) {
+    document.getElementById('billing-fields').hidden = event.target.checked;
+  });
+
+  document.getElementById('payment-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    window.location.href = 'confirm.html?method=card';
+  });
+</script>
+
+</body>
+</html>

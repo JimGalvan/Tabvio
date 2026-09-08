@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Secure card entry</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 14px; color: #1b2733; }
+  .field { margin-bottom: 10px; }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  label { display: block; margin-bottom: 4px; font-size: 0.8rem; color: #5d7180; }
+  input { width: 100%; box-sizing: border-box; font-size: 0.95rem; padding: 7px;
+          border: 1px solid #c8d2db; border-radius: 5px; }
+  .issuer { font-size: 0.75rem; color: #8a99a6; margin: 0 0 10px; }
+</style>
+</head>
+<body>
+
+<p class="issuer">Secure fields hosted by the payment provider</p>
+
+<div class="field">
+  <label for="hosted-card-number">Card number</label>
+  <input id="hosted-card-number" name="cardnumber" autocomplete="cc-number"
+         inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456">
+</div>
+<div class="row">
+  <div class="field">
+    <label for="hosted-card-exp">Expiry</label>
+    <input id="hosted-card-exp" name="exp-date" autocomplete="cc-exp"
+           inputmode="numeric" maxlength="5" placeholder="MM/YY">
+  </div>
+  <div class="field">
+    <label for="hosted-card-csc">CVC</label>
+    <input id="hosted-card-csc" name="cvc" autocomplete="cc-csc"
+           inputmode="numeric" maxlength="4" placeholder="CVC">
+  </div>
+</div>
+
+</body>
+</html>

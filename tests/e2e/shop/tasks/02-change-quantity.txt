@@ -1,0 +1,3 @@
+Go to http://localhost:8001/shop/product.html and add a size 9 Trailhead Running Shoe
+to the cart. On the cart page change the quantity to 2, then tell me the new subtotal,
+tax and order total.

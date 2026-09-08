@@ -74,8 +74,9 @@ def require_fillable_element(
 
 
 def validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
-    for step in steps[:-1]:
-        if isinstance(step, (ClickStep, SelectStep, PressStep, MfaCodeStep)):
+    all_steps_except_last = steps[:-1]
+    for step in all_steps_except_last:
+        if isinstance(step, (ClickStep, PressStep, MfaCodeStep)):
             raise ValueError(
                 f"{step.action} must be final; observe before planning more actions"
             )

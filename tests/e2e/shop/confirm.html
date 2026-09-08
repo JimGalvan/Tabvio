@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind Outfitters — Order confirmed</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1b2733; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           padding: 12px 24px; border-bottom: 1px solid #dde3e9; }
+  .brand { font-weight: 700; letter-spacing: 0.02em; }
+  .cart-link { text-decoration: none; color: #1b2733; }
+  main { max-width: 700px; margin: 0 auto; padding: 24px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+  .panel { border: 1px solid #dde3e9; border-radius: 8px; padding: 20px; margin-top: 16px; }
+  .panel div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .panel .total { font-weight: 700; border-top: 1px solid #dde3e9; margin-top: 8px; padding-top: 10px; }
+  .order-number { font-family: monospace; font-weight: 700; font-size: 1.1rem; }
+  .status { padding: 14px 16px; border-radius: 8px; background: #f5f7f9;
+            border-left: 3px solid #c8d2db; }
+  .status.done { background: #e8f4ec; border-left-color: #2f7d4f; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">NORTHWIND OUTFITTERS</span>
+  <a class="cart-link" id="nav-cart" href="cart.html">Cart (<span id="cart-count">0</span>)</a>
+</header>
+
+<main>
+  <p class="muted">Step 5 of 5 — Confirmation. Page code: <span class="code" id="page-code">SHOP-CONFIRM-2Z4</span></p>
+
+  <!-- Fills in after 1.5 seconds, the same way nav/confirm.html does, so an
+       agent that snapshots once and answers immediately reports the wrong line. -->
+  <p class="status" id="confirm-status">Placing your order, please wait.</p>
+
+  <div class="panel" id="receipt" hidden>
+    <p>Order number: <span class="order-number" id="order-number">TBV-40381</span></p>
+    <div><span id="receipt-line">Your order</span><span id="receipt-subtotal">$0.00</span></div>
+    <div><span>Shipping</span><span id="receipt-shipping">$0.00</span></div>
+    <div><span>Estimated tax</span><span id="receipt-tax">$0.00</span></div>
+    <div class="total"><span>Paid</span><span id="receipt-total">$0.00</span></div>
+    <p class="muted" id="receipt-address">Shipping to: not set</p>
+    <p class="muted" id="receipt-method">Paid by card.</p>
+  </div>
+
+  <p><a id="confirm-to-product" href="product.html">Start over</a></p>
+</main>
+
+<script src="shop.js"></script>
+<script>
+  var cart = Shop.readCart();
+  var shipping = Shop.readShipping();
+  var amounts = Shop.totals(cart);
+  var method = new URLSearchParams(window.location.search).get('method') === 'hosted'
+    ? 'Paid by card on the hosted form.'
+    : 'Paid by card.';
+
+  // The cart empties the moment the order is placed, like a real shop, so the
+  // totals shown here come from the snapshot taken above.
+  Shop.clearCart();
+  Shop.paintCartCount();
+
+  setTimeout(function () {
+    var status = document.getElementById('confirm-status');
+    status.textContent =
+      'Order TBV-40381 confirmed. A receipt is on its way to your email.';
+    status.className = 'status done';
+
+    document.getElementById('receipt').hidden = false;
+    document.getElementById('receipt-subtotal').textContent = Shop.money(amounts.subtotal);
+    document.getElementById('receipt-shipping').textContent = Shop.money(amounts.shipping);
+    document.getElementById('receipt-tax').textContent = Shop.money(amounts.tax);
+    document.getElementById('receipt-total').textContent = Shop.money(amounts.total);
+    document.getElementById('receipt-method').textContent = method;
+
+    if (cart) {
+      document.getElementById('receipt-line').textContent =
+        cart.quantity + ' x ' + cart.name + ', size ' + cart.size;
+    }
+    if (shipping) {
+      document.getElementById('receipt-address').textContent =
+        'Shipping to: ' + shipping.name + ', ' + shipping.address1 + ', ' +
+        shipping.city + ' ' + shipping.state + ' ' + shipping.postal;
+    }
+  }, 1500);
+</script>
+
+</body>
+</html>

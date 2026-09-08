@@ -6,6 +6,7 @@ FRAME_HEIGHT = 540
 FRAME_QUALITY = 55
 FRAME_QUALITY_TAKEOVER = 80
 OBSERVE_ATTEMPTS = 3
+PAYMENT_HANDOFF_SIGNAL_KINDS = frozenset({"card-autocomplete", "hosted-payment-field"})
 
 CONTROL_KEYS = frozenset(
     {

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind Outfitters — Trailhead Running Shoe</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1b2733; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           padding: 12px 24px; border-bottom: 1px solid #dde3e9; }
+  .brand { font-weight: 700; letter-spacing: 0.02em; }
+  .cart-link { text-decoration: none; color: #1b2733; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .product { display: grid; grid-template-columns: 300px 1fr; gap: 32px; margin-top: 16px; }
+  .photo { height: 260px; border-radius: 8px;
+           background: linear-gradient(140deg, #2b4a63, #6f97b5); }
+  .price { font-size: 1.6rem; font-weight: 700; margin: 8px 0 16px; }
+  label { display: block; margin: 12px 0 4px; font-size: 0.9rem; color: #5d7180; }
+  select { font-size: 1rem; padding: 6px; min-width: 140px; }
+  button { font-size: 1rem; padding: 10px 20px; margin-top: 20px; cursor: pointer;
+           color: white; background: #1c64f2; border: 0; border-radius: 6px; }
+  .added { margin-top: 16px; padding: 10px 12px; border-radius: 6px;
+           background: #e8f4ec; border-left: 3px solid #2f7d4f; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">NORTHWIND OUTFITTERS</span>
+  <a class="cart-link" id="nav-cart" href="cart.html">Cart (<span id="cart-count">0</span>)</a>
+</header>
+
+<main>
+  <p class="muted">Step 1 of 5 — Product. Page code: <span class="code" id="page-code">SHOP-PRODUCT-4K2</span></p>
+
+  <div class="product">
+    <div class="photo" aria-hidden="true"></div>
+    <div>
+      <h1 id="product-name">Trailhead Running Shoe</h1>
+      <p class="muted" id="product-sku">SKU TRAIL-88</p>
+      <p class="price" id="product-price">$89.00</p>
+      <p>A lightweight trail shoe with a rock plate and a 6&nbsp;mm drop. Sold in whole sizes only.</p>
+
+      <label for="product-size">Size</label>
+      <select id="product-size" name="size">
+        <option value="">Choose a size</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        <option value="11">11</option>
+      </select>
+
+      <label for="product-quantity">Quantity</label>
+      <select id="product-quantity" name="quantity">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+
+      <p><button id="add-to-cart" type="button">Add to cart</button></p>
+
+      <div class="added" id="add-confirmation" hidden>
+        <p id="add-message">Added to your cart.</p>
+        <p><a id="go-to-cart" href="cart.html">Go to cart</a></p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="shop.js"></script>
+<script>
+  Shop.paintCartCount();
+
+  document.getElementById('add-to-cart').addEventListener('click', function () {
+    var size = document.getElementById('product-size').value;
+    var quantity = Number(document.getElementById('product-quantity').value);
+    var message = document.getElementById('add-message');
+
+    if (!size) {
+      document.getElementById('add-confirmation').hidden = false;
+      message.textContent = 'Choose a size before adding this to your cart.';
+      return;
+    }
+
+    Shop.saveCart({
+      sku: 'TRAIL-88',
+      name: 'Trailhead Running Shoe',
+      size: size,
+      quantity: quantity,
+      unitPrice: 89.0
+    });
+    Shop.paintCartCount();
+    document.getElementById('add-confirmation').hidden = false;
+    message.textContent =
+      'Added ' + quantity + ' x Trailhead Running Shoe, size ' + size + ', to your cart.';
+  });
+</script>
+
+</body>
+</html>

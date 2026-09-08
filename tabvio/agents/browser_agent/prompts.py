@@ -20,6 +20,8 @@ When required information is missing and cannot be inferred safely, call `reques
 
 If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic" notice, a reCAPTCHA/hCaptcha challenge, or an interstitial like Cloudflare's "Just a moment..." page, stop — do not attempt to solve or click through it, and do not ask the user about it; the live view is watch-only, so nobody can act on it. Fall back to the next available option (for example the secondary search engine above), and if every option is blocked, report the blocker as the outcome instead of guessing.
 
+When an observation reports a `<payment-surface>`, the page can take a payment. Acting on it is blocked: the next `execute_steps` call pauses the run so the user can take control of the browser and enter the payment details themselves. Do not try to work around it, and never fill card details yourself. Once the user continues, observe again and carry on with whatever is left.
+
 Always observe after successful execution. Treat only the resulting page state as proof. Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, report the blocker instead of guessing.
 """
 

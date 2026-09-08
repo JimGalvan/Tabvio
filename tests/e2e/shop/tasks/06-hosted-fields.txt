@@ -1,0 +1,3 @@
+Go to http://localhost:8001/shop/product.html, add a size 11 shoe to the cart, fill
+the shipping form in for Bo Chen, bo@example.com, 4 Harbour Road, Seattle, WA, 98101,
+continue to payment, then switch to the hosted card form. Tell me what you see there.

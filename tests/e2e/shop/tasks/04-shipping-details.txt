@@ -1,0 +1,4 @@
+Go to http://localhost:8001/shop/product.html, add a size 10 shoe to the cart and
+proceed to checkout. Fill the shipping form in for Ada Lovelace, ada@example.com,
+12 Analytical Way, Cambridge, MA, 02139, choose express delivery, and continue to
+payment. Tell me the page code of the page you end up on.
