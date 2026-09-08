@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — names, roles and state</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; color: #1b2733; }
+  .row { margin: 14px 0; }
+  label { display: block; margin-bottom: 4px; font-size: 0.9rem; color: #5d7180; }
+  input[type=text] { width: 280px; height: 30px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+  #described-link { display: inline-block; width: 24px; height: 24px;
+                    background: #dde3e9; vertical-align: middle; }
+  .fake-control { display: inline-block; padding: 8px 12px;
+                  border: 1px solid #dde3e9; border-radius: 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<p class="muted">Page code: <span class="code">SCAN-NAMES-6F6</span></p>
+
+<div class="row">
+  <label for="card-number">Card number</label>
+  <input id="card-number" type="text">
+</div>
+
+<div class="row">
+  <a id="icon-link" href="cart.html"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Shopping cart" width="24" height="24"></a>
+  <button id="icon-button" title="Delete this item"><svg width="20" height="20"></svg></button>
+  <a id="described-link" href="help.html" aria-labelledby="help-text"></a>
+  <span id="help-text">Help centre</span>
+</div>
+
+<div class="row">
+  <button id="search" aria-label="Search">Search products by name and category</button>
+</div>
+
+<div class="row">
+  <input id="offers" type="checkbox">
+  <label for="offers">Email me offers</label>
+</div>
+
+<div class="row">
+  <input id="speed-standard" type="radio" name="speed" value="standard">
+  <label for="speed-standard">Standard delivery</label>
+  <input id="speed-express" type="radio" name="speed" value="express" checked>
+  <label for="speed-express">Express delivery</label>
+</div>
+
+<div class="row">
+  <label for="shoe-size">Size</label>
+  <select id="shoe-size" name="size">
+    <option value="">Choose a size</option>
+    <option value="9" selected>9</option>
+    <option value="10">10</option>
+  </select>
+</div>
+
+<div class="row">
+  <div class="fake-control" id="aria-checkbox" role="checkbox" aria-checked="true" tabindex="0">Save my details</div>
+  <div class="fake-control" id="aria-button" role="button" aria-disabled="true" tabindex="0">Place the order</div>
+  <div class="fake-control" id="aria-combobox" role="combobox" aria-expanded="false" tabindex="0">Country</div>
+</div>
+
+</body>
+</html>

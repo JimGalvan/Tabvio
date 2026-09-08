@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — the fold and the sticky bar</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1b2733; }
+  .promo { position: fixed; top: 0; left: 0; right: 0; height: 120px;
+           background: #eef3f8; border-bottom: 1px solid #dde3e9; z-index: 9;
+           padding: 12px 24px; box-sizing: border-box; }
+  .buried { position: absolute; top: 60px; left: 24px; }
+  .centre-covered { position: absolute; top: 10px; left: 600px;
+                    width: 260px; height: 190px; font-size: 1rem; }
+  .straddles { position: absolute; top: 520px; left: 24px;
+               width: 300px; height: 600px; font-size: 1rem; }
+  .filler { height: 1600px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<div class="promo">
+  <p class="muted">Page code: <span class="code">SCAN-FOLD-2B2</span></p>
+  <button id="in-promo">Dismiss the promo</button>
+</div>
+
+<button class="buried" id="buried">Buried under the promo bar</button>
+<button class="centre-covered" id="centre-covered">Centre under the promo bar</button>
+<button class="straddles" id="straddles">Straddles the fold</button>
+
+<div class="filler"></div>
+
+</body>
+</html>

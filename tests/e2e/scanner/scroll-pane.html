@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — inner scroll pane</title>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden;
+               font-family: system-ui, sans-serif; color: #1b2733; }
+  #shell { height: 100%; display: flex; flex-direction: column; }
+  header { padding: 12px 24px; border-bottom: 1px solid #dde3e9; }
+  #messages { flex: 1; overflow-y: auto; }
+  .message { padding: 18px 24px; border-bottom: 1px solid #eef1f4; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <p class="muted">Page code: <span class="code">SCAN-PANE-3C3</span></p>
+    <strong>Inbox</strong>
+  </header>
+  <div id="messages"></div>
+</div>
+
+<script>
+  const messages = document.getElementById('messages');
+  for (let index = 1; index <= 60; index++) {
+    const row = document.createElement('div');
+    row.className = 'message';
+    row.innerHTML = '<button id="message-' + index + '">Open message ' + index + '</button>';
+    messages.appendChild(row);
+  }
+</script>
+
+</body>
+</html>

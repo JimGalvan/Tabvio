@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — hidden and covered subtrees</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; color: #1b2733; }
+  .row { margin: 12px 0; }
+  .fading-menu { opacity: 0; }
+  .field { position: relative; width: 320px; }
+  .field input { width: 320px; height: 34px; box-sizing: border-box; }
+  .field .overlay { position: absolute; top: 0; right: 0; width: 200px; height: 34px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<p class="muted">Page code: <span class="code">SCAN-HIDDEN-5E5</span></p>
+
+<div class="row"><button id="real">Really visible button</button></div>
+
+<div class="row fading-menu">
+  <button id="faded">Menu item in a faded wrapper</button>
+</div>
+
+<div class="row" aria-hidden="true">
+  <button id="aria-hidden">Duplicate in an aria-hidden mirror</button>
+</div>
+
+<div class="row" inert>
+  <button id="inert">Button in an inert subtree</button>
+</div>
+
+<div class="row field">
+  <input id="partly-covered" type="text" aria-label="Delivery date">
+  <span class="overlay"></span>
+</div>
+
+</body>
+</html>

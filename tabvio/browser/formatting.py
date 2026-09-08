@@ -50,8 +50,10 @@ class Helpers:
         if visible_elements:
             for index, element in enumerate(visible_elements):
                 tag = element.get("tag", "").strip()
-                attrs = element.get("attrs", "").strip()
-                text = Helpers.normalize_page_text(element.get("text", ""))
+                attrs = html.escape(element.get("attrs", "").strip(), quote=False)
+                text = html.escape(
+                    Helpers.normalize_page_text(element.get("text", "")), quote=False
+                )
                 tag_str = f"{tag} {attrs}".strip()
 
                 if text:

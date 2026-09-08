@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — a nav that buries the button</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px;
+         color: #1b2733; font-size: 11px; }
+  nav a { display: inline-block; padding: 2px 4px; }
+  #place-order { font-size: 1rem; padding: 10px 20px; margin-top: 12px; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<p class="muted">Page code: <span class="code">SCAN-NAV-7G7</span></p>
+<nav id="mega"></nav>
+<p>Order total $148.00</p>
+<button id="place-order">Place order</button>
+
+<script>
+  const mega = document.getElementById('mega');
+  for (let index = 1; index <= 140; index++) {
+    const link = document.createElement('a');
+    link.href = 'category.html?id=' + index;
+    link.textContent = 'Category ' + index;
+    mega.appendChild(link);
+  }
+</script>
+
+</body>
+</html>

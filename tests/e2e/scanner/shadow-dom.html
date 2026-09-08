@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scanner — shadow DOM</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; color: #1b2733; }
+  .code { font-family: monospace; font-weight: 700; }
+  .muted { color: #5d7180; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<p class="muted">Page code: <span class="code">SCAN-SHADOW-1A1</span></p>
+<h1>Web components</h1>
+
+<button id="light-button">Light DOM button</button>
+
+<product-card></product-card>
+
+<script>
+  class ProductCard extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({mode: 'open'});
+      root.innerHTML =
+        '<div style="padding:16px;border:1px solid #dde3e9;margin-top:16px">' +
+        '<p>Trailhead Running Shoe</p>' +
+        '<button id="shadow-button">Add to cart in shadow DOM</button>' +
+        '<quantity-stepper></quantity-stepper>' +
+        '</div>';
+    }
+  }
+
+  class QuantityStepper extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({mode: 'open'});
+      root.innerHTML =
+        '<button id="nested-shadow-button">Increase quantity two roots deep</button>';
+    }
+  }
+
+  customElements.define('product-card', ProductCard);
+  customElements.define('quantity-stepper', QuantityStepper);
+</script>
+
+</body>
+</html>
