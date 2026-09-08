@@ -1,4 +1,6 @@
+from collections import Counter
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -10,6 +12,12 @@ class Element:
     attrs: str
     cx: float
     cy: float
+
+
+@dataclass
+class Observation:
+    page_state: str
+    page_snapshot: Counter[Any]
 
 
 @dataclass(frozen=True)

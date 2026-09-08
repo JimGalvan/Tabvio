@@ -21,9 +21,10 @@ from tabvio.browser.constants import (
     VIEWPORT_WIDTH,
 )
 from tabvio.browser.formatting import Helpers
-from tabvio.browser.models import Element, Iframe, Tab
+from tabvio.browser.models import Element, Iframe, Tab, Observation
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 from tabvio.browser.payment_detector import PaymentDetector
+from collections import Counter
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class BrowserSession:
         self._next_iframe_id = 0
         self._elements = []
 
-    async def attempt_navigate_and_observe(self, url: str) -> str:
+    async def attempt_navigate_and_observe(self, url: str) -> Observation:
         await self._initialize_browser()
 
         if self._page is None or self._page.is_closed():
@@ -105,7 +106,7 @@ class BrowserSession:
         self._reset_page_state(self._page)
         return await self._observe_current_page()
 
-    async def attempt_observe_page(self) -> str:
+    async def attempt_observe_page(self) -> Observation:
         return await self._observe_current_page()
 
     @staticmethod
@@ -227,7 +228,45 @@ class BrowserSession:
                 self._reset_page_state(self._page)
         raise RuntimeError("The page kept navigating and could not be observed")
 
-    async def _observe_current_page(self) -> str:
+    async def _capture_page_snapshot(self, page):
+        _SNAPSHOT_JS = """
+        () => {
+          const out = [];
+          const els = document.body ? document.body.querySelectorAll('*') : [];
+          let budget = 3000;
+          for (const el of els) {
+            if (budget-- <= 0) break;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) continue;
+            if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0') continue;
+            const tag = el.tagName;
+            if (tag === 'INPUT') {
+              out.push(`input|${el.type}|${el.checked ? 'on' : 'off'}|${el.value}`);
+            } else if (tag === 'SELECT') {
+              out.push(`select|${el.value}`);
+            } else if (tag === 'TEXTAREA') {
+              out.push(`textarea|${el.value}`);
+            } else {
+              const own = Array.from(el.childNodes)
+                .filter(n => n.nodeType === 3)
+                .map(n => n.textContent.trim())
+                .filter(Boolean).join(' ');
+              if (own) out.push(own);
+            }
+          }
+          return out.join('\\n');
+        }
+        """
+
+        try:
+            text = await page.evaluate(_SNAPSHOT_JS)
+        except Exception:
+            return Counter()
+        return Counter(line.strip() for line in text.splitlines() if line.strip())
+
+    async def _observe_current_page(self) -> Observation:
         result = json.loads(await self._scan_page())
 
         self._elements = []
@@ -239,12 +278,15 @@ class BrowserSession:
         tabs = await self._collect_tabs()
         frames = self._collect_iframes()
         self._payment_detection_result = await self._payment_detector.detect(self._page)
-        return (
+        page_snapshot = await self._capture_page_snapshot(self._page)
+        page_state = (
             f"{interactable_elements}\n"
             f"<available-tabs>{tabs}\n</available-tabs>"
             f"<available-iframes>{frames}</available-iframes>"
             f"{self.payment_detection_result.describe()}"
         )
+
+        return Observation(page_state=page_state, page_snapshot=page_snapshot)
 
     def get_stored_element(self, element_index: int) -> Element | None:
         if 0 <= element_index < len(self._elements):

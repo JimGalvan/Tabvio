@@ -65,38 +65,22 @@ def build_browser_tools(
                 observation = await browser.attempt_observe_page()
             USER_PROMPT = f"""Determine whether this page is loaded.
                         Page snapshot:
-                        {observation}
+                        {observation.page_state}
                         """
             result = await page_load_detector_subagent.ainvoke({"messages": [{"role": "user", "content": USER_PROMPT}]})
             is_page_loaded = "true" in result["messages"][-1].content
 
         publish_custom_event("browser.navigation.completed", {"url": url})
-        return observation
+        return observation.page_state
 
     @tool
     async def observe_page() -> str:
         """Return the current page snapshot without navigating."""
         observation = await browser.attempt_observe_page()
-        initial_hash_observation = Utils.hash_string(observation)
-        delays = [0.5, 1, 2, 3]
-        has_page_changed = False
-        final_observation = ""
-        for delay in delays:
-            if has_page_changed:
-                break
-
-            time.sleep(delay)
-            new_observation = await browser.attempt_observe_page()
-            new_hash_observation = Utils.hash_string(new_observation)
-
-            if new_hash_observation != initial_hash_observation:
-                has_page_changed = True
-                final_observation = new_observation
-
         publish_custom_event(
             "browser.observation", {"message": "Observed the current page"}
         )
-        return final_observation
+        return observation.page_state
 
     @tool
     async def switch_tab(tab_id: str) -> str:
