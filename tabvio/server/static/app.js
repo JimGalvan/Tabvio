@@ -649,11 +649,11 @@ function finishTakeover(message = null) {
   browserViewport.removeAttribute("tabindex");
   takeoverButton.textContent = "Take control";
   takeoverNote.textContent =
-    message || "The agent is paused, so you can use its browser yourself.";
+    message || "You can use this browser while the agent is waiting or the session is open for follow-up.";
 }
 
 function showTakeoverBar(status) {
-  const canTakeControl = status === "waiting_for_input";
+  const canTakeControl = status === "waiting_for_input" || status === "ready_for_follow_up";
   takeoverBar.hidden = !canTakeControl;
   if (!canTakeControl && takeoverIsActive) {
     stopTakeover();
@@ -821,7 +821,7 @@ async function refreshBrowserScreen(scheduleNextRefresh = true) {
   } finally {
     screenRequestInFlight = false;
     const runIsActive = requestedRunId === activeRunId;
-    const screenRefreshIsPaused = screenPausedStatuses.has(
+    const screenRefreshIsPaused = !takeoverIsActive && screenPausedStatuses.has(
       statusDot.dataset.status,
     );
     if (scheduleNextRefresh && runIsActive && !screenRefreshIsPaused) {

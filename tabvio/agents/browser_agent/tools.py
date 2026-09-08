@@ -38,6 +38,7 @@ def build_browser_tools(
     """Build the tools for one browser run and its security boundaries."""
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
     acknowledged_payment_surface: str | None = None
+    pending_payment_observation = None
 
     page_load_detector_subagent = build_page_loader_detector_subagent()
 
@@ -49,6 +50,8 @@ def build_browser_tools(
     @tool
     async def navigate_and_observe(url: str) -> str:
         """Navigate to a URL and return the resulting page snapshot."""
+        if pending_payment_observation is not None:
+            return await finish_observation("")
         publish_custom_event("browser.navigation.started", {"url": url})
 
         delays = [1, 2, 3, 5]
@@ -71,23 +74,27 @@ def build_browser_tools(
             is_page_loaded = "true" in result["messages"][-1].content
 
         publish_custom_event("browser.navigation.completed", {"url": url})
-        return observation.page_state
+        return await finish_observation(observation.page_state)
 
     @tool
     async def observe_page() -> str:
         """Return the current page snapshot without navigating."""
+        if pending_payment_observation is not None:
+            return await finish_observation("")
         observation = await browser.attempt_observe_page()
         publish_custom_event(
             "browser.observation", {"message": "Observed the current page"}
         )
-        return observation.page_state
+        return await finish_observation(observation.page_state)
 
     @tool
     async def switch_tab(tab_id: str) -> str:
         """Switch to the tab identified by a value such as `tab:1`."""
+        if pending_payment_observation is not None:
+            return await finish_observation("")
         result = await browser.switch_tab(tab_id)
         publish_custom_event("browser.tab.changed", {"tab_id": tab_id})
-        return result
+        return await finish_observation(result)
 
     @tool
     def request_user_input(question: str) -> str:
@@ -121,10 +128,26 @@ def build_browser_tools(
             ]
         )
 
-    def guard_payment_surface() -> None:
+    async def finish_observation(page_state: str) -> str:
+        nonlocal pending_payment_observation
+
+        detection = pending_payment_observation or browser.payment_detection_result
+        if not detection.needs_handoff(acknowledged_payment_surface):
+            return page_state
+
+        # Interrupted tools replay from the beginning. Keep the detected surface
+        # so resume neither navigates again nor loses the interrupt when the
+        # user has already left the payment page.
+        pending_payment_observation = detection
+        guard_payment_surface(detection)
+        pending_payment_observation = None
+        observation = await browser.attempt_observe_page()
+        return observation.page_state
+
+    def guard_payment_surface(detection=None) -> None:
         nonlocal acknowledged_payment_surface
 
-        detection = browser.payment_detection_result
+        detection = detection or browser.payment_detection_result
         if not detection.needs_handoff(acknowledged_payment_surface):
             return
 

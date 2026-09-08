@@ -112,6 +112,28 @@ class TakeoverEndpointTests(unittest.TestCase):
         self.assertEqual(refusal.exception.code, app_module.CONTROL_CLOSE_RUN_NOT_WAITING)
         self.assertEqual(browser.actions, [])
 
+    def test_follow_up_window_allows_control_and_restarts_live_capture(self) -> None:
+        with signed_in_client() as (client, user):
+            run, browser = self.open_run(user.id, status=RunStatus.READY_FOR_FOLLOW_UP)
+            context = app_module.run_manager._contexts[run.id]
+            with self.connect(client, run) as socket:
+                socket.send_json({"type": "click", "x": 100, "y": 200})
+                self.assertTrue(socket.receive_json()["applied"])
+                self.assertIsNotNone(context.capture_task)
+                self.assertFalse(context.capture_task.done())
+        self.assertEqual(browser.actions, [("click", 100.0, 200.0)])
+        self.assertIsNone(context.capture_task)
+
+    def test_existing_controller_cannot_act_after_agent_resumes_or_session_ends(self) -> None:
+        for status in (RunStatus.RUNNING, RunStatus.SUCCEEDED):
+            with self.subTest(status=status), signed_in_client() as (client, user):
+                run, browser = self.open_run(user.id)
+                with self.connect(client, run) as socket:
+                    run.status = status
+                    socket.send_json({"type": "click", "x": 100, "y": 200})
+                    self.assertFalse(socket.receive_json()["applied"])
+                self.assertEqual(browser.actions, [])
+
     def test_takeover_is_refused_while_a_verification_code_is_pending(self) -> None:
         """That flow holds an element index a person clicking around would break."""
         with signed_in_client() as (client, user):

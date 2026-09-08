@@ -234,10 +234,13 @@ class RunManager:
     async def open_control(self, run_id: UUID, user_id: UUID) -> RunContext:
         """Hand the browser to the person watching it.
 
-        Checked at open only. A run waiting for a verification code is refused:
+        A run waiting for a verification code is refused:
         that flow holds element indexes captured before the person arrived.
         """
-        context = self._require_waiting_context(run_id, user_id)
+        context, _ = self._resolve_owned(run_id, user_id)
+        if context is None:
+            raise RunNotFoundError(f"Run {run_id} was not found")
+        self._require_control_status(context)
 
         sensitive_inputs = getattr(context.runtime, "sensitive_inputs", None)
         if sensitive_inputs is not None and sensitive_inputs.pending is not None:
@@ -248,6 +251,10 @@ class RunManager:
         context.controller_count += 1
         if context.controller_count == 1:
             await self._publish(context, "takeover.started", {})
+        if context.capture_task is None or context.capture_task.done():
+            context.capture_task = asyncio.create_task(
+                self._capture_frames(context), name=f"capture-{run_id}"
+            )
 
         return context
 
@@ -255,6 +262,15 @@ class RunManager:
         context.controller_count = max(context.controller_count - 1, 0)
         if context.controller_count == 0 and not context.run.status.is_terminal:
             await self._publish(context, "takeover.ended", {})
+            if context.run.status == RunStatus.READY_FOR_FOLLOW_UP:
+                await self._pause_frame_capture(context)
+
+    @staticmethod
+    def _require_control_status(context: RunContext) -> None:
+        if context.run.status not in {
+            RunStatus.WAITING_FOR_INPUT, RunStatus.READY_FOR_FOLLOW_UP,
+        }:
+            raise RunNotWaitingForInputError("The browser is not available for user control")
 
     async def apply_control(
             self,
@@ -268,6 +284,7 @@ class RunManager:
         """
         browser = context.runtime.browser
         async with context.control_lock:
+            self._require_control_status(context)
             if event.type == "click":
                 return await browser.user_click(event.x, event.y)
             if event.type == "scroll":
@@ -298,7 +315,8 @@ class RunManager:
             context.assistant_output_parts = []
             await self._publish(context, "follow_up.started", {"task": follow_up_task})
             await self._set_status(context, RunStatus.RUNNING)
-            context.capture_task = asyncio.create_task(self._capture_frames(context), name=f"capture-{run_id}")
+            if context.capture_task is None or context.capture_task.done():
+                context.capture_task = asyncio.create_task(self._capture_frames(context), name=f"capture-{run_id}")
             context.execution_task = asyncio.create_task(
                 self._execute(context, {"messages": [{"role": "user", "content": follow_up_task}]})
                 , name=f"follow-up-{run_id}")
