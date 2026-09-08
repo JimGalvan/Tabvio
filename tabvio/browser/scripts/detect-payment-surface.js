@@ -1,5 +1,5 @@
 (() => {
-    const CARD_TOKENS = new Set([
+    const CARD_AUTOCOMPLETE_VALUES = new Set([
         'cc-name',
         'cc-given-name',
         'cc-additional-name',
@@ -12,7 +12,7 @@
         'cc-type',
     ]);
 
-    const PROCESSOR_HOSTS = [
+    const PAYMENT_PROVIDER_HOST_PATTERNS = [
         ['Stripe', /(^|\.)stripe\.com$/],
         ['Braintree', /(^|\.)braintreegateway\.com$/],
         ['Adyen', /(^|\.)adyen\.com$/],
@@ -31,56 +31,68 @@
         ['Adyen', /^adyen-checkout/],
     ];
 
-    const processorFor = (value) => {
+    const signals = [];
+    const seen = new Set();
+
+    function getPaymentProviderFromSource(iframeSourceUrl) {
         let hostname;
         try {
-            hostname = new URL(value, location.href).hostname.toLowerCase();
+            hostname = new URL(iframeSourceUrl, window.location.href).hostname;
         } catch (error) {
             return null;
         }
 
-        for (const [name, pattern] of PROCESSOR_HOSTS) {
-            if (pattern.test(hostname)) return name;
+        for (const [providerName, hostnamePattern] of PAYMENT_PROVIDER_HOST_PATTERNS) {
+            const hostnameMatches = hostnamePattern.test(hostname);
+            if (hostnameMatches) {
+                return providerName;
+            }
         }
         return null;
-    };
+    }
 
-    const signals = [];
-    const seen = new Set();
-    const record = (kind, detail) => {
-        const key = kind + '|' + detail;
+    function record(type, value) {
+        const key = type + '|' + value;
         if (seen.has(key)) return;
         seen.add(key);
-        signals.push({kind: kind, detail: detail});
-    };
+        signals.push({type: type, value: value});
+    }
 
-    const autofillable = document.querySelectorAll(
+    const fieldsWithAutocomplete = document.querySelectorAll(
         'input[autocomplete], select[autocomplete]',
     );
-    for (const field of autofillable) {
-        const tokens = (field.getAttribute('autocomplete') || '')
+
+    for (const field of fieldsWithAutocomplete) {
+        const autocompleteValues = (field.getAttribute('autocomplete') || '')
             .toLowerCase()
             .split(/\s+/);
-        for (const token of tokens) {
-            if (CARD_TOKENS.has(token)) record('card-autocomplete', token);
+
+        for (const autocompleteValue of autocompleteValues) {
+            if (CARD_AUTOCOMPLETE_VALUES.has(autocompleteValue)) {
+                record('card-autocomplete', autocompleteValue);
+            }
         }
     }
 
-    for (const frame of document.querySelectorAll('iframe')) {
-        const processor = processorFor(frame.getAttribute('src'));
-        if (processor) {
-            record('hosted-payment-field', processor);
+    const iframes = document.querySelectorAll('iframe');
+    for (const iframe of iframes) {
+        const iframeSourceUrl = iframe.getAttribute('src');
+        const paymentProvider = getPaymentProviderFromSource(iframeSourceUrl);
+        if (paymentProvider) {
+            record('hosted-payment-field', paymentProvider);
             continue;
         }
 
-        const name = frame.getAttribute('name') || '';
+        const name = iframe.getAttribute('name') || '';
         for (const [label, pattern] of HOSTED_FRAME_NAMES) {
             if (pattern.test(name)) record('hosted-payment-field', label);
         }
     }
 
-    for (const script of document.querySelectorAll('script[src]')) {
-        const processor = processorFor(script.getAttribute('src'));
+    const scripts = document.querySelectorAll('script[src]');
+    for (const script of scripts) {
+        const scriptSourceUrl = script.getAttribute('src');
+        const processor = getPaymentProviderFromSource(scriptSourceUrl);
         if (processor) record('payment-sdk', processor);
     }
 

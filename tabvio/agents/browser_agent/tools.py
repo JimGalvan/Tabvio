@@ -37,6 +37,7 @@ def build_browser_tools(
 ) -> list[BaseTool]:
     """Build the tools for one browser run and its security boundaries."""
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
+    acknowledged_payment_surface: str | None = None
 
     page_load_detector_subagent = build_page_loader_detector_subagent()
 
@@ -137,22 +138,25 @@ def build_browser_tools(
         )
 
     def guard_payment_surface() -> None:
-        if not browser.needs_payment_handoff():
+        nonlocal acknowledged_payment_surface
+
+        detection = browser.payment_detection_result
+        if not detection.needs_handoff(acknowledged_payment_surface):
             return
 
-        signals = [
-            f"{signal.kind}:{signal.detail}" for signal in browser.payment_signals
-        ]
         question = (
             "This page can take a payment, so I have stopped before touching it. "
             "Take control of the browser, enter the payment details yourself, "
-            "then tell me how to continue."
+            "then tell me when I can continue."
         )
-        publish_custom_event(
-            "input.required", {"question": question, "payment_signals": signals}
-        )
+        payload = {
+            "question": question,
+            "payment_signals": detection.get_signals,
+        }
+        publish_custom_event("input.required", payload)
+
         interrupt({"kind": "payment_handoff", "question": question})
-        browser.acknowledge_payment_surface()
+        acknowledged_payment_surface = detection.fingerprint
 
     @tool(args_schema=StepPlan)
     async def execute_steps(
@@ -249,7 +253,6 @@ def build_browser_tools(
     @tool
     def switch_to_iframe(iframe_id: str):
         """ Switch iframe using iframe id """
-
 
     return [
         navigate_and_observe,

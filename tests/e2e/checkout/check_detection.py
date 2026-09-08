@@ -51,18 +51,17 @@ async def main() -> int:
             await session.attempt_navigate_and_observe(
                 (PAGES / name).resolve().as_uri()
             )
-            triggered = session.needs_payment_handoff()
+            # Each page is judged on its own, not on what came before it.
+            detection = session._payment_detection_result
+            triggered = detection.needs_handoff(None)
             signals = ", ".join(
-                f"{signal.kind}:{signal.detail}" for signal in session.payment_signals
+                f"{signal.type}:{signal.value}" for signal in detection.signals
             )
 
             verdict = "ok " if triggered == should_trigger else "MISS"
             if triggered != should_trigger:
                 failures += 1
             print(f"{verdict}  {name:30} triggered={str(triggered):5}  {signals}")
-
-            # Each page is judged on its own, not on what came before it.
-            session.acknowledge_payment_surface()
     finally:
         await session.close()
 

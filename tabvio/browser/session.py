@@ -17,12 +17,13 @@ from tabvio.browser.constants import (
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
-    PAYMENT_HANDOFF_SIGNAL_KINDS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
 from tabvio.browser.formatting import Helpers
-from tabvio.browser.models import Element, Iframe, PaymentSignal, Tab
+from tabvio.browser.models import Element, Iframe, Tab
+from tabvio.browser.payment_detection_result import PaymentDetectionResult
+from tabvio.browser.payment_detector import PaymentDetector
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +45,12 @@ class BrowserSession:
         self._next_tab_id = 0
         self._next_iframe_id = 0
         self._scripts: dict[str, str] = {}
-        self._payment_signals: list[PaymentSignal] = []
-        self._payment_surface_url = ''
-        self._acknowledged_payment_surface: str | None = None
+        self._payment_detector = PaymentDetector()
+        self._payment_detection_result = PaymentDetectionResult()
+
+    @property
+    def payment_detection_result(self) -> PaymentDetectionResult:
+        return self._payment_detection_result
 
     @property
     def is_open(self) -> bool:
@@ -106,10 +110,10 @@ class BrowserSession:
 
     @staticmethod
     def _sync_registry(
-        registry: dict[str, Registered],
-        live_items: list[Registered],
-        prefix: str,
-        next_id: int,
+            registry: dict[str, Registered],
+            live_items: list[Registered],
+            prefix: str,
+            next_id: int,
     ) -> tuple[dict[str, Registered], int]:
         """Drop ids for items that are gone, keep the rest, and number the new ones."""
         synced = {}
@@ -230,118 +234,16 @@ class BrowserSession:
         for index, raw_element in enumerate(result["elements"]):
             self._elements.append(Element(index=index, **raw_element))
 
-        interactable_elements = Helpers.page_json_to_interactable_elements_for_llm(result)
+        interactable_elements = Helpers.get_elements_as_output_for_llm(result)
         self._reconcile_current_page()
         tabs = await self._collect_tabs()
         frames = self._collect_iframes()
-        await self._detect_payment_surface()
+        self._payment_detection_result = await self._payment_detector.detect(self._page)
         return (
             f"{interactable_elements}\n"
             f"<available-tabs>{tabs}\n</available-tabs>"
             f"<available-iframes>{frames}</available-iframes>"
-            f"{self.describe_payment_surface()}"
-        )
-
-    # Payment surfaces
-    #
-    # Tier 1 detection only: structural signals, no reading of visible text. The
-    # verdict is recorded here rather than handed to the agent to weigh, because
-    # a page that can take a payment has to stop the run whatever the model
-    # concluded about it.
-
-    @property
-    def payment_signals(self) -> list[PaymentSignal]:
-        return list(self._payment_signals)
-
-    def _record_payment_signals(
-        self,
-        url: str,
-        raw_signals: list[dict[str, str]],
-    ) -> None:
-        recorded = []
-        for raw_signal in raw_signals:
-            signal = PaymentSignal(
-                kind=str(raw_signal.get("kind", "")),
-                detail=str(raw_signal.get("detail", "")),
-            )
-            if signal not in recorded:
-                recorded.append(signal)
-
-        self._payment_signals = recorded
-        self._payment_surface_url = url
-
-    async def _detect_payment_surface(self) -> None:
-        """Look for a payment instrument in every frame of the current page.
-
-        Every frame, because hosted card fields live in a cross-origin iframe:
-        the parent sees the frame element, and the frame itself sees its own
-        autocomplete tokens. A frame that detaches mid-scan is skipped rather
-        than failing the observation, which is only a detection.
-        """
-        page = self._page
-        if page is None or page.is_closed():
-            self._record_payment_signals("", [])
-            return
-
-        script = self._get_script("detect-payment-surface.js")
-        collected: list[dict[str, str]] = []
-        for frame in list(page.frames):
-            try:
-                result = json.loads(await frame.evaluate(script))
-            except Exception as exception:
-                logger.debug(
-                    "Payment detection skipped a frame (%s): %s", frame.url, exception
-                )
-                continue
-
-            collected.extend(result.get("signals", []))
-
-        self._record_payment_signals(page.url, collected)
-
-    def _payment_surface_fingerprint(self) -> str | None:
-        """What the user would be asked about, or None when there is nothing.
-
-        Built from the page and its triggering signals so that arriving at a
-        second payment page asks again, while re-observing the same one does
-        not.
-        """
-        triggering = sorted(
-            f"{signal.kind}:{signal.detail}"
-            for signal in self._payment_signals
-            if signal.kind in PAYMENT_HANDOFF_SIGNAL_KINDS
-        )
-        if not triggering:
-            return None
-
-        url = urlsplit(self._payment_surface_url)
-        return "|".join([f"{url.scheme}://{url.netloc}{url.path}", *triggering])
-
-    def needs_payment_handoff(self) -> bool:
-        fingerprint = self._payment_surface_fingerprint()
-        return (
-            fingerprint is not None
-            and fingerprint != self._acknowledged_payment_surface
-        )
-
-    def acknowledge_payment_surface(self) -> None:
-        """Remember that the user has already been handed this page."""
-        self._acknowledged_payment_surface = self._payment_surface_fingerprint()
-
-    def describe_payment_surface(self) -> str:
-        """The line an observation carries so the agent knows why it is blocked."""
-        triggering = [
-            f"{signal.kind}:{signal.detail}"
-            for signal in self._payment_signals
-            if signal.kind in PAYMENT_HANDOFF_SIGNAL_KINDS
-        ]
-        if not triggering:
-            return ""
-
-        return (
-            "<payment-surface>This page can take a payment "
-            f"({', '.join(sorted(triggering))}). Acting on it is blocked; the "
-            "user enters payment details themselves."
-            "</payment-surface>"
+            f"{self.payment_detection_result.describe()}"
         )
 
     def get_stored_element(self, element_index: int) -> Element | None:
@@ -363,7 +265,7 @@ class BrowserSession:
         return f"Scrolled to {position['current']} of {position['maximum']} pixels"
 
     async def _page_coordinates(
-        self, horizontal: float, vertical: float
+            self, horizontal: float, vertical: float
     ) -> tuple[float, float]:
         page = self._require_page()
 
@@ -457,10 +359,10 @@ class BrowserSession:
         return f"Clicked at {horizontal:.0f}, {vertical:.0f}"
 
     async def user_scroll(
-        self,
-        horizontal: float,
-        vertical: float,
-        amount: float,
+            self,
+            horizontal: float,
+            vertical: float,
+            amount: float,
     ) -> str:
         page = self._require_page()
         await page.mouse.move(horizontal, vertical)
@@ -504,6 +406,4 @@ class BrowserSession:
         self._reset_page_state()
         self._tabs_by_id = {}
         self._next_tab_id = 0
-        self._payment_signals = []
-        self._payment_surface_url = ""
-        self._acknowledged_payment_surface = None
+        self._payment_detection_result = PaymentDetectionResult()

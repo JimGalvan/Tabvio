@@ -14,8 +14,8 @@ class Element:
 
 @dataclass(frozen=True)
 class PaymentSignal:
-    kind: str
-    detail: str
+    type: str
+    value: str
 
 
 @dataclass
