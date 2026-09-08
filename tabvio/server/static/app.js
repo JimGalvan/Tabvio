@@ -635,6 +635,7 @@ function startTakeover() {
 }
 
 function stopTakeover(message = null) {
+  releaseHeldMouse();
   if (controlSocket) {
     controlSocket.close();
   }
@@ -643,6 +644,7 @@ function stopTakeover(message = null) {
 }
 
 function finishTakeover(message = null) {
+  releaseHeldMouse();
   controlSocket = null;
   takeoverIsActive = false;
   browserViewport.classList.remove("is-interactive");
@@ -668,15 +670,48 @@ takeoverButton.addEventListener("click", () => {
   }
 });
 
-browserViewport.addEventListener("click", (pointerEvent) => {
-  if (!takeoverIsActive) {
+let heldMousePointer = null;
+
+function releaseHeldMouse() {
+  if (heldMousePointer === null) {
+    return;
+  }
+  const pointerId = heldMousePointer;
+  heldMousePointer = null;
+  sendControlEvent({type: "mouse_up"});
+  if (browserViewport.hasPointerCapture(pointerId)) {
+    browserViewport.releasePointerCapture(pointerId);
+  }
+}
+
+browserViewport.addEventListener("pointerdown", (pointerEvent) => {
+  if (!takeoverIsActive || pointerEvent.button !== 0 || heldMousePointer !== null) {
     return;
   }
 
   const coordinates = frameCoordinates(pointerEvent);
   if (coordinates) {
-    sendControlEvent({type: "click", x: coordinates.x, y: coordinates.y});
+    pointerEvent.preventDefault();
+    browserViewport.focus();
+    browserViewport.setPointerCapture(pointerEvent.pointerId);
+    heldMousePointer = pointerEvent.pointerId;
+    sendControlEvent({type: "mouse_down", x: coordinates.x, y: coordinates.y});
   }
+});
+
+for (const eventType of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  browserViewport.addEventListener(eventType, (event) => {
+    if (event.pointerId === heldMousePointer) {
+      releaseHeldMouse();
+    }
+  });
+}
+browserViewport.addEventListener("dragstart", (event) => {
+  if (takeoverIsActive) event.preventDefault();
+});
+window.addEventListener("blur", releaseHeldMouse);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) releaseHeldMouse();
 });
 
 browserViewport.addEventListener(

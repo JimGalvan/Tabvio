@@ -12,7 +12,7 @@ from fastapi import WebSocketDisconnect
 
 from tabvio.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio.runs import constants
-from tabvio.runs.models import RunContext, RunRecord, RunStatus
+from tabvio.runs.models import BrowserControlEvent, RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
 from tabvio.server import routes as app_module
@@ -29,6 +29,14 @@ class RecordingBrowser:
     async def user_click(self, horizontal: float, vertical: float) -> str:
         self.actions.append(("click", horizontal, vertical))
         return "Clicked"
+
+    async def user_mouse_down(self, horizontal: float, vertical: float) -> str:
+        self.actions.append(("mouse_down", horizontal, vertical))
+        return "Held"
+
+    async def user_mouse_up(self) -> str:
+        self.actions.append(("mouse_up",))
+        return "Released"
 
     async def user_scroll(
         self, horizontal: float, vertical: float, amount: float
@@ -111,6 +119,34 @@ class TakeoverEndpointTests(unittest.TestCase):
 
         self.assertEqual(refusal.exception.code, app_module.CONTROL_CLOSE_RUN_NOT_WAITING)
         self.assertEqual(browser.actions, [])
+
+    def test_mouse_stays_down_until_explicit_release(self) -> None:
+        with signed_in_client() as (client, user):
+            run, browser = self.open_run(user.id)
+            with self.connect(client, run) as socket:
+                socket.send_json({"type": "mouse_down", "x": 100, "y": 200})
+                self.assertTrue(socket.receive_json()["applied"])
+                self.assertEqual(browser.actions, [("mouse_down", 100.0, 200.0)])
+                socket.send_json({"type": "mouse_up"})
+                self.assertTrue(socket.receive_json()["applied"])
+        self.assertEqual(browser.actions, [("mouse_down", 100.0, 200.0), ("mouse_up",)])
+
+    def test_disconnect_releases_mouse_even_with_another_controller_connected(self) -> None:
+        with signed_in_client() as (client, user):
+            run, browser = self.open_run(user.id)
+            with self.connect(client, run) as other:
+                with self.connect(client, run) as owner:
+                    owner.send_json({"type": "mouse_down", "x": 100, "y": 200})
+                    self.assertTrue(owner.receive_json()["applied"])
+                    other.send_json({"type": "mouse_up"})
+                    other.receive_json()
+                    self.assertEqual(browser.actions, [("mouse_down", 100.0, 200.0)])
+                other.send_json({"type": "mouse_down", "x": 10, "y": 20})
+                self.assertTrue(other.receive_json()["applied"])
+        self.assertEqual(browser.actions, [
+            ("mouse_down", 100.0, 200.0), ("mouse_up",),
+            ("mouse_down", 10.0, 20.0), ("mouse_up",),
+        ])
 
     def test_follow_up_window_allows_control_and_restarts_live_capture(self) -> None:
         with signed_in_client() as (client, user):
@@ -205,6 +241,20 @@ class TakeoverCaptureTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(self.INTERVAL_SECONDS)
         context.run.status = RunStatus.SUCCEEDED
         await capture
+
+    async def test_resuming_or_ending_run_releases_held_mouse(self) -> None:
+        for status in (RunStatus.RUNNING, RunStatus.SUCCEEDED, RunStatus.CANCELLED):
+            with self.subTest(status=status):
+                browser = RecordingBrowser()
+                run = RunRecord(task="Hold", max_runtime_seconds=300, user_id=uuid4(),
+                                status=RunStatus.WAITING_FOR_INPUT)
+                context = build_context(run, browser)
+                await self._manager.apply_control(
+                    context, BrowserControlEvent(type="mouse_down", x=10, y=20)
+                )
+                await self._manager._set_status(context, status)
+                self.assertEqual(browser.actions, [("mouse_down", 10.0, 20.0), ("mouse_up",)])
+                self.assertIsNone(context.mouse_controller)
 
     async def test_frames_are_captured_at_a_higher_quality_during_takeover(self) -> None:
         browser = RecordingBrowser()

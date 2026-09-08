@@ -80,6 +80,7 @@ class RunContext:
     follow_up_expiry_task: asyncio.Task[None] | None = None
     assistant_output_parts: list[str] = field(default_factory=list)
     controller_count: int = 0
+    mouse_controller: str | None = None
     control_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -103,7 +104,7 @@ class FollowUpRequest(BaseModel):
 
 
 class BrowserControlEvent(BaseModel):
-    type: Literal["click", "scroll", "key", "text"]
+    type: Literal["click", "mouse_down", "mouse_up", "scroll", "key", "text"]
     x: float = Field(default=0.0, ge=0, le=VIEWPORT_WIDTH)
     y: float = Field(default=0.0, ge=0, le=VIEWPORT_HEIGHT)
     delta_y: float = Field(

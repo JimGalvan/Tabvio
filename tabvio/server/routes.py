@@ -387,7 +387,7 @@ async def control_run_browser(websocket: WebSocket, run_id: UUID) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        await run_manager.close_control(context)
+        await run_manager.close_control(context, str(id(websocket)))
 
 
 async def _handle_control_message(
@@ -404,7 +404,7 @@ async def _handle_control_message(
         return
 
     try:
-        outcome = await run_manager.apply_control(context, event)
+        outcome = await run_manager.apply_control(context, event, str(id(websocket)))
     except Exception as exception:
         logger.warning("Takeover event failed for run %s: %s", context.run.id, exception)
         await _acknowledge(websocket, False, str(exception))

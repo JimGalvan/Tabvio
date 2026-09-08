@@ -412,6 +412,18 @@ class BrowserSession:
         self._invalidate_elements()
         return f"Scrolled by {amount:.0f} pixels"
 
+    async def user_mouse_down(self, horizontal: float, vertical: float) -> str:
+        page = self._require_page()
+        await page.mouse.move(horizontal, vertical)
+        await page.mouse.down()
+        self._invalidate_elements()
+        return "Mouse button held"
+
+    async def user_mouse_up(self) -> str:
+        await self._require_page().mouse.up()
+        self._invalidate_elements()
+        return "Mouse button released"
+
     async def user_key(self, key: str) -> str:
         await self._require_page().keyboard.press(key)
         self._invalidate_elements()

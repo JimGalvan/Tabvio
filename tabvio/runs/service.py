@@ -258,12 +258,25 @@ class RunManager:
 
         return context
 
-    async def close_control(self, context: RunContext) -> None:
+    async def close_control(self, context: RunContext, controller_id: str = "default") -> None:
+        async with context.control_lock:
+            if context.mouse_controller == controller_id:
+                await self._release_control_mouse(context)
         context.controller_count = max(context.controller_count - 1, 0)
         if context.controller_count == 0 and not context.run.status.is_terminal:
             await self._publish(context, "takeover.ended", {})
             if context.run.status == RunStatus.READY_FOR_FOLLOW_UP:
                 await self._pause_frame_capture(context)
+
+    @staticmethod
+    async def _release_control_mouse(context: RunContext) -> None:
+        if context.mouse_controller is not None:
+            try:
+                await context.runtime.browser.user_mouse_up()
+            except Exception:
+                logger.exception("Could not release the mouse for run %s", context.run.id)
+            finally:
+                context.mouse_controller = None
 
     @staticmethod
     def _require_control_status(context: RunContext) -> None:
@@ -276,6 +289,7 @@ class RunManager:
             self,
             context: RunContext,
             event: BrowserControlEvent,
+            controller_id: str = "default",
     ) -> str:
         """Play one of a person's actions into the browser.
 
@@ -284,7 +298,20 @@ class RunManager:
         """
         browser = context.runtime.browser
         async with context.control_lock:
+            if event.type == "mouse_up":
+                if context.mouse_controller == controller_id:
+                    await self._release_control_mouse(context)
+                return "Mouse button released"
             self._require_control_status(context)
+            if context.mouse_controller is not None and event.type in {"click", "mouse_down", "scroll"}:
+                raise RunNotWaitingForInputError("Release the held mouse button before another action")
+            if event.type == "mouse_down":
+                context.mouse_controller = controller_id
+                try:
+                    return await browser.user_mouse_down(event.x, event.y)
+                except Exception:
+                    await self._release_control_mouse(context)
+                    raise
             if event.type == "click":
                 return await browser.user_click(event.x, event.y)
             if event.type == "scroll":
@@ -676,7 +703,10 @@ class RunManager:
         if context.run.status == status:
             return
 
-        context.run.status = status
+        async with context.control_lock:
+            if status not in {RunStatus.WAITING_FOR_INPUT, RunStatus.READY_FOR_FOLLOW_UP}:
+                await self._release_control_mouse(context)
+            context.run.status = status
         context.run.updated_at = utc_now()
         self._repository.save_run(context.run)
         status_payload = {"status": status.value}
