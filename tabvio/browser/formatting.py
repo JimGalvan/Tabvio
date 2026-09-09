@@ -5,72 +5,71 @@ MAX_PAGE_TEXT_CHARS = 3_000
 MAX_ELEMENTS = 100
 
 
-class Helpers:
-    @staticmethod
-    def truncate(text: str, max_chars: int) -> tuple[str, bool]:
-        if len(text) <= max_chars:
-            return text, False
+def truncate(text: str, max_chars: int) -> tuple[str, bool]:
+    if len(text) <= max_chars:
+        return text, False
 
-        return text[:max_chars].rstrip(), True
+    return text[:max_chars].rstrip(), True
 
-    @staticmethod
-    def normalize_page_text(text: str) -> str:
-        normalized_lines = []
 
-        for line in text.splitlines():
-            line = re.sub(r"\s+", " ", line).strip()
+def normalize_page_text(text: str) -> str:
+    normalized_lines = []
 
-            if line:
-                normalized_lines.append(line)
+    for line in text.splitlines():
+        collapsed = re.sub(r"\s+", " ", line).strip()
 
-        return "\n".join(normalized_lines)
+        if collapsed:
+            normalized_lines.append(collapsed)
 
-    @staticmethod
-    def get_elements_as_output_for_llm(data: dict) -> str:
-        url = data.get("url", "")
+    return "\n".join(normalized_lines)
 
-        if "?" in url:
-            url = url.split("?", 1)[0] + "?..."
 
-        title = data.get("title", "")
-        pages_below = float(data.get("pagesBelow", 0))
+def hide_query_string(url: str) -> str:
+    if "?" not in url:
+        return url
 
-        url = html.escape(url, quote=True)
-        title = html.escape(title, quote=True)
+    path = url.split("?", 1)[0]
+    return f"{path}?..."
 
-        elements = data.get("elements", [])
-        visible_elements = elements[:MAX_ELEMENTS]
 
-        lines = [
-            (f'<page url="{url}" title="{title}" pages_below="{pages_below:.1f}">'),
-            "",
-            "Interactive elements:",
-        ]
+def format_element(index: int, element: dict) -> str:
+    tag = element.get("tag", "").strip()
+    attrs = html.escape(element.get("attrs", "").strip(), quote=False)
+    text = html.escape(normalize_page_text(element.get("text", "")), quote=False)
 
-        if visible_elements:
-            for index, element in enumerate(visible_elements):
-                tag = element.get("tag", "").strip()
-                attrs = html.escape(element.get("attrs", "").strip(), quote=False)
-                text = html.escape(
-                    Helpers.normalize_page_text(element.get("text", "")), quote=False
-                )
-                tag_str = f"{tag} {attrs}".strip()
+    opening_tag = f"{tag} {attrs}".strip()
 
-                if text:
-                    lines.append(f"[{index}] <{tag_str}> {text}")
-                else:
-                    lines.append(f"[{index}] <{tag_str}>")
+    if text:
+        return f"[{index}] <{opening_tag}> {text}"
 
-            if len(elements) > MAX_ELEMENTS:
-                lines.append(
-                    f"... {len(elements) - MAX_ELEMENTS} additional elements omitted"
-                )
-        else:
-            lines.append("(none)")
-        lines.extend(
-            [
-                "",
-                "</page>",
-            ]
-        )
-        return "\n".join(lines)
+    return f"[{index}] <{opening_tag}>"
+
+
+def format_scan_for_llm(scan: dict) -> str:
+    url = html.escape(hide_query_string(scan.get("url", "")), quote=True)
+    title = html.escape(scan.get("title", ""), quote=True)
+    pages_below = float(scan.get("pagesBelow", 0))
+
+    elements = scan.get("elements", [])
+    shown_elements = elements[:MAX_ELEMENTS]
+    omitted_count = len(elements) - len(shown_elements)
+
+    lines = [
+        f'<page url="{url}" title="{title}" pages_below="{pages_below:.1f}">',
+        "",
+        "Interactive elements:",
+    ]
+
+    if not shown_elements:
+        lines.append("(none)")
+    else:
+        for index, element in enumerate(shown_elements):
+            lines.append(format_element(index, element))
+
+        if omitted_count:
+            lines.append(f"... {omitted_count} additional elements omitted")
+
+    lines.append("")
+    lines.append("</page>")
+
+    return "\n".join(lines)

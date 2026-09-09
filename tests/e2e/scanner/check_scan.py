@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from tabvio.browser.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
-from tabvio.browser.formatting import Helpers  # noqa: E402
+from tabvio.browser.formatting import format_scan_for_llm  # noqa: E402
 from tabvio.browser.session import BrowserSession  # noqa: E402
 
 PAGES = Path(__file__).resolve().parent
@@ -256,7 +256,7 @@ async def check_coordinates(
 
 def check_prompt(scan: dict, case: dict) -> list[str]:
     problems = []
-    prompt = Helpers.get_elements_as_output_for_llm(scan)
+    prompt = format_scan_for_llm(scan)
 
     for needle in case.get("in_prompt", []):
         if needle not in prompt:

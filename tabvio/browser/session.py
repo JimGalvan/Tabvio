@@ -20,8 +20,9 @@ from tabvio.browser.constants import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
-from tabvio.browser.formatting import Helpers
+from tabvio.browser.formatting import format_scan_for_llm
 from tabvio.browser.models import Element, Iframe, Tab, Observation
+from tabvio.browser.page_content import PageContent
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 from tabvio.browser.payment_detector import PaymentDetector
 from collections import Counter
@@ -273,15 +274,17 @@ class BrowserSession:
         for index, raw_element in enumerate(result["elements"]):
             self._elements.append(Element(index=index, **raw_element))
 
-        interactable_elements = Helpers.get_elements_as_output_for_llm(result)
+        interactable_elements = format_scan_for_llm(result)
         self._reconcile_current_page()
         tabs = await self._collect_tabs()
         frames = self._collect_iframes()
+        page_content = await PageContent.get_page_content(self._page, char_budget=400)
         self._payment_detection_result = await self._payment_detector.detect(self._page)
         page_snapshot = await self._capture_page_snapshot(self._page)
         page_state = (
             f"{interactable_elements}\n"
-            f"<available-tabs>{tabs}\n</available-tabs>"
+            f"<page-content>{page_content}</page-content>\n"
+            f"<available-tabs>{tabs}</available-tabs>\n"
             f"<available-iframes>{frames}</available-iframes>"
             f"{self.payment_detection_result.describe()}"
         )
@@ -392,7 +395,6 @@ class BrowserSession:
         pass
 
     def _invalidate_elements(self) -> None:
-        """A person moving the page leaves the agent's element indexes stale."""
         self._elements = []
 
     async def user_click(self, horizontal: float, vertical: float) -> str:

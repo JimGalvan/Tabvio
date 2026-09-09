@@ -8,16 +8,16 @@
     const MIN_CLICKABLE_PX = 3;
     const CLIP_TIMEOUT_MS = 250;
 
-    const INTERACTIVE_TAGS = ['a','button','input','select','textarea','summary','label'];
-    const INTERACTIVE_ROLES = ['button','link','checkbox','radio','tab','menuitem',
-        'option','switch','combobox','searchbox','textbox','menuitemcheckbox',
-        'menuitemradio','slider','spinbutton','treeitem','gridcell','listbox'];
+    const INTERACTIVE_TAGS = ['a', 'button', 'input', 'select', 'textarea', 'summary', 'label'];
+    const INTERACTIVE_ROLES = ['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem',
+        'option', 'switch', 'combobox', 'searchbox', 'textbox', 'menuitemcheckbox',
+        'menuitemradio', 'slider', 'spinbutton', 'treeitem', 'gridcell', 'listbox'];
 
-    const TOGGLE_INPUT_TYPES = ['checkbox','radio'];
-    const BUTTON_INPUT_TYPES = ['submit','button','reset'];
-    const VALUELESS_INPUT_TYPES = ['checkbox','radio','submit','button','reset',
-        'image','file','hidden','range','color'];
-    const PRIVATE_INPUT_TYPES = ['password','email','tel'];
+    const TOGGLE_INPUT_TYPES = ['checkbox', 'radio'];
+    const BUTTON_INPUT_TYPES = ['submit', 'button', 'reset'];
+    const VALUELESS_INPUT_TYPES = ['checkbox', 'radio', 'submit', 'button', 'reset',
+        'image', 'file', 'hidden', 'range', 'color'];
+    const PRIVATE_INPUT_TYPES = ['password', 'email', 'tel'];
     const PRIVATE_FIELD_WORDS =
         /(^|[^a-z])(card|cvv|cvc|csc|ssn|sin|iban|swift|routing|account|passcode|pin|secret|token)([^a-z]|$)/i;
 
@@ -58,17 +58,21 @@
     }
 
     function getInteractiveKind(element) {
-        const tagName = element.tagName.toLowerCase();
-        const role = element.getAttribute('role');
+        try {
+            const tagName = element.tagName.toLowerCase();
+            const role = element.getAttribute('role');
 
-        if (INTERACTIVE_TAGS.includes(tagName)) return EXPLICIT;
-        if (role && INTERACTIVE_ROLES.includes(role)) return EXPLICIT;
-        if (element.hasAttribute('onclick') || element.isContentEditable) return EXPLICIT;
-        if (element.tabIndex >= 0 && tagName !== 'body') return INFERRED;
+            if (INTERACTIVE_TAGS.includes(tagName)) return EXPLICIT;
+            if (role && INTERACTIVE_ROLES.includes(role)) return EXPLICIT;
+            if (element.hasAttribute('onclick') || element.isContentEditable) return EXPLICIT;
+            if (element.tabIndex >= 0 && tagName !== 'body') return INFERRED;
 
-        const hasOwnPointerCursor = checkForOwnPointerCursor(element);
-        if (hasOwnPointerCursor) return INFERRED;
-        return null;
+            const hasOwnPointerCursor = checkForOwnPointerCursor(element);
+            if (hasOwnPointerCursor) return INFERRED;
+            return null;
+        } catch (e) {
+            return null
+        }
     }
 
     function checkIfBigEnoughToClick(rect) {
