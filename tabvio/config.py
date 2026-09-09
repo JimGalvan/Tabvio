@@ -8,12 +8,23 @@ from pathlib import Path
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "server" / "static"
 DATABASE_PATH = PROJECT_DIRECTORY / "data" / "tabvio.db"
+TRACE_DIRECTORY = PROJECT_DIRECTORY / "data" / "traces"
 CREDENTIAL_KEY_LENGTH_BYTES = 32
 
 
 def read_headless_setting() -> bool:
     configured_value = os.getenv("TABVIO_HEADLESS", "true").strip().lower()
     return configured_value not in {"false", "0", "no"}
+
+
+def read_browser_channel_setting() -> str | None:
+    configured_value = os.getenv("TABVIO_BROWSER_CHANNEL", "").strip()
+    return configured_value or None
+
+
+def read_browser_trace_setting() -> bool:
+    configured_value = os.getenv("TABVIO_BROWSER_TRACE", "false").strip().lower()
+    return configured_value in {"true", "1", "yes"}
 
 
 def read_max_concurrent_runs(default: int) -> int:

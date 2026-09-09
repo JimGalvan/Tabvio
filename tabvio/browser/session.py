@@ -14,6 +14,7 @@ from playwright.async_api import (
 from playwright.async_api import Frame as PlaywrightFrame
 
 from tabvio.browser.constants import (
+    BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
@@ -34,8 +35,15 @@ Registered = TypeVar("Registered")
 
 class BrowserSession:
 
-    def __init__(self, headless: bool = True):
+    def __init__(
+            self,
+            headless: bool = True,
+            trace_path: Path | None = None,
+            browser_channel: str | None = None,
+    ):
         self._headless = headless
+        self._trace_path = trace_path
+        self._browser_channel = browser_channel
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -82,13 +90,36 @@ class BrowserSession:
 
         if self._browser is None:
             self._browser = await self._playwright.chromium.launch(
-                headless=self._headless
+                headless=self._headless,
+                channel=self._browser_channel,
+                args=BROWSER_LAUNCH_ARGS,
             )
             self._context = await self._browser.new_context(
                 viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
             )
+            await self._start_trace()
 
         return self._browser
+
+    async def _start_trace(self) -> None:
+        if self._trace_path is None or self._context is None:
+            return
+        await self._context.tracing.start(screenshots=False, snapshots=True)
+
+    async def _stop_trace(self) -> None:
+        if self._trace_path is None or self._context is None:
+            return
+
+        try:
+            self._trace_path.parent.mkdir(parents=True, exist_ok=True)
+            await self._context.tracing.stop(path=str(self._trace_path))
+            logger.info("Wrote a browser trace to %s", self._trace_path)
+        except Exception:
+            logger.warning(
+                "Could not write a browser trace to %s",
+                self._trace_path,
+                exc_info=True,
+            )
 
     def _reset_page_state(self, page: Page | None = None) -> None:
         self._page = page
@@ -288,7 +319,6 @@ class BrowserSession:
             f"<available-iframes>{frames}</available-iframes>"
             f"{self.payment_detection_result.describe()}"
         )
-
         return Observation(page_state=page_state, page_snapshot=page_snapshot)
 
     def get_stored_element(self, element_index: int) -> Element | None:
@@ -448,6 +478,7 @@ class BrowserSession:
 
     async def close(self) -> None:
         if self._context is not None:
+            await self._stop_trace()
             await self._context.close()
             self._context = None
 

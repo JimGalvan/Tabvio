@@ -1,4 +1,5 @@
 LOAD_TIMEOUT_MS = 60_000
+BROWSER_LAUNCH_ARGS = ["--disable-blink-features=AutomationControlled"]
 VIEWPORT_WIDTH = 1365
 VIEWPORT_HEIGHT = 768
 FRAME_WIDTH = 960
