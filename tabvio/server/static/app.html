@@ -70,6 +70,22 @@
             <label>Login<input id="credential-login" autocomplete="username" placeholder="you@example.com"></label>
             <label>Password<input id="credential-password" type="password" autocomplete="new-password" placeholder="Enter password"></label>
             <label>Allowed domains<input id="credential-domains" required placeholder="github.com, *.github.com"></label>
+            <label>Preferred verification<select id="credential-verification">
+                <option value="">Ask me each time</option>
+                <option value="sms">Text message</option>
+                <option value="email">Email</option>
+                <option value="authenticator_app">Authenticator app</option>
+                <option value="phone_call">Phone call</option>
+                <option value="push">Push notification</option>
+              </select></label>
+            <label>If that is unavailable<select id="credential-verification-fallback">
+                <option value="">Ask me instead</option>
+                <option value="sms">Text message</option>
+                <option value="email">Email</option>
+                <option value="authenticator_app">Authenticator app</option>
+                <option value="phone_call">Phone call</option>
+                <option value="push">Push notification</option>
+              </select></label>
             <label class="credential-default-toggle">
               <input id="credential-default" type="checkbox">
               <span>Preselect this credential for new runs</span>

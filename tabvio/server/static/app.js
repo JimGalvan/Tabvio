@@ -61,6 +61,18 @@ const credentialLogin = document.querySelector("#credential-login");
 const credentialPassword = document.querySelector("#credential-password");
 const credentialDomains = document.querySelector("#credential-domains");
 const credentialDefault = document.querySelector("#credential-default");
+const credentialVerification = document.querySelector("#credential-verification");
+const credentialVerificationFallback = document.querySelector(
+  "#credential-verification-fallback",
+);
+
+const VERIFICATION_LABELS = {
+  sms: "Text message",
+  email: "Email",
+  authenticator_app: "Authenticator app",
+  phone_call: "Phone call",
+  push: "Push notification",
+};
 const credentialMessage = document.querySelector("#credential-message");
 const credentialSaveButton = document.querySelector("#credential-save-button");
 const credentialEditCancel = document.querySelector("#credential-edit-cancel");
@@ -193,6 +205,7 @@ credentialForm.addEventListener("submit", async (formEvent) => {
     name: credentialName.value.trim(),
     allowed_domains: domains,
     is_default: credentialDefault.checked,
+    preferred_verification: chosenVerificationMethods(),
   };
   if (credentialLogin.value.trim()) {
     body.login = credentialLogin.value.trim();
@@ -230,6 +243,19 @@ credentialForm.addEventListener("submit", async (formEvent) => {
     credentialSaveButton.disabled = false;
   }
 });
+
+function chosenVerificationMethods() {
+  const chosen = [
+    credentialVerification.value,
+    credentialVerificationFallback.value,
+  ].filter(Boolean);
+  return chosen.length ? chosen : ["ask"];
+}
+
+function describeVerification(methods) {
+  const labelled = (methods || []).map((method) => VERIFICATION_LABELS[method] || method);
+  return labelled.length ? ` · verify by ${labelled.join(", then ")}` : "";
+}
 
 function selectedCredentialIds() {
   return [...credentialPicker.querySelectorAll("input:checked")]
@@ -303,7 +329,9 @@ function renderCredentialList() {
       name.append(" ", badge);
     }
     const detail = document.createElement("span");
-    detail.textContent = `${credential.login_hint} · ${credential.allowed_domains.join(", ")}`;
+    detail.textContent =
+      `${credential.login_hint} · ${credential.allowed_domains.join(", ")}` +
+      describeVerification(credential.preferred_verification);
     summary.append(name, detail);
 
     const actions = document.createElement("div");
@@ -332,6 +360,9 @@ function beginCredentialEdit(credential) {
   credentialPassword.placeholder = "Leave blank to keep current password";
   credentialDomains.value = credential.allowed_domains.join(", ");
   credentialDefault.checked = Boolean(credential.is_default);
+  const [preferred = "", fallback = ""] = credential.preferred_verification || [];
+  credentialVerification.value = preferred;
+  credentialVerificationFallback.value = fallback;
   credentialSaveButton.textContent = "Save changes";
   credentialEditCancel.hidden = false;
   credentialMessage.textContent = "";
@@ -944,8 +975,12 @@ function handleRunEvent(serverEvent) {
     answerQuestion.textContent = payload.question || "The agent needs more information.";
     answerMessage.textContent = "";
     answerPanel.hidden = false;
-    hideSecureInputPanel();
-    answerInput.focus();
+    if (activeSensitiveRequestId) {
+      secureInputCode.focus();
+    } else {
+      hideSecureInputPanel();
+      answerInput.focus();
+    }
   } else if (eventType === "sensitive_input.required") {
     activeSensitiveRequestId = payload.request_id;
     secureInputQuestion.textContent = payload.prompt || "Enter your verification code.";

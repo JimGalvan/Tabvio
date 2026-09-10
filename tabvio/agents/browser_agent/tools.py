@@ -117,6 +117,9 @@ def build_browser_tools(
                     "id": str(item.id),
                     "name": item.name,
                     "allowed_domains": item.allowed_domains,
+                    "preferred_verification": [
+                        method.value for method in item.preferred_verification
+                    ],
                 }
                 for item in metadata
             ]

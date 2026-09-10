@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
-from tabvio.credentials.models import CredentialRecord
+from tabvio.credentials.models import CredentialRecord, VerificationMethod
 from tabvio.db import connect
 
 
@@ -27,6 +27,7 @@ class CredentialRepository:
                     login_hint TEXT NOT NULL,
                     encrypted_payload BLOB,
                     is_default INTEGER NOT NULL DEFAULT 0,
+                    preferred_verification_json TEXT NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     revoked_at TEXT
@@ -47,6 +48,11 @@ class CredentialRepository:
                 connection.execute(
                     "ALTER TABLE credentials ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"
                 )
+            if "preferred_verification_json" not in credential_columns:
+                connection.execute(
+                    "ALTER TABLE credentials "
+                    "ADD COLUMN preferred_verification_json TEXT NOT NULL DEFAULT '[]'"
+                )
             connection.commit()
 
     def save(self, credential: CredentialRecord) -> None:
@@ -56,14 +62,16 @@ class CredentialRepository:
                     """
                     INSERT INTO credentials (
                         id, user_id, name, allowed_domains_json, login_hint,
-                        encrypted_payload, is_default, created_at, updated_at, revoked_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        encrypted_payload, is_default, preferred_verification_json,
+                        created_at, updated_at, revoked_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         allowed_domains_json = excluded.allowed_domains_json,
                         login_hint = excluded.login_hint,
                         encrypted_payload = excluded.encrypted_payload,
                         is_default = excluded.is_default,
+                        preferred_verification_json = excluded.preferred_verification_json,
                         updated_at = excluded.updated_at,
                         revoked_at = excluded.revoked_at
                     """,
@@ -75,6 +83,9 @@ class CredentialRepository:
                         credential.login_hint,
                         credential.encrypted_payload,
                         int(credential.is_default),
+                        json.dumps(
+                            [method.value for method in credential.preferred_verification]
+                        ),
                         credential.created_at.isoformat(),
                         credential.updated_at.isoformat(),
                         credential.revoked_at.isoformat() if credential.revoked_at else None,
@@ -130,10 +141,16 @@ class CredentialRepository:
             login_hint=row["login_hint"],
             encrypted_payload=row["encrypted_payload"],
             is_default=bool(row["is_default"]),
+            preferred_verification=CredentialRepository._read_verification(row),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             revoked_at=row["revoked_at"],
         )
+
+    @staticmethod
+    def _read_verification(row: sqlite3.Row) -> list[VerificationMethod]:
+        stored = row["preferred_verification_json"]
+        return [VerificationMethod(method) for method in json.loads(stored or "[]")]
 
     def _connect(self):
         return connect(self._database_path)

@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from tabvio.clock import utc_now
+
+MAX_VERIFICATION_PREFERENCES = 5
+
+
+class VerificationMethod(StrEnum):
+    SMS = "sms"
+    EMAIL = "email"
+    AUTHENTICATOR_APP = "authenticator_app"
+    PHONE_CALL = "phone_call"
+    PUSH = "push"
+    ASK = "ask"
 
 
 class CredentialRecord(BaseModel):
@@ -16,6 +28,9 @@ class CredentialRecord(BaseModel):
     login_hint: str
     encrypted_payload: bytes
     is_default: bool = False
+    preferred_verification: list[VerificationMethod] = Field(
+        default_factory=list, max_length=MAX_VERIFICATION_PREFERENCES
+    )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     revoked_at: datetime | None = None
@@ -27,6 +42,9 @@ class CredentialMetadata(BaseModel):
     allowed_domains: list[str]
     login_hint: str
     is_default: bool
+    preferred_verification: list[VerificationMethod] = Field(
+        default_factory=list, max_length=MAX_VERIFICATION_PREFERENCES
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -37,6 +55,9 @@ class CreateCredentialRequest(BaseModel):
     password: SecretStr = Field(min_length=1, max_length=2_000)
     allowed_domains: list[str] = Field(min_length=1, max_length=20)
     is_default: bool = False
+    preferred_verification: list[VerificationMethod] = Field(
+        default_factory=list, max_length=MAX_VERIFICATION_PREFERENCES
+    )
 
     @field_validator("name", "login")
     @classmethod
@@ -50,6 +71,9 @@ class UpdateCredentialRequest(BaseModel):
     password: SecretStr | None = Field(default=None, min_length=1, max_length=2_000)
     allowed_domains: list[str] | None = Field(default=None, min_length=1, max_length=20)
     is_default: bool | None = None
+    preferred_verification: list[VerificationMethod] | None = Field(
+        default=None, max_length=MAX_VERIFICATION_PREFERENCES
+    )
 
     @field_validator("name", "login")
     @classmethod

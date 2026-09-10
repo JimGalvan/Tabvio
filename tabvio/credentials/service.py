@@ -23,6 +23,7 @@ from tabvio.credentials.models import (
     CredentialRecord,
     CredentialSecret,
     UpdateCredentialRequest,
+    VerificationMethod,
 )
 from tabvio.credentials.repository import CredentialRepository
 
@@ -40,6 +41,7 @@ class CredentialService:
             login_hint=self._mask_login(request.login),
             encrypted_payload=b"",
             is_default=request.is_default,
+            preferred_verification=self._normalize_verification(request.preferred_verification),
         )
         secret = CredentialSecret(
             login=request.login,
@@ -73,6 +75,10 @@ class CredentialService:
             secret.password = request.password.get_secret_value()
         if request.is_default is not None:
             credential.is_default = request.is_default
+        if request.preferred_verification is not None:
+            credential.preferred_verification = self._normalize_verification(
+                request.preferred_verification
+            )
         credential.encrypted_payload = self._cipher.encrypt(
             secret.model_dump_json().encode(), self._associated_data(credential)
         )
@@ -140,6 +146,19 @@ class CredentialService:
             if value not in normalized:
                 normalized.append(value)
         return normalized
+
+    @staticmethod
+    def _normalize_verification(
+        methods: list[VerificationMethod],
+    ) -> list[VerificationMethod]:
+        """Drop duplicates, keeping order. Asking to be asked means no preference."""
+        if VerificationMethod.ASK in methods:
+            return []
+        ordered: list[VerificationMethod] = []
+        for method in methods:
+            if method not in ordered:
+                ordered.append(method)
+        return ordered
 
     @staticmethod
     def _mask_login(login: str) -> str:
