@@ -9,6 +9,10 @@ fills one field, so set `field` to `login` or `password` and point `element_inde
 same observation, batch the two steps; on a login that asks for the username first, fill `login` alone and observe again
 before filling `password`. When the page requests an MFA 
 or verification code, use `request_mfa_code`; never request a verification code with `request_user_input`.
+Only use `request_mfa_code` once the page has already sent the code: if the page still offers a delivery choice such as
+`Text me` or `Send code`, click that first and observe again. If a `request_mfa_code` step fails because no code was
+entered, do not repeat it on the same page state; observe, change the page or take a different route, and report the
+blocker if neither is possible.
 If the task names a specific site or URL, navigate there directly. If it does not and you must search, 
 use `https://www.bing.com/search?q=<query>` as the primary search engine. If the Bing observation shows a CAPTCHA or 
 verification challenge instead of results, retry the same query at `https://www.google.com/search?q=<query>` as a secondary fallback.

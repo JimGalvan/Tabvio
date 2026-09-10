@@ -36,6 +36,7 @@ const answerPanel = document.querySelector("#answer-panel");
 const answerQuestion = document.querySelector("#answer-question");
 const answerForm = document.querySelector("#answer-form");
 const answerInput = document.querySelector("#answer-input");
+const answerMessage = document.querySelector("#answer-message");
 const resultPanel = document.querySelector("#result-panel");
 const resultOutput = document.querySelector("#result-output");
 const followUpPanel = document.querySelector("#follow-up-panel");
@@ -69,6 +70,8 @@ const secureInputQuestion = document.querySelector("#secure-input-question");
 const secureInputForm = document.querySelector("#secure-input-form");
 const secureInputCode = document.querySelector("#secure-input-code");
 const secureInputMessage = document.querySelector("#secure-input-message");
+const secureInputDecline = document.querySelector("#secure-input-decline");
+const secureInputDeadline = document.querySelector("#secure-input-deadline");
 
 const eventTypes = [
   "run.created",
@@ -89,6 +92,7 @@ const eventTypes = [
   "takeover.ended",
   "sensitive_input.required",
   "sensitive_input.received",
+  "sensitive_input.cancelled",
   "follow_up.started",
   "follow_up.ended",
   "follow_up.expired",
@@ -112,6 +116,7 @@ const screenPausedStatuses = new Set([
 let activeRunId = null;
 let activeScreenUrl = null;
 let activeControlUrl = null;
+let secureInputCountdownTimer = null;
 let controlSocket = null;
 let takeoverIsActive = false;
 let currentScreenObjectUrl = null;
@@ -371,7 +376,7 @@ secureInputForm.addEventListener("submit", async (formEvent) => {
   }
 
   const requestId = activeSensitiveRequestId;
-  const submitButton = secureInputForm.querySelector("button");
+  const submitButton = secureInputForm.querySelector("button[type='submit']");
   submitButton.disabled = true;
   secureInputMessage.textContent = "";
   try {
@@ -385,14 +390,37 @@ secureInputForm.addEventListener("submit", async (formEvent) => {
     if (!response.ok) {
       throw new Error(responseBody.detail || "The verification code could not be entered");
     }
-    activeSensitiveRequestId = null;
-    secureInputPanel.hidden = true;
+    hideSecureInputPanel();
   } catch (error) {
     secureInputCode.value = "";
     secureInputMessage.textContent = error.message;
     secureInputCode.focus();
   } finally {
     submitButton.disabled = false;
+  }
+});
+
+secureInputDecline.addEventListener("click", async () => {
+  if (!activeRunId || !activeSensitiveRequestId) {
+    return;
+  }
+
+  secureInputDecline.disabled = true;
+  secureInputMessage.textContent = "";
+  try {
+    const response = await fetch(
+      `/api/runs/${activeRunId}/sensitive-input/decline`,
+      {method: "POST"},
+    );
+    if (!response.ok) {
+      const responseBody = await readResponseBody(response);
+      throw new Error(responseBody.detail || "The code request could not be dropped");
+    }
+    hideSecureInputPanel();
+  } catch (error) {
+    secureInputMessage.textContent = error.message;
+  } finally {
+    secureInputDecline.disabled = false;
   }
 });
 
@@ -418,9 +446,10 @@ answerForm.addEventListener("submit", async (formEvent) => {
     }
 
     answerInput.value = "";
+    answerMessage.textContent = "";
     answerPanel.hidden = true;
   } catch (error) {
-    answerQuestion.textContent = error.message;
+    answerMessage.textContent = error.message;
   } finally {
     submitButton.disabled = false;
   }
@@ -778,8 +807,7 @@ function openRun(responseBody) {
   activityEmpty.hidden = false;
   resultPanel.hidden = true;
   answerPanel.hidden = true;
-  secureInputPanel.hidden = true;
-  activeSensitiveRequestId = null;
+  hideSecureInputPanel();
   followUpPanel.hidden = true;
   followUpMessage.textContent = "";
   cancelButton.disabled = false;
@@ -914,7 +942,9 @@ function handleRunEvent(serverEvent) {
     updateStatus(payload.status, payload.follow_up_expires_at);
   } else if (eventType === "input.required") {
     answerQuestion.textContent = payload.question || "The agent needs more information.";
+    answerMessage.textContent = "";
     answerPanel.hidden = false;
+    hideSecureInputPanel();
     answerInput.focus();
   } else if (eventType === "sensitive_input.required") {
     activeSensitiveRequestId = payload.request_id;
@@ -922,10 +952,13 @@ function handleRunEvent(serverEvent) {
     secureInputMessage.textContent = "";
     secureInputPanel.hidden = false;
     answerPanel.hidden = true;
+    startSecureInputCountdown(payload.expires_at);
     secureInputCode.focus();
-  } else if (eventType === "sensitive_input.received") {
-    secureInputCode.value = "";
-    secureInputPanel.hidden = true;
+  } else if (
+    eventType === "sensitive_input.received" ||
+    eventType === "sensitive_input.cancelled"
+  ) {
+    hideSecureInputPanel();
   } else if (eventType === "run.completed") {
     resultOutput.textContent = payload.output || streamedMessage;
     resultPanel.hidden = false;
@@ -1002,6 +1035,12 @@ function describeEvent(eventType, payload) {
     "takeover.ended": {title: "Control handed back", detail: "The agent has its browser again."},
     "sensitive_input.required": {title: "Verification required", detail: "Waiting for a secure code."},
     "sensitive_input.received": {title: "Verification code entered", detail: "The code was sent directly to the browser."},
+    "sensitive_input.cancelled": {
+      title: "Code request dropped",
+      detail: payload.reason
+        ? `The agent will carry on: ${payload.reason}.`
+        : "The agent will carry on without a code.",
+    },
     "follow_up.started": {title: "Follow-up started", detail: payload.task},
     "follow_up.ended": {title: "Browser session ended", detail: "The browser was closed."},
     "follow_up.expired": {title: "Browser session expired", detail: "The follow-up window ended."},
@@ -1042,11 +1081,52 @@ function updateStatus(status, followUpExpiresAt = null) {
   }
 }
 
+function hideSecureInputPanel() {
+  stopSecureInputCountdown();
+  secureInputDeadline.textContent = "";
+  secureInputCode.value = "";
+  secureInputMessage.textContent = "";
+  secureInputPanel.hidden = true;
+  activeSensitiveRequestId = null;
+}
+
+function startSecureInputCountdown(expiresAt) {
+  stopSecureInputCountdown();
+  if (!expiresAt) {
+    secureInputDeadline.textContent = "";
+    return;
+  }
+
+  const deadline = new Date(expiresAt).getTime();
+  const renderRemaining = () => {
+    const secondsLeft = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    if (secondsLeft === 0) {
+      stopSecureInputCountdown();
+      secureInputDeadline.textContent =
+        "Time is up. The agent is carrying on without a code.";
+      return;
+    }
+    const minutes = Math.floor(secondsLeft / 60);
+    const seconds = String(secondsLeft % 60).padStart(2, "0");
+    secureInputDeadline.textContent =
+      `${minutes}:${seconds} left before the agent carries on without a code.`;
+  };
+
+  renderRemaining();
+  secureInputCountdownTimer = window.setInterval(renderRemaining, 1000);
+}
+
+function stopSecureInputCountdown() {
+  if (secureInputCountdownTimer) {
+    window.clearInterval(secureInputCountdownTimer);
+    secureInputCountdownTimer = null;
+  }
+}
+
 function showFollowUpPanel(expiresAt) {
   cancelButton.disabled = true;
   answerPanel.hidden = true;
-  secureInputPanel.hidden = true;
-  activeSensitiveRequestId = null;
+  hideSecureInputPanel();
   followUpPanel.hidden = false;
   followUpMessage.textContent = "";
   followUpDeadline.textContent = formatFollowUpDeadline(expiresAt);

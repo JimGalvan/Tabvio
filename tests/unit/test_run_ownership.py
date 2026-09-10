@@ -16,6 +16,7 @@ RUN_ENDPOINTS = [
     ("POST", "/end"),
     ("POST", "/input"),
     ("POST", "/sensitive-input"),
+    ("POST", "/sensitive-input/decline"),
     ("POST", "/follow-ups"),
     ("POST", "/rerun"),
 ]

@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections import OrderedDict
 from collections.abc import AsyncIterator
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -40,11 +40,14 @@ class RunManager:
             max_concurrent_runs: int = constants.DEFAULT_MAX_CONCURRENT_RUNS,
             follow_up_window_seconds: float = constants.DEFAULT_FOLLOW_UP_WINDOW_SECONDS,
             credential_service: CredentialService | None = None,
+            sensitive_input_window_seconds: float = constants.DEFAULT_SENSITIVE_INPUT_WINDOW_SECONDS,
     ):
         if max_concurrent_runs < 1:
             raise ValueError("max_concurrent_runs must be at least 1")
         if follow_up_window_seconds <= 0:
             raise ValueError("follow_up_window_seconds must be greater than 0")
+        if sensitive_input_window_seconds <= 0:
+            raise ValueError("sensitive_input_window_seconds must be greater than 0")
 
         self._repository = repository
         self._headless = headless
@@ -52,6 +55,7 @@ class RunManager:
         self._manager_lock = asyncio.Lock()
         self._max_concurrent_runs = max_concurrent_runs
         self._follow_up_window_seconds = follow_up_window_seconds
+        self._sensitive_input_window_seconds = sensitive_input_window_seconds
         self._credential_service = credential_service
         self._active_run_ids: set[UUID] = set()
         self._completed_frames: OrderedDict[UUID, bytes] = OrderedDict()
@@ -203,6 +207,7 @@ class RunManager:
         except ValueError as exception:
             raise SensitiveInputNotPendingError(str(exception)) from exception
 
+        self._cancel_sensitive_input_timeout(context)
         await context.runtime.browser.fill_sensitive(pending.element_index, code)
         self._resuming_run_ids.add(run_id)
         try:
@@ -220,6 +225,101 @@ class RunManager:
             self._resuming_run_ids.discard(run_id)
             raise
 
+    async def decline_sensitive_input(self, run_id: UUID, user_id: UUID) -> RunRecord:
+        """Drop a code request the person cannot answer and let the agent replan."""
+        context, _ = self._resolve_owned(run_id, user_id)
+        if context is None:
+            raise RunNotFoundError(f"Run {run_id} was not found")
+
+        channel = self._sensitive_input_channel(context)
+        if channel is None or channel.pending is None:
+            raise SensitiveInputNotPendingError(
+                "The run is not waiting for a verification code"
+            )
+
+        await self._withdraw_sensitive_input(
+            context, constants.SENSITIVE_INPUT_DECLINED_REASON
+        )
+        return await self._resume_without_code(context)
+
+    @staticmethod
+    def _sensitive_input_channel(context: RunContext):
+        return getattr(context.runtime, "sensitive_inputs", None)
+
+    async def _withdraw_sensitive_input(self, context: RunContext, reason: str) -> None:
+        """Take the code box off the screen. The agent step stays parked."""
+        channel = self._sensitive_input_channel(context)
+        if channel is None:
+            return
+
+        withdrawn = channel.withdraw(reason)
+        if withdrawn is None:
+            return
+
+        self._cancel_sensitive_input_timeout(context)
+        await self._publish(
+            context,
+            "sensitive_input.cancelled",
+            {"request_id": str(withdrawn.id), "reason": reason},
+        )
+
+    async def _resume_without_code(self, context: RunContext) -> RunRecord:
+        """Restart the parked agent step, telling it why no code arrived."""
+        channel = self._sensitive_input_channel(context)
+        reason = channel.take_withdrawn_reason() if channel is not None else None
+        if reason is None:
+            return context.run
+
+        run_id = context.run.id
+        self._resuming_run_ids.add(run_id)
+        try:
+            context.execution_task = asyncio.create_task(
+                self._execute(
+                    context, Command(resume={"entered": False, "reason": reason})
+                ),
+                name=f"sensitive-decline-{run_id}",
+            )
+            return context.run
+        except Exception:
+            self._resuming_run_ids.discard(run_id)
+            raise
+
+    def _start_sensitive_input_timeout(self, context: RunContext) -> datetime:
+        """Give the person a bounded window to produce a code."""
+        self._cancel_sensitive_input_timeout(context)
+        context.sensitive_input_timeout_task = asyncio.create_task(
+            self._expire_sensitive_input(context),
+            name=f"sensitive-timeout-{context.run.id}",
+        )
+        return utc_now() + timedelta(seconds=self._sensitive_input_window_seconds)
+
+    def _cancel_sensitive_input_timeout(self, context: RunContext) -> None:
+        timeout_task = context.sensitive_input_timeout_task
+        context.sensitive_input_timeout_task = None
+        if timeout_task is not None and timeout_task is not asyncio.current_task():
+            timeout_task.cancel()
+
+    async def _expire_sensitive_input(self, context: RunContext) -> None:
+        try:
+            await asyncio.sleep(self._sensitive_input_window_seconds)
+        except asyncio.CancelledError:
+            return
+
+        if self._contexts.get(context.run.id) is not context:
+            return
+        if context.run.status != RunStatus.WAITING_FOR_INPUT:
+            return
+
+        channel = self._sensitive_input_channel(context)
+        if channel is None or channel.pending is None:
+            return
+
+        context.sensitive_input_timeout_task = None
+        await self._withdraw_sensitive_input(
+            context, constants.SENSITIVE_INPUT_TIMEOUT_REASON
+        )
+        await self._resume_without_code(context)
+
     def _require_waiting_context(self, run_id: UUID, user_id: UUID) -> RunContext:
         """The live context of a run this account owns that is parked on input."""
         context, _ = self._resolve_owned(run_id, user_id)
@@ -234,19 +334,18 @@ class RunManager:
     async def open_control(self, run_id: UUID, user_id: UUID) -> RunContext:
         """Hand the browser to the person watching it.
 
-        A run waiting for a verification code is refused:
-        that flow holds element indexes captured before the person arrived.
+        A pending verification code is withdrawn first: it holds an element index
+        that a person clicking around would break. The agent is told the code
+        never arrived once control goes back.
         """
         context, _ = self._resolve_owned(run_id, user_id)
         if context is None:
             raise RunNotFoundError(f"Run {run_id} was not found")
         self._require_control_status(context)
 
-        sensitive_inputs = getattr(context.runtime, "sensitive_inputs", None)
-        if sensitive_inputs is not None and sensitive_inputs.pending is not None:
-            raise RunNotWaitingForInputError(
-                "The run is waiting for a verification code"
-            )
+        await self._withdraw_sensitive_input(
+            context, constants.SENSITIVE_INPUT_TAKEOVER_REASON
+        )
 
         context.controller_count += 1
         if context.controller_count == 1:
@@ -267,6 +366,7 @@ class RunManager:
             await self._publish(context, "takeover.ended", {})
             if context.run.status == RunStatus.READY_FOR_FOLLOW_UP:
                 await self._pause_frame_capture(context)
+            await self._resume_without_code(context)
 
     @staticmethod
     async def _release_control_mouse(context: RunContext) -> None:
@@ -505,6 +605,7 @@ class RunManager:
                 context.execution_task.cancel()
             if context.capture_task is not None:
                 context.capture_task.cancel()
+            self._cancel_sensitive_input_timeout(context)
             await context.runtime.browser.close()
         self._contexts.clear()
         self._active_run_ids.clear()
@@ -637,6 +738,7 @@ class RunManager:
             )
 
     async def _finish_context(self, context: RunContext) -> None:
+        self._cancel_sensitive_input_timeout(context)
         expiry_task = context.follow_up_expiry_task
         context.follow_up_expiry_task = None
         if expiry_task is not None and expiry_task is not asyncio.current_task():
@@ -733,6 +835,9 @@ class RunManager:
 
             payload = data.get("payload", {})
             if isinstance(event_type, str) and isinstance(payload, dict):
+                if event_type == "sensitive_input.required":
+                    deadline = self._start_sensitive_input_timeout(context)
+                    payload = {**payload, "expires_at": deadline.isoformat()}
                 await self._publish(context, event_type, payload)
                 if event_type in {"input.required", "sensitive_input.required"}:
                     await self._set_status(context, RunStatus.WAITING_FOR_INPUT)

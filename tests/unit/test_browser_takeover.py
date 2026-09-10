@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi import WebSocketDisconnect
@@ -14,6 +14,7 @@ from tabvio.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio.runs import constants
 from tabvio.runs.models import BrowserControlEvent, RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
+from tabvio.runs.sensitive_input import SensitiveInputChannel
 from tabvio.runs.service import RunManager
 from tabvio.server import routes as app_module
 from tests.support import anonymous_client, build_run, signed_in_client
@@ -57,13 +58,17 @@ class RecordingBrowser:
         return b"jpeg-frame"
 
 
-def build_context(run: RunRecord, browser: RecordingBrowser, pending=None) -> RunContext:
+def build_context(
+    run: RunRecord,
+    browser: RecordingBrowser,
+    pending_element_index: int | None = None,
+) -> RunContext:
+    channel = SensitiveInputChannel()
+    if pending_element_index is not None:
+        channel.begin(pending_element_index, "Enter the code")
     return RunContext(
         run=run,
-        runtime=SimpleNamespace(
-            browser=browser,
-            sensitive_inputs=SimpleNamespace(pending=pending),
-        ),
+        runtime=SimpleNamespace(browser=browser, sensitive_inputs=channel),
     )
 
 
@@ -79,10 +84,17 @@ class TakeoverEndpointTests(unittest.TestCase):
     def connect(self, client, run: RunRecord):
         return client.websocket_connect(f"/api/runs/{run.id}/control")
 
-    def open_run(self, user_id, status=RunStatus.WAITING_FOR_INPUT, pending=None):
+    def open_run(
+        self,
+        user_id,
+        status=RunStatus.WAITING_FOR_INPUT,
+        pending_element_index=None,
+    ):
         run = build_run(user_id, status=status)
         browser = RecordingBrowser()
-        app_module.run_manager._contexts[run.id] = build_context(run, browser, pending)
+        app_module.run_manager._contexts[run.id] = build_context(
+            run, browser, pending_element_index
+        )
         self.addCleanup(app_module.run_manager._contexts.pop, run.id, None)
         return run, browser
 
@@ -170,15 +182,27 @@ class TakeoverEndpointTests(unittest.TestCase):
                     self.assertFalse(socket.receive_json()["applied"])
                 self.assertEqual(browser.actions, [])
 
-    def test_takeover_is_refused_while_a_verification_code_is_pending(self) -> None:
-        """That flow holds an element index a person clicking around would break."""
-        with signed_in_client() as (client, user):
-            run, _ = self.open_run(user.id, pending=SimpleNamespace(element_index=3))
-            with self.assertRaises(WebSocketDisconnect) as refusal:
-                with self.connect(client, run):
-                    pass
+    def test_taking_control_drops_a_pending_verification_code(self) -> None:
+        """That request holds an element index a person clicking around would break."""
+        resumed = patch.object(app_module.run_manager, "_execute", new=AsyncMock())
+        resumed.start()
+        self.addCleanup(resumed.stop)
 
-        self.assertEqual(refusal.exception.code, app_module.CONTROL_CLOSE_RUN_NOT_WAITING)
+        with signed_in_client() as (client, user):
+            run, browser = self.open_run(user.id, pending_element_index=3)
+            context = app_module.run_manager._contexts[run.id]
+            with self.connect(client, run) as socket:
+                self.assertIsNone(context.runtime.sensitive_inputs.pending)
+                socket.send_json({"type": "click", "x": 100, "y": 200})
+                self.assertTrue(socket.receive_json()["applied"])
+
+        self.assertEqual(browser.actions, [("click", 100.0, 200.0)])
+        resume_command = app_module.run_manager._execute.await_args.args[1]
+        self.assertEqual(resume_command.resume["entered"], False)
+        self.assertEqual(
+            resume_command.resume["reason"],
+            constants.SENSITIVE_INPUT_TAKEOVER_REASON,
+        )
 
     def test_another_accounts_browser_cannot_be_driven(self) -> None:
         with signed_in_client() as (client, _):

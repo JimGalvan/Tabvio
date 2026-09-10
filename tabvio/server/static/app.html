@@ -134,6 +134,7 @@
             <button class="primary-button" type="submit">Send answer</button>
           </form>
           <p class="secure-input-note">Do not enter passwords or verification codes here. Tabvio provides separate secure inputs for those.</p>
+          <p class="answer-question" id="answer-message" role="alert"></p>
         </section>
 
         <section class="secure-input-panel" id="secure-input-panel" hidden>
@@ -143,8 +144,10 @@
             <label class="visually-hidden" for="secure-input-code">Verification code</label>
             <input id="secure-input-code" type="password" inputmode="text" autocomplete="one-time-code" required maxlength="128" placeholder="Enter verification code">
             <button class="primary-button" type="submit">Enter code</button>
+            <button class="quiet-button" type="button" id="secure-input-decline">I don&rsquo;t have a code</button>
           </form>
           <p class="secure-input-note">The code goes directly to the browser and is not added to the run history.</p>
+          <p class="secure-input-note" id="secure-input-deadline"></p>
           <p class="answer-question" id="secure-input-message" role="alert"></p>
         </section>
 

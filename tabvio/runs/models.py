@@ -78,6 +78,7 @@ class RunContext:
     execution_task: asyncio.Task[None] | None = None
     capture_task: asyncio.Task[None] | None = None
     follow_up_expiry_task: asyncio.Task[None] | None = None
+    sensitive_input_timeout_task: asyncio.Task[None] | None = None
     assistant_output_parts: list[str] = field(default_factory=list)
     controller_count: int = 0
     mouse_controller: str | None = None

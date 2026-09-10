@@ -30,6 +30,19 @@ from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
 
+def explain_missing_code(resume_value: object) -> str:
+    """What the agent is told when the person did not supply the code it asked for."""
+    reason = (
+        resume_value.get("reason") if isinstance(resume_value, dict) else None
+    ) or "the person did not enter one"
+    return (
+        f"The verification code was not entered because {reason}. "
+        "Observe the page and change something first - send the code, choose "
+        "another delivery method, or continue without it - before asking for a "
+        "verification code again."
+    )
+
+
 def build_browser_tools(
         browser: BrowserSession,
         credential_service: CredentialService | None = None,
@@ -53,26 +66,7 @@ def build_browser_tools(
         if pending_payment_observation is not None:
             return await finish_observation("")
         publish_custom_event("browser.navigation.started", {"url": url})
-
-        delays = [1, 2, 3, 5]
-        is_page_loaded = False
-        observation = ""
-        for delay in delays:
-            if is_page_loaded:
-                break
-
-            time.sleep(delay)
-            if delay == 1:
-                observation = await browser.attempt_navigate_and_observe(url)
-            else:
-                observation = await browser.attempt_observe_page()
-            USER_PROMPT = f"""Determine whether this page is loaded.
-                        Page snapshot:
-                        {observation.page_state}
-                        """
-            result = await page_load_detector_subagent.ainvoke({"messages": [{"role": "user", "content": USER_PROMPT}]})
-            is_page_loaded = "true" in result["messages"][-1].content
-
+        observation = await browser.attempt_navigate_and_observe(url)
         publish_custom_event("browser.navigation.completed", {"url": url})
         return await finish_observation(observation.page_state)
 
@@ -228,9 +222,9 @@ def build_browser_tools(
                     result = interrupt(
                         {"kind": request.kind, "request_id": str(request.id)}
                     )
-                    if not isinstance(result, dict) or result.get("entered") is not True:
-                        raise RuntimeError("The verification code was not entered")
                     sensitive_inputs.clear(request.id)
+                    if not isinstance(result, dict) or result.get("entered") is not True:
+                        raise RuntimeError(explain_missing_code(result))
 
                 completed.append(reference)
                 publish_custom_event("browser.action.completed", event_payload)

@@ -443,6 +443,12 @@ async def submit_sensitive_input(
     return _build_run_response(run)
 
 
+@app.post("/api/runs/{run_id}/sensitive-input/decline", response_model=RunResponse)
+async def decline_sensitive_input(run_id: UUID, user: CurrentUser) -> RunResponse:
+    run = await run_manager.decline_sensitive_input(run_id, user.id)
+    return _build_run_response(run)
+
+
 @app.post(
     "/api/runs/{run_id}/rerun",
     response_model=RunResponse,
