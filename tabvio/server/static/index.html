@@ -1,63 +1,83 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#dce8f0">
-  <title>Tabvio · Autonomous browser agent</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/legal.css">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-T6FFC63ETD"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+
+        gtag('js', new Date());
+
+        gtag('config', 'G-T6FFC63ETD');
+    </script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#dce8f0">
+    <title>Tabvio · Autonomous browser agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/legal.css">
 </head>
 <body>
-  <main class="shell">
+<main class="shell">
     <header class="masthead">
-      <a class="wordmark" href="/" aria-label="Tabvio home">
-        <span class="wordmark-mark" aria-hidden="true"></span>
-        <span>Tabvio</span>
-      </a>
-      <div class="masthead-side">
-        <nav class="account" aria-label="Account">
-          <a class="account-link" href="/login">Log in</a>
-          <a class="pill-button" href="/signup">Sign up</a>
-        </nav>
-      </div>
+        <a class="wordmark" href="/" aria-label="Tabvio home">
+            <span class="wordmark-mark" aria-hidden="true"></span>
+            <span>Tabvio</span>
+        </a>
+        <div class="masthead-side">
+            <nav class="account" aria-label="Account">
+                <a class="account-link" href="/login">Log in</a>
+                <a class="pill-button" href="/signup">Sign up</a>
+            </nav>
+        </div>
     </header>
 
     <section class="brief">
-      <div class="brief-copy">
-        <p class="eyebrow">Autonomous browser agent</p>
-        <h1>Give it a task.<br><span>Get it done.</span></h1>
-        <p class="brief-note">Automate browser work from start to finish—research, forms, data entry, and multi-step workflows.</p>
-        <p class="brief-note">Watch the agent work in a live browser, answer its questions as they come up, and pick the thread back up with a follow-up.</p>
-      </div>
+        <div class="brief-copy">
+            <p class="eyebrow">Autonomous browser agent</p>
+            <h1>Give it a task.<br><span>Get it done.</span></h1>
+            <p class="brief-note">Automate browser work from start to finish—research, forms, data entry, and multi-step
+                workflows.</p>
+            <p class="brief-note">Watch the agent work in a live browser, answer its questions as they come up, and pick
+                the thread back up with a follow-up.</p>
+        </div>
 
-      <form class="task-form" id="task-form">
-        <label for="task-input">What should the agent do?</label>
-        <textarea id="task-input" name="task" rows="4" required placeholder="Open example.com and summarize what is on the page."></textarea>
-        <p class="task-hint">Tip: include the URL — e.g. <code>example.com</code> — to get the most relevant result.</p>
-        <div class="task-examples">
-          <button class="example-chip" type="button" data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">Try an example: Top 5 on Hacker News</button>
-        </div>
-        <div class="task-actions">
-          <button class="primary-button" type="submit" id="start-button">
-            Start run
-            <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </form>
+        <form class="task-form" id="task-form">
+            <label for="task-input">What should the agent do?</label>
+            <textarea id="task-input" name="task" rows="4" required
+                      placeholder="Open example.com and summarize what is on the page."></textarea>
+            <p class="task-hint">Tip: include the URL — e.g. <code>example.com</code> — to get the most relevant result.
+            </p>
+            <div class="task-examples">
+                <button class="example-chip" type="button"
+                        data-example="Go to Hacker News, open the current top 5 stories, and return a table with the title, score, number of comments, and source domain for each one.">
+                    Try an example: Top 5 on Hacker News
+                </button>
+            </div>
+            <div class="task-actions">
+                <button class="primary-button" type="submit" id="start-button">
+                    Start run
+                    <span aria-hidden="true">↗</span>
+                </button>
+            </div>
+        </form>
     </section>
-  </main>
+</main>
 
-  <footer class="site-footer">
+<footer class="site-footer">
     <div class="site-footer-inner">
-      <nav aria-label="Legal">
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-      </nav>
-      <p class="footer-year">© 2026 Tabvio</p>
+        <nav aria-label="Legal">
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+        </nav>
+        <p class="footer-year">© 2026 Tabvio</p>
     </div>
-  </footer>
+</footer>
 
-  <script src="/static/landing.js" defer></script>
+<script src="/static/landing.js" defer></script>
 </body>
 </html>
