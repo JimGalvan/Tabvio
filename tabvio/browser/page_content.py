@@ -110,6 +110,8 @@ async def get_frame_texts(page: Page) -> Dict[int, str]:
     frames: Dict[int, str] = {}
     scan_script = BrowserUtils.get_js_script('scan-page.js')
     for index, iframe in enumerate(page.frames):
+        if iframe.is_detached():
+            continue
         page_text = json.loads(await iframe.evaluate(scan_script))['pageText']
         frames[index] = page_text
     return frames

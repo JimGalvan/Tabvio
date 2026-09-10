@@ -135,9 +135,6 @@ def build_browser_tools(
         if not detection.needs_handoff(acknowledged_payment_surface):
             return page_state
 
-        # Interrupted tools replay from the beginning. Keep the detected surface
-        # so resume neither navigates again nor loses the interrupt when the
-        # user has already left the payment page.
         pending_payment_observation = detection
         guard_payment_surface(detection)
         pending_payment_observation = None
@@ -215,9 +212,9 @@ def build_browser_tools(
                         runtime.context.user_id,
                         browser.current_hostname,
                     )
-                    await browser.fill(step.username_element_index, secret.login)
-                    await browser.fill(step.password_element_index, secret.password)
-                    del secret
+                    value = secret.login if step.field == "login" else secret.password
+                    await browser.fill(step.element_index, value)
+                    del secret, value
                 elif isinstance(step, MfaCodeStep):
                     request = sensitive_inputs.begin(step.element_index, step.prompt)
                     publish_custom_event(

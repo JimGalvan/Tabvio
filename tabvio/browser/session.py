@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -12,6 +13,7 @@ from playwright.async_api import (
     async_playwright,
 )
 from playwright.async_api import Frame as PlaywrightFrame
+from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from tabvio.browser.constants import (
     BROWSER_LAUNCH_ARGS,
@@ -127,6 +129,18 @@ class BrowserSession:
         self._iframes_by_id = {}
         self._next_iframe_id = 0
         self._elements = []
+
+    async def _wait_for_page_to_load(self) -> None:
+        await asyncio.sleep(0.25)
+        try:
+            await self._page.wait_for_load_state("domcontentloaded", timeout=1_000)
+        except PlaywrightTimeoutError:
+            pass
+
+        try:
+            await self._page.wait_for_load_state("networkidle", timeout=1_000)
+        except PlaywrightTimeoutError:
+            pass
 
     async def attempt_navigate_and_observe(self, url: str) -> Observation:
         await self._initialize_browser()
@@ -261,44 +275,14 @@ class BrowserSession:
         raise RuntimeError("The page kept navigating and could not be observed")
 
     async def _capture_page_snapshot(self, page):
-        _SNAPSHOT_JS = """
-        () => {
-          const out = [];
-          const els = document.body ? document.body.querySelectorAll('*') : [];
-          let budget = 3000;
-          for (const el of els) {
-            if (budget-- <= 0) break;
-            const r = el.getBoundingClientRect();
-            if (r.width <= 0 || r.height <= 0) continue;
-            if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
-            const st = getComputedStyle(el);
-            if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0') continue;
-            const tag = el.tagName;
-            if (tag === 'INPUT') {
-              out.push(`input|${el.type}|${el.checked ? 'on' : 'off'}|${el.value}`);
-            } else if (tag === 'SELECT') {
-              out.push(`select|${el.value}`);
-            } else if (tag === 'TEXTAREA') {
-              out.push(`textarea|${el.value}`);
-            } else {
-              const own = Array.from(el.childNodes)
-                .filter(n => n.nodeType === 3)
-                .map(n => n.textContent.trim())
-                .filter(Boolean).join(' ');
-              if (own) out.push(own);
-            }
-          }
-          return out.join('\\n');
-        }
-        """
-
         try:
-            text = await page.evaluate(_SNAPSHOT_JS)
+            text = await page.evaluate(self._get_script("capture-page-snapshot.js"))
         except Exception:
             return Counter()
         return Counter(line.strip() for line in text.splitlines() if line.strip())
 
     async def _observe_current_page(self) -> Observation:
+        await self._wait_for_page_to_load()
         result = json.loads(await self._scan_page())
 
         self._elements = []
@@ -312,11 +296,12 @@ class BrowserSession:
         page_content = await PageContent.get_page_content(self._page, char_budget=400)
         self._payment_detection_result = await self._payment_detector.detect(self._page)
         page_snapshot = await self._capture_page_snapshot(self._page)
+        described_frames = "\n".join(str(frame) for frame in frames)
         page_state = (
             f"{interactable_elements}\n"
             f"<page-content>{page_content}</page-content>\n"
             f"<available-tabs>{tabs}</available-tabs>\n"
-            f"<available-iframes>{frames}</available-iframes>"
+            f"<available-iframes>\n{described_frames}\n</available-iframes>"
             f"{self.payment_detection_result.describe()}"
         )
         return Observation(page_state=page_state, page_snapshot=page_snapshot)

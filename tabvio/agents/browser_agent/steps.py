@@ -36,8 +36,8 @@ class PressStep(StrictStep):
 class CredentialFillStep(StrictStep):
     action: Literal["fill_credential"]
     credential_id: UUID
-    username_element_index: int = Field(ge=0)
-    password_element_index: int = Field(ge=0)
+    field: Literal["login", "password"]
+    element_index: int = Field(ge=0)
 
 
 class MfaCodeStep(StrictStep):
@@ -83,9 +83,8 @@ def validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
 
     for step in steps:
         if isinstance(step, CredentialFillStep):
-            require_fillable_element(browser, step.username_element_index)
             require_fillable_element(
-                browser, step.password_element_index, password=True
+                browser, step.element_index, password=step.field == "password"
             )
             continue
 
@@ -110,19 +109,9 @@ def element_label(browser: BrowserSession, element_index: int) -> str:
 
 def step_reference(step: BrowserStep) -> str:
     if isinstance(step, CredentialFillStep):
-        return (
-            f"fill_credential[{step.username_element_index},"
-            f"{step.password_element_index}]"
-        )
+        return f"fill_credential.{step.field}[{step.element_index}]"
     return f"{step.action}[{step.element_index}]"
 
 
 def step_event_payload(browser: BrowserSession, step: BrowserStep) -> dict[str, Any]:
-    if isinstance(step, CredentialFillStep):
-        target = (
-            f"{element_label(browser, step.username_element_index)} and "
-            f"{element_label(browser, step.password_element_index)}"
-        )
-    else:
-        target = element_label(browser, step.element_index)
-    return {"action": step.action, "target": target}
+    return {"action": step.action, "target": element_label(browser, step.element_index)}

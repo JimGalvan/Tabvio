@@ -33,8 +33,14 @@ class SecureBrowserStepTests(unittest.TestCase):
                     {
                         "action": "fill_credential",
                         "credential_id": str(credential_id),
-                        "username_element_index": 1,
-                        "password_element_index": 2,
+                        "field": "login",
+                        "element_index": 1,
+                    },
+                    {
+                        "action": "fill_credential",
+                        "credential_id": str(credential_id),
+                        "field": "password",
+                        "element_index": 2,
                     },
                     {"action": "click", "element_index": 4},
                 ]
@@ -61,8 +67,8 @@ class SecureBrowserStepTests(unittest.TestCase):
                     {
                         "action": "fill_credential",
                         "credential_id": str(uuid4()),
-                        "username_element_index": 1,
-                        "password_element_index": 3,
+                        "field": "password",
+                        "element_index": 3,
                     }
                 ]
             }

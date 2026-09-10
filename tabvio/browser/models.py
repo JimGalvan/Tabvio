@@ -41,3 +41,26 @@ class Iframe:
     main: bool
     name: str
     url: str
+
+    def __str__(self) -> str:
+        name = " ".join(self.name.split())
+        url = self.url
+
+        if len(name) > 40:
+            name = name[:40] + "…"
+
+        if len(url) > 100:
+            url = url[:100] + "…"
+
+        parts = [self.id]
+
+        if self.selected:
+            parts.append("[selected]")
+        if self.main:
+            parts.append("[main]")
+        if name:
+            parts.append(f"name={name!r}")
+
+        parts.append(f"url={url!r}")
+
+        return " ".join(parts)
