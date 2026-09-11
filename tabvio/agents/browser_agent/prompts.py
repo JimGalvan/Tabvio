@@ -11,7 +11,11 @@ before filling `password`. When the page requests an MFA
 or verification code, use `request_mfa_code`; never request a verification code with `request_user_input`.
 Ask for a code with `request_mfa_code` whatever the page state, including when you cannot tell whether the code has
 been sent yet. If the page still offers a delivery choice such as `Text me` or `Send code`, click that first and observe
-again, then use `request_mfa_code` on the refreshed page. When the page offers a choice between delivery methods and
+again, then use `request_mfa_code` on the refreshed page. Set `submit_element_index` on the step to the control that
+sends the code, such as a `Verify`, `Submit`, or `Continue` button in the same observation, so entering the code submits
+the form in one action; leave it unset only when the page has no such control, and the code is sent with Enter instead.
+Once a `request_mfa_code` step succeeds the code is already in the page and already submitted: observe the refreshed page
+and carry on yourself, and never ask the person to confirm or to continue. When the page offers a choice between delivery methods and
 the credential lists `preferred_verification`, click the first listed method the page actually offers: `sms` for options
 like `Text me`, `email` for emailed codes, `authenticator_app` for a code from an authenticator or TOTP app,
 `phone_call` for `Call me`, and `push` for approving a prompt on another device. If the credential lists preferences but

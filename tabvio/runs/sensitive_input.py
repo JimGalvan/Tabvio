@@ -8,6 +8,7 @@ class PendingSensitiveInput:
     element_index: int
     prompt: str
     kind: str = "mfa_code"
+    submit_element_index: int | None = None
 
 
 class SensitiveInputChannel:
@@ -26,7 +27,12 @@ class SensitiveInputChannel:
         """The code box is gone, but the agent step is still parked on it."""
         return self._withdrawn_reason is not None
 
-    def begin(self, element_index: int, prompt: str) -> PendingSensitiveInput:
+    def begin(
+        self,
+        element_index: int,
+        prompt: str,
+        submit_element_index: int | None = None,
+    ) -> PendingSensitiveInput:
         if self._pending is not None:
             if (
                 self._pending.element_index == element_index
@@ -35,7 +41,10 @@ class SensitiveInputChannel:
                 return self._pending
             raise RuntimeError("Another sensitive input request is already pending")
         self._pending = PendingSensitiveInput(
-            id=uuid4(), element_index=element_index, prompt=prompt
+            id=uuid4(),
+            element_index=element_index,
+            prompt=prompt,
+            submit_element_index=submit_element_index,
         )
         self._withdrawn_reason = None
         return self._pending

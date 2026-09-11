@@ -53,6 +53,58 @@ class SecureBrowserStepTests(unittest.TestCase):
         self.assertNotIn("password\":", serialized)
         self.assertNotIn("value\":", serialized)
 
+    def test_a_code_step_may_name_the_control_that_sends_it(self) -> None:
+        plan = StepPlan.model_validate(
+            {
+                "steps": [
+                    {
+                        "action": "request_mfa_code",
+                        "element_index": 3,
+                        "prompt": "Enter the code",
+                        "submit_element_index": 4,
+                    }
+                ]
+            }
+        )
+
+        validate_plan(self._browser, plan.steps)
+        self.assertEqual(plan.steps[0].submit_element_index, 4)
+
+    def test_a_code_step_cannot_submit_through_an_unobserved_element(self) -> None:
+        plan = StepPlan.model_validate(
+            {
+                "steps": [
+                    {
+                        "action": "request_mfa_code",
+                        "element_index": 3,
+                        "prompt": "Enter the code",
+                        "submit_element_index": 99,
+                    }
+                ]
+            }
+        )
+
+        with self.assertRaises(ValueError) as rejection:
+            validate_plan(self._browser, plan.steps)
+
+        self.assertIn("[99]", str(rejection.exception))
+
+    def test_a_code_step_without_a_named_control_still_validates(self) -> None:
+        plan = StepPlan.model_validate(
+            {
+                "steps": [
+                    {
+                        "action": "request_mfa_code",
+                        "element_index": 3,
+                        "prompt": "Enter the code",
+                    }
+                ]
+            }
+        )
+
+        validate_plan(self._browser, plan.steps)
+        self.assertIsNone(plan.steps[0].submit_element_index)
+
     def test_runtime_context_is_not_exposed_in_tool_schema(self) -> None:
         tools = {tool.name: tool for tool in build_browser_tools(self._browser)}
         schema = tools["execute_steps"].args_schema.model_json_schema()

@@ -18,8 +18,9 @@ class SensitiveBrowser:
     def __init__(self):
         self.fills = []
 
-    async def fill_sensitive(self, element_index, value):
-        self.fills.append((element_index, value))
+    async def fill_sensitive(self, element_index, value, submit_element_index=None):
+        self.fills.append((element_index, value, submit_element_index))
+        return f"Filled element [{element_index}] and submitted it"
 
 
 class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
@@ -35,7 +36,9 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._temporary_directory.cleanup()
 
-    def park_run_on_a_code_request(self, owner_id, prompt="Enter the code"):
+    def park_run_on_a_code_request(
+        self, owner_id, prompt="Enter the code", submit_element_index=None
+    ):
         """A run waiting on the secure code box, as the dashboard would show it."""
         run = RunRecord(
             task="Sign in",
@@ -45,7 +48,7 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         )
         browser = SensitiveBrowser()
         channel = SensitiveInputChannel()
-        pending = channel.begin(8, prompt)
+        pending = channel.begin(8, prompt, submit_element_index)
         context = RunContext(
             run=run,
             runtime=SimpleNamespace(browser=browser, sensitive_inputs=channel),
@@ -68,11 +71,28 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
 
         self.assertIs(result, context.run)
-        self.assertEqual(browser.fills, [(8, "123456")])
+        self.assertEqual(browser.fills, [(8, "123456", None)])
         events = self._repository.list_events(context.run.id)
         self.assertEqual(events[-1].event_type, "sensitive_input.received")
         self.assertNotIn("123456", events[-1].model_dump_json())
         self._manager._execute.assert_awaited_once()
+
+    async def test_the_code_is_sent_rather_than_left_in_the_field(self) -> None:
+        owner_id = uuid4()
+        context, pending, browser = self.park_run_on_a_code_request(
+            owner_id, submit_element_index=12
+        )
+
+        await self._manager.submit_sensitive_input(
+            context.run.id, owner_id, pending.id, "123456"
+        )
+        await asyncio.sleep(0)
+
+        self.assertEqual(browser.fills, [(8, "123456", 12)])
+        self.assertEqual(
+            self.resume_payload(),
+            {"entered": True, "submitted": "Filled element [8] and submitted it"},
+        )
 
     async def test_declining_sends_the_agent_back_without_a_code(self) -> None:
         owner_id = uuid4()
@@ -124,8 +144,8 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         )
         await asyncio.sleep(0.05)
 
-        self.assertEqual(browser.fills, [(8, "123456")])
-        self.assertEqual(self.resume_payload(), {"entered": True})
+        self.assertEqual(browser.fills, [(8, "123456", None)])
+        self.assertEqual(self.resume_payload()["entered"], True)
 
     async def test_the_dashboard_is_told_when_the_code_window_closes(self) -> None:
         owner_id = uuid4()

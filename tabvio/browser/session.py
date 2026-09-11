@@ -368,8 +368,12 @@ class BrowserSession:
         await page.keyboard.insert_text(value)
         return f"Filled element [{element_index}]"
 
-    async def fill_sensitive(self, element_index: int, value: str) -> str:
-        """Mask a field in browser captures before inserting sensitive text."""
+    async def fill_sensitive(
+            self,
+            element_index: int,
+            value: str,
+            submit_element_index: int | None = None,
+    ) -> str:
         element = self.get_stored_element(element_index)
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
@@ -377,7 +381,24 @@ class BrowserSession:
             self._get_script("mask-sensitive-field.js"),
             {"x": element.cx, "y": element.cy},
         )
-        return await self.fill(element_index, value)
+        await self.fill(element_index, value)
+        return await self._submit_sensitive_field(element_index, submit_element_index)
+
+    async def _submit_sensitive_field(
+            self,
+            element_index: int,
+            submit_element_index: int | None,
+    ) -> str:
+        """Click the control the plan named, or fall back to pressing Enter."""
+        if submit_element_index is not None:
+            await self._click_element(submit_element_index)
+            return (
+                f"Filled element [{element_index}] and clicked "
+                f"element [{submit_element_index}] to submit it"
+            )
+
+        await self._require_page().keyboard.press("Enter")
+        return f"Filled element [{element_index}] and pressed Enter to submit it"
 
     async def select(self, element_index: int, value: str) -> str:
         page = self._require_page()

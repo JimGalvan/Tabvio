@@ -208,7 +208,9 @@ class RunManager:
             raise SensitiveInputNotPendingError(str(exception)) from exception
 
         self._cancel_sensitive_input_timeout(context)
-        await context.runtime.browser.fill_sensitive(pending.element_index, code)
+        submitted = await context.runtime.browser.fill_sensitive(
+            pending.element_index, code, pending.submit_element_index
+        )
         self._resuming_run_ids.add(run_id)
         try:
             await self._publish(
@@ -217,7 +219,9 @@ class RunManager:
                 {"request_id": str(request_id), "kind": pending.kind},
             )
             context.execution_task = asyncio.create_task(
-                self._execute(context, Command(resume={"entered": True})),
+                self._execute(
+                    context, Command(resume={"entered": True, "submitted": submitted})
+                ),
                 name=f"sensitive-resume-{run_id}",
             )
             return context.run

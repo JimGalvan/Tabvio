@@ -44,6 +44,7 @@ class MfaCodeStep(StrictStep):
     action: Literal["request_mfa_code"]
     element_index: int = Field(ge=0)
     prompt: str = Field(min_length=1, max_length=240)
+    submit_element_index: int | None = Field(default=None, ge=0)
 
 
 BrowserStep = Annotated[
@@ -73,6 +74,18 @@ def require_fillable_element(
         )
 
 
+def require_submit_element(
+        browser: BrowserSession, submit_element_index: int | None
+) -> None:
+    """The control that sends the code, when the plan names one."""
+    if submit_element_index is None:
+        return
+    if browser.get_stored_element(submit_element_index) is None:
+        raise ValueError(
+            f"element [{submit_element_index}] is not in the latest observation"
+        )
+
+
 def validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
     all_steps_except_last = steps[:-1]
     for step in all_steps_except_last:
@@ -97,6 +110,7 @@ def validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
             require_fillable_element(browser, step.element_index)
         if isinstance(step, MfaCodeStep):
             require_fillable_element(browser, step.element_index)
+            require_submit_element(browser, step.submit_element_index)
 
 
 def element_label(browser: BrowserSession, element_index: int) -> str:

@@ -30,6 +30,18 @@ from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
 
+def describe_entered_code(resume_value: object) -> str:
+    """What the agent is told once a person's code has gone into the page."""
+    submitted = resume_value.get("submitted") if isinstance(resume_value, dict) else None
+    carry_on = "Observe the page and carry on yourself; do not ask the person to continue."
+    if not submitted:
+        return f"The person entered the verification code. {carry_on}"
+    return (
+        f"The person entered the verification code and it was submitted: {submitted}. "
+        f"{carry_on}"
+    )
+
+
 def explain_missing_code(resume_value: object) -> str:
     """What the agent is told when the person did not supply the code it asked for."""
     reason = (
@@ -185,6 +197,7 @@ def build_browser_tools(
             )
 
         completed: list[str] = []
+        notes: list[str] = []
         for step in normalized_steps:
             reference = step_reference(step)
             event_payload = step_event_payload(browser, step)
@@ -213,7 +226,9 @@ def build_browser_tools(
                     await browser.fill(step.element_index, value)
                     del secret, value
                 elif isinstance(step, MfaCodeStep):
-                    request = sensitive_inputs.begin(step.element_index, step.prompt)
+                    request = sensitive_inputs.begin(
+                        step.element_index, step.prompt, step.submit_element_index
+                    )
                     publish_custom_event(
                         "sensitive_input.required",
                         {
@@ -228,6 +243,7 @@ def build_browser_tools(
                     sensitive_inputs.clear(request.id)
                     if not isinstance(result, dict) or result.get("entered") is not True:
                         raise RuntimeError(explain_missing_code(result))
+                    notes.append(describe_entered_code(result))
 
                 completed.append(reference)
                 publish_custom_event("browser.action.completed", event_payload)
@@ -242,11 +258,18 @@ def build_browser_tools(
                         "completed": completed,
                         "failed": reference,
                         "error": str(exception),
+                        "notes": notes,
                     }
                 )
 
         return json.dumps(
-            {"ok": True, "kind": "success", "completed": completed, "failed": None}
+            {
+                "ok": True,
+                "kind": "success",
+                "completed": completed,
+                "failed": None,
+                "notes": notes,
+            }
         )
 
     execute_steps.handle_validation_error = True
