@@ -4655,6 +4655,9 @@ openai = [
     { name = "aws-bedrock-token-generator" },
     { name = "openai" },
 ]
+otel = [
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+]
 
 [[package]]
 name = "structlog"
@@ -4692,7 +4695,7 @@ dependencies = [
     { name = "playwright" },
     { name = "python-dotenv" },
     { name = "questionary" },
-    { name = "strands-agents", extra = ["openai"] },
+    { name = "strands-agents", extra = ["openai", "otel"] },
     { name = "tavily-python" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "workos" },
@@ -4730,7 +4733,7 @@ requires-dist = [
     { name = "playwright", specifier = ">=1.59.0,<2.0" },
     { name = "python-dotenv" },
     { name = "questionary", specifier = ">=2.0.0" },
-    { name = "strands-agents", extras = ["openai"], specifier = ">=1.55,<2.0" },
+    { name = "strands-agents", extras = ["openai", "otel"], specifier = ">=1.55,<2.0" },
     { name = "tavily-python" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0,<1.0" },
     { name = "workos", specifier = ">=5.10" },
