@@ -1,6 +1,70 @@
 # Tabvio
 
-Tabvio web browser agent that can perform tasks with autonomy.
+Tabvio is a web browser agent that plans, executes, and verifies multi-step web
+tasks, and hands the keyboard back to you for the parts a machine should not do
+alone. It watches its own browser, stops at payment pages, asks for verification
+codes through a one-time input that is never written to run history, and lets
+you take the controls mid-run and give them back.
+
+The agent runs on the [AWS Strands SDK](https://strandsagents.com/) against
+Amazon Bedrock models, and drives a managed Chrome on Amazon Bedrock AgentCore
+Browser.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    person(["Person"])
+
+    subgraph app["FastAPI application"]
+        routes["Routes<br/>SSE, MJPEG, WebSocket"]
+        manager["RunManager"]
+        runtime{{"Agent runtime<br/>TABVIO_AGENT_ENGINE"}}
+    end
+
+    subgraph engines["Agent engines"]
+        strands["Strands engine"]
+        langchain["LangChain engine"]
+    end
+
+    playwright["Playwright browser session"]
+
+    subgraph aws["AWS"]
+        bedrock["Bedrock<br/>Sonnet 5 and Haiku 4.5"]
+        agentcore["AgentCore Browser"]
+    end
+
+    store[("SQLite<br/>runs, events, credentials")]
+
+    person -->|"task"| routes
+    routes --> manager
+    manager --> runtime
+    manager --> store
+    runtime --> strands
+    runtime -.-> langchain
+    strands --> bedrock
+    strands --> playwright
+    langchain --> playwright
+    playwright -->|"CDP"| agentcore
+    manager -->|"live frames and pauses"| routes
+    routes -->|"watch, answer, take control"| person
+```
+
+The run manager never sees a framework type. Each engine turns its own stream
+into `custom`, `message`, and `interrupt` items, so the dashboard, the live
+view, the takeover socket, and the credential vault are the same code on both.
+
+**Where the interesting parts live**
+
+| Concern | Path |
+| --- | --- |
+| Strands agent, tools, models | `tabvio/agents/strands/` |
+| LangChain agent, tools | `tabvio/agents/browser_agent/` |
+| Engine seam | `tabvio/runs/runtime.py` |
+| Run lifecycle and events | `tabvio/runs/service.py` |
+| Browser, scanning, payment detection | `tabvio/browser/` |
+| Managed browser over CDP | `tabvio/browser/agentcore.py` |
+| Encrypted credential vault | `tabvio/credentials/` |
 
 ## Development
 
@@ -23,6 +87,33 @@ Run the checks:
 uv run pytest
 uv run ruff check .
 ```
+
+## Agent engine
+
+Tabvio runs on either of two agent frameworks, chosen by `TABVIO_AGENT_ENGINE`.
+Both drive the same browser, credential vault, and takeover flow.
+
+| Value | Stack |
+| --- | --- |
+| `strands` | AWS Strands SDK, Bedrock models, AgentCore Browser |
+| `langchain` | LangGraph and deepagents, the original build |
+
+On the Strands engine, `TABVIO_MODEL_PROVIDER` picks Bedrock or OpenAI. Bedrock
+needs AWS credentials on the machine and both models enabled in `AWS_REGION`.
+Model ids must be cross-region inference profiles rather than bare ids; list
+what your account can reach with:
+
+```powershell
+aws bedrock list-inference-profiles --region us-west-2
+```
+
+`TABVIO_BROWSER_BACKEND=agentcore` replaces the locally launched Chromium with
+a managed browser session on Bedrock AgentCore, reached over the Chrome
+DevTools Protocol. Everything downstream is unchanged: the same Playwright
+calls, the same live view, the same takeover socket. Sessions bill by the
+minute and are stopped when a run ends.
+
+Every setting is documented in `.env.example`.
 
 ## Accounts
 
