@@ -16,3 +16,7 @@ SENSITIVE_INPUT_TAKEOVER_REASON = (
     "the person took control of the browser and may have changed the page"
 )
 MAX_LISTED_RUNS = 50
+
+# AgentCore browser sessions bill by the minute, so this caps a run that is
+# abandoned without its browser being closed.
+DEFAULT_AGENTCORE_SESSION_TIMEOUT_SECONDS = 3600

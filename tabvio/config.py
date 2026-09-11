@@ -41,6 +41,32 @@ def read_model_provider_setting() -> str:
     return configured_value
 
 
+def read_browser_backend_setting() -> str:
+    configured_value = os.getenv("TABVIO_BROWSER_BACKEND", "local").strip().lower()
+    if configured_value not in {"local", "agentcore"}:
+        raise RuntimeError("TABVIO_BROWSER_BACKEND must be local or agentcore")
+    return configured_value
+
+
+def read_agentcore_browser_identifier() -> str:
+    configured_value = os.getenv("TABVIO_AGENTCORE_BROWSER", "").strip()
+    return configured_value or "aws.browser.v1"
+
+
+def read_agentcore_session_timeout_seconds(default: int) -> int:
+    configured_value = os.getenv("TABVIO_AGENTCORE_SESSION_TIMEOUT", str(default))
+    try:
+        value = int(configured_value)
+    except ValueError as exception:
+        raise RuntimeError(
+            "TABVIO_AGENTCORE_SESSION_TIMEOUT must be an integer"
+        ) from exception
+
+    if value < 60:
+        raise RuntimeError("TABVIO_AGENTCORE_SESSION_TIMEOUT must be at least 60")
+    return value
+
+
 def read_aws_region_setting() -> str:
     configured_value = os.getenv("AWS_REGION", "").strip()
     return configured_value or "us-west-2"

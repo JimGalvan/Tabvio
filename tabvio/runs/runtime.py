@@ -16,10 +16,15 @@ from tabvio.browser.session import BrowserSession
 from tabvio.config import (
     TRACE_DIRECTORY,
     read_agent_engine_setting,
+    read_agentcore_browser_identifier,
+    read_agentcore_session_timeout_seconds,
+    read_aws_region_setting,
+    read_browser_backend_setting,
     read_browser_channel_setting,
     read_browser_trace_setting,
 )
 from tabvio.credentials.service import CredentialService
+from tabvio.runs import constants
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
@@ -213,6 +218,22 @@ def _trace_path_for_run(thread_id: UUID) -> Path | None:
     return TRACE_DIRECTORY / f"{thread_id}.zip"
 
 
+def _build_remote_browser():
+    if read_browser_backend_setting() != "agentcore":
+        return None
+
+    # Imported here so a local run never needs boto3 credentials loaded.
+    from tabvio.browser.agentcore import AgentCoreBrowser
+
+    return AgentCoreBrowser(
+        region=read_aws_region_setting(),
+        identifier=read_agentcore_browser_identifier(),
+        session_timeout_seconds=read_agentcore_session_timeout_seconds(
+            constants.DEFAULT_AGENTCORE_SESSION_TIMEOUT_SECONDS
+        ),
+    )
+
+
 def build_agent_runtime(
         thread_id: UUID,
         user_id: UUID | None,
@@ -224,6 +245,7 @@ def build_agent_runtime(
         headless=headless,
         trace_path=_trace_path_for_run(thread_id),
         browser_channel=read_browser_channel_setting(),
+        remote_browser=_build_remote_browser(),
     )
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
     sensitive_inputs = SensitiveInputChannel()
