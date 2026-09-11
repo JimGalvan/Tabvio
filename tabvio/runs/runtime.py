@@ -150,11 +150,14 @@ class StrandsAgentRuntime:
         ]
 
     async def stream(self, agent_input: Any):
+        self.channel.reset()
         pump = asyncio.create_task(self._pump(agent_input))
+        finished = False
         try:
             while True:
                 item = await self.channel.next_item()
                 if item["kind"] == "finished":
+                    finished = True
                     break
                 if item["kind"] == "custom":
                     yield item
@@ -164,10 +167,11 @@ class StrandsAgentRuntime:
                 if normalized is not None:
                     yield normalized
         finally:
-            pump.cancel()
-
-        # Re-raises whatever the agent loop failed with.
-        await pump
+            if finished:
+                # Re-raises whatever the agent loop failed with.
+                await pump
+            else:
+                pump.cancel()
 
     async def final_output(self) -> str:
         if self._last_message is None:

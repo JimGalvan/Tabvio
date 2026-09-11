@@ -10,6 +10,11 @@ class AgentEventChannel:
     def __init__(self):
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
+    def reset(self) -> None:
+        # A consumer that stops early leaves items behind, and they would other
+        # wise be read as the start of the next turn.
+        self._queue = asyncio.Queue()
+
     def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         self._queue.put_nowait(
             {"kind": "custom", "event_type": event_type, "payload": payload}
