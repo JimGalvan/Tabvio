@@ -24,9 +24,12 @@ from tabvio.agents.shared.verification import (
     explain_missing_code,
 )
 from tabvio.agents.strands.events import AgentEventChannel
+from tabvio.agents.strands.schema import inline_references
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 from tabvio.runs.sensitive_input import SensitiveInputChannel
+
+STEP_PLAN_SCHEMA = inline_references(StepPlan.model_json_schema())
 
 
 def build_browser_tools(
@@ -148,7 +151,7 @@ def build_browser_tools(
         )
         acknowledged_payment_surface = detection.fingerprint
 
-    @tool(inputSchema={"json": StepPlan.model_json_schema()}, context=True)
+    @tool(inputSchema={"json": STEP_PLAN_SCHEMA}, context=True)
     async def execute_steps(steps: list, tool_context: ToolContext) -> str:
         """Validate and execute browser steps, including credential and MFA steps."""
         async with browser_lock:
