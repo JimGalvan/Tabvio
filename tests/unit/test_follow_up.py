@@ -2,7 +2,6 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import uuid4
 
 from tabvio.runs.exceptions import RunCapacityReachedError, RunNotReadyForFollowUpError
@@ -24,18 +23,25 @@ class FollowUpBrowser:
         self.closed = True
 
 
-class FollowUpAgent:
-    def __init__(self) -> None:
+class FollowUpRuntime:
+    def __init__(self, browser) -> None:
         self.inputs = []
+        self.browser = browser
+        self.sensitive_inputs = None
 
-    async def astream(self, agent_input, **stream_options):
+    def start_input(self, task):
+        return {"task": task}
+
+    def resume_input(self, value):
+        return {"resume": value}
+
+    async def stream(self, agent_input):
         self.inputs.append(agent_input)
-        if False:
-            yield stream_options
+        for item in []:
+            yield item
 
-    async def aget_state(self, config):
-        output = f"Result {len(self.inputs)}"
-        return SimpleNamespace(values={"messages": [SimpleNamespace(content=output)]})
+    async def final_output(self) -> str:
+        return f"Result {len(self.inputs)}"
 
 
 class FollowUpTests(unittest.IsolatedAsyncioTestCase):
@@ -52,20 +58,15 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
     def _build_context(
         self,
         manager: RunManager,
-    ) -> tuple[RunContext, FollowUpAgent, FollowUpBrowser]:
+    ) -> tuple[RunContext, FollowUpRuntime, FollowUpBrowser]:
         run = RunRecord(task="First task", max_runtime_seconds=60, user_id=self._owner_id)
-        agent = FollowUpAgent()
         browser = FollowUpBrowser()
-        runtime = SimpleNamespace(
-            agent=agent,
-            browser=browser,
-            config={"configurable": {"thread_id": str(run.thread_id)}},
-        )
+        runtime = FollowUpRuntime(browser)
         context = RunContext(run=run, runtime=runtime)
         self._repository.save_run(run)
         manager._contexts[run.id] = context
         manager._active_run_ids.add(run.id)
-        return context, agent, browser
+        return context, runtime, browser
 
     async def test_follow_up_reuses_runtime_and_end_releases_capacity(self) -> None:
         manager = RunManager(
@@ -73,12 +74,9 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
             max_concurrent_runs=1,
             follow_up_window_seconds=30,
         )
-        context, agent, browser = self._build_context(manager)
+        context, runtime, browser = self._build_context(manager)
 
-        await manager._execute(
-            context,
-            {"messages": [{"role": "user", "content": "First task"}]},
-        )
+        await manager._execute(context, context.runtime.start_input("First task"))
 
         self.assertEqual(context.run.status, RunStatus.READY_FOR_FOLLOW_UP)
         self.assertIn(context.run.id, manager._contexts)
@@ -99,10 +97,9 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
             RunStatus.READY_FOR_FOLLOW_UP,
         )
 
-        self.assertEqual(len(agent.inputs), 2)
-        follow_up_message = agent.inputs[1]["messages"][0]
+        self.assertEqual(len(runtime.inputs), 2)
         self.assertEqual(
-            follow_up_message["content"],
+            runtime.inputs[1]["task"],
             "Add the first item to the cart",
         )
         self.assertFalse(browser.closed)
@@ -122,10 +119,7 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
         )
         context, _, browser = self._build_context(manager)
 
-        await manager._execute(
-            context,
-            {"messages": [{"role": "user", "content": "First task"}]},
-        )
+        await manager._execute(context, context.runtime.start_input("First task"))
         await self._wait_for_context_cleanup(manager, context)
 
         self.assertEqual(context.run.status, RunStatus.SUCCEEDED)

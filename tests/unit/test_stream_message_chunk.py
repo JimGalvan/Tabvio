@@ -2,15 +2,15 @@ import unittest
 
 from langchain_core.messages import AIMessageChunk
 
-from tabvio.runs.service import RunManager
+from tabvio.runs.runtime import LangChainAgentRuntime
 
 
 class StreamMessageChunkTests(unittest.TestCase):
     def test_langchain_ai_message_chunk_is_extracted(self) -> None:
-        manager = RunManager.__new__(RunManager)
+        runtime = LangChainAgentRuntime.__new__(LangChainAgentRuntime)
         message = AIMessageChunk(content="Working")
 
-        result = manager._extract_stream_message((message, {}))
+        result = runtime._message_text((message, {}))
 
         self.assertEqual(result, "Working")
 

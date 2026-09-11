@@ -68,7 +68,11 @@ def build_context(
         channel.begin(pending_element_index, "Enter the code")
     return RunContext(
         run=run,
-        runtime=SimpleNamespace(browser=browser, sensitive_inputs=channel),
+        runtime=SimpleNamespace(
+            browser=browser,
+            sensitive_inputs=channel,
+            resume_input=lambda value: value,
+        ),
     )
 
 
@@ -197,10 +201,10 @@ class TakeoverEndpointTests(unittest.TestCase):
                 self.assertTrue(socket.receive_json()["applied"])
 
         self.assertEqual(browser.actions, [("click", 100.0, 200.0)])
-        resume_command = app_module.run_manager._execute.await_args.args[1]
-        self.assertEqual(resume_command.resume["entered"], False)
+        resume_value = app_module.run_manager._execute.await_args.args[1]
+        self.assertEqual(resume_value["entered"], False)
         self.assertEqual(
-            resume_command.resume["reason"],
+            resume_value["reason"],
             constants.SENSITIVE_INPUT_TAKEOVER_REASON,
         )
 

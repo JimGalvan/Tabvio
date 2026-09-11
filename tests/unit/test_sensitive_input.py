@@ -51,7 +51,11 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         pending = channel.begin(8, prompt, submit_element_index)
         context = RunContext(
             run=run,
-            runtime=SimpleNamespace(browser=browser, sensitive_inputs=channel),
+            runtime=SimpleNamespace(
+                browser=browser,
+                sensitive_inputs=channel,
+                resume_input=lambda value: value,
+            ),
         )
         self._repository.save_run(run)
         self._manager._contexts[run.id] = context
@@ -59,7 +63,7 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         return context, pending, browser
 
     def resume_payload(self):
-        return self._manager._execute.await_args.args[1].resume
+        return self._manager._execute.await_args.args[1]
 
     async def test_code_is_filled_but_never_persisted(self) -> None:
         owner_id = uuid4()
@@ -151,14 +155,12 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         owner_id = uuid4()
         context, _, _ = self.park_run_on_a_code_request(owner_id)
 
-        await self._manager._handle_stream_part(
+        await self._manager._handle_stream_item(
             context,
             {
-                "type": "custom",
-                "data": {
-                    "event_type": "sensitive_input.required",
-                    "payload": {"request_id": str(uuid4()), "prompt": "Enter the code"},
-                },
+                "kind": "custom",
+                "event_type": "sensitive_input.required",
+                "payload": {"request_id": str(uuid4()), "prompt": "Enter the code"},
             },
         )
         self._manager._cancel_sensitive_input_timeout(context)

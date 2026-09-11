@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from langgraph.types import Command
-
 from tabvio.runs.runtime import build_agent_runtime
 from tabvio.clock import utc_now
 from tabvio.credentials.exceptions import CredentialNotFoundError
@@ -100,7 +98,7 @@ class RunManager:
                 await self._publish(context, "run.created", {"task": run.task, "status": run.status.value})
                 context.capture_task = asyncio.create_task(self._capture_frames(context), name=f"capture-{run.id}")
                 context.execution_task = asyncio.create_task(
-                    self._execute(context, {"messages": [{"role": "user", "content": run.task}]}), name=f"run-{run.id}"
+                    self._execute(context, context.runtime.start_input(run.task)), name=f"run-{run.id}"
                 )
             except Exception:
                 self._contexts.pop(run.id, None)
@@ -181,7 +179,7 @@ class RunManager:
         try:
             await self._publish(context, "input.received", {})
             context.execution_task = asyncio.create_task(
-                self._execute(context, Command(resume=answer.strip())), name=f"resume-{run_id}"
+                self._execute(context, context.runtime.resume_input(answer.strip())), name=f"resume-{run_id}"
             )
             return context.run
         except Exception:
@@ -220,7 +218,7 @@ class RunManager:
             )
             context.execution_task = asyncio.create_task(
                 self._execute(
-                    context, Command(resume={"entered": True, "submitted": submitted})
+                    context, context.runtime.resume_input({"entered": True, "submitted": submitted})
                 ),
                 name=f"sensitive-resume-{run_id}",
             )
@@ -279,7 +277,7 @@ class RunManager:
         try:
             context.execution_task = asyncio.create_task(
                 self._execute(
-                    context, Command(resume={"entered": False, "reason": reason})
+                    context, context.runtime.resume_input({"entered": False, "reason": reason})
                 ),
                 name=f"sensitive-decline-{run_id}",
             )
@@ -449,7 +447,7 @@ class RunManager:
             if context.capture_task is None or context.capture_task.done():
                 context.capture_task = asyncio.create_task(self._capture_frames(context), name=f"capture-{run_id}")
             context.execution_task = asyncio.create_task(
-                self._execute(context, {"messages": [{"role": "user", "content": follow_up_task}]})
+                self._execute(context, context.runtime.start_input(follow_up_task))
                 , name=f"follow-up-{run_id}")
 
         await self._await_cancelled_task(expiry_task)
@@ -621,14 +619,8 @@ class RunManager:
 
         try:
             async with asyncio.timeout(context.run.max_runtime_seconds):
-                async for stream_part in context.runtime.agent.astream(
-                        agent_input,
-                        config=context.runtime.config,
-                        stream_mode=["messages", "custom", "updates"],
-                        version="v2",
-                        context=getattr(context.runtime, "context", None),
-                ):
-                    await self._handle_stream_part(context, stream_part)
+                async for stream_item in context.runtime.stream(agent_input):
+                    await self._handle_stream_item(context, stream_item)
 
             if context.run.status == RunStatus.WAITING_FOR_INPUT:
                 return
@@ -820,35 +812,19 @@ class RunManager:
             status_payload["follow_up_expires_at"] = context.run.follow_up_expires_at.isoformat()
         await self._publish(context, "run.status", status_payload)
 
-    async def _handle_stream_part(
+    async def _handle_stream_item(
             self,
             context: RunContext,
-            stream_part: dict[str, Any],
+            stream_item: dict[str, Any],
     ) -> None:
-        stream_type = stream_part.get("type")
-        data = stream_part.get("data")
+        kind = stream_item.get("kind")
 
-        if stream_type == "custom" and isinstance(data, dict):
-            event_type = data.get("event_type")
-            if (
-                    event_type in {"input.required", "sensitive_input.required"}
-                    and context.run.id in self._resuming_run_ids
-            ):
-                self._resuming_run_ids.discard(context.run.id)
-                return
-
-            payload = data.get("payload", {})
-            if isinstance(event_type, str) and isinstance(payload, dict):
-                if event_type == "sensitive_input.required":
-                    deadline = self._start_sensitive_input_timeout(context)
-                    payload = {**payload, "expires_at": deadline.isoformat()}
-                await self._publish(context, event_type, payload)
-                if event_type in {"input.required", "sensitive_input.required"}:
-                    await self._set_status(context, RunStatus.WAITING_FOR_INPUT)
+        if kind == "custom":
+            await self._handle_custom_event(context, stream_item)
             return
 
-        if stream_type == "messages":
-            message_text = self._extract_stream_message(data)
+        if kind == "message":
+            message_text = stream_item.get("text", "")
             if message_text:
                 context.assistant_output_parts.append(message_text)
                 await self._publish(context, "agent.message.delta",
@@ -856,20 +832,38 @@ class RunManager:
                 self._trim_assistant_output(context)
             return
 
-        if stream_type == "updates" and self._contains_interrupt(data):
-            if context.run.status != RunStatus.WAITING_FOR_INPUT:
-                await self._set_status(context, RunStatus.WAITING_FOR_INPUT)
+        if kind == "interrupt" and context.run.status != RunStatus.WAITING_FOR_INPUT:
+            await self._set_status(context, RunStatus.WAITING_FOR_INPUT)
+
+    async def _handle_custom_event(
+            self,
+            context: RunContext,
+            stream_item: dict[str, Any],
+    ) -> None:
+        event_type = stream_item.get("event_type")
+        if (
+                event_type in {"input.required", "sensitive_input.required"}
+                and context.run.id in self._resuming_run_ids
+        ):
+            self._resuming_run_ids.discard(context.run.id)
+            return
+
+        payload = stream_item.get("payload", {})
+        if not isinstance(event_type, str) or not isinstance(payload, dict):
+            return
+
+        if event_type == "sensitive_input.required":
+            deadline = self._start_sensitive_input_timeout(context)
+            payload = {**payload, "expires_at": deadline.isoformat()}
+
+        await self._publish(context, event_type, payload)
+        if event_type in {"input.required", "sensitive_input.required"}:
+            await self._set_status(context, RunStatus.WAITING_FOR_INPUT)
 
     async def _get_final_output(self, context: RunContext) -> str:
-        try:
-            state = await context.runtime.agent.aget_state(context.runtime.config)
-            messages = state.values.get("messages", [])
-            if messages:
-                message_text = self._extract_message_content(messages[-1].content)
-                if message_text:
-                    return message_text
-        except Exception:
-            pass
+        message_text = await context.runtime.final_output()
+        if message_text:
+            return message_text
 
         return "".join(context.assistant_output_parts).strip()
 
@@ -902,52 +896,6 @@ class RunManager:
 
         combined_output = "".join(context.assistant_output_parts)
         context.assistant_output_parts = [combined_output[-constants.MAX_ASSISTANT_OUTPUT_CHARACTERS:]]
-
-    def _extract_stream_message(self, data: Any) -> str:
-        if not isinstance(data, (tuple, list)) or not data:
-            return ""
-
-        message = data[0]
-        message_type = getattr(message, "type", None)
-        if message_type not in {"ai", "assistant", "AIMessageChunk"}:
-            return ""
-
-        content = getattr(message, "content", "")
-        return self._extract_message_content(content)
-
-    def _extract_message_content(self, content: Any) -> str:
-        if isinstance(content, str):
-            return content
-
-        if not isinstance(content, list):
-            return ""
-
-        text_parts = []
-        for block in content:
-            if isinstance(block, str):
-                text_parts.append(block)
-            elif isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text")
-                if isinstance(text, str):
-                    text_parts.append(text)
-
-        return "".join(text_parts)
-
-    def _contains_interrupt(self, value: Any) -> bool:
-        if isinstance(value, dict):
-            if "__interrupt__" in value:
-                return True
-
-            for nested_value in value.values():
-                if self._contains_interrupt(nested_value):
-                    return True
-
-        if isinstance(value, (list, tuple)):
-            for nested_value in value:
-                if self._contains_interrupt(nested_value):
-                    return True
-
-        return False
 
     def _json_safe(self, value: Any) -> Any:
         if value is None or isinstance(value, (str, int, float, bool)):

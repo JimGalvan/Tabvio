@@ -15,10 +15,22 @@ class StubRuntime:
     """Enough of an AgentRuntime that create_run can start without a browser."""
 
     def __init__(self):
-        self.config = {"configurable": {"thread_id": "stub"}}
         self.browser = self
         self.context = None
         self.sensitive_inputs = None
+
+    def start_input(self, task):
+        return {"task": task}
+
+    def resume_input(self, value):
+        return {"resume": value}
+
+    async def stream(self, agent_input):
+        for item in []:
+            yield item
+
+    async def final_output(self) -> str:
+        return ""
 
     async def close(self) -> None:
         return None

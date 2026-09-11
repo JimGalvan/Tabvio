@@ -12,15 +12,13 @@ class InteractiveResumeTests(unittest.TestCase):
         manager = RunManager.__new__(RunManager)
         manager._resuming_run_ids = {run_id}
         context = SimpleNamespace(run=SimpleNamespace(id=run_id))
-        stream_part = {
-            "type": "custom",
-            "data": {
-                "event_type": "input.required",
-                "payload": {"question": "What word should I use?"},
-            },
+        stream_item = {
+            "kind": "custom",
+            "event_type": "input.required",
+            "payload": {"question": "What word should I use?"},
         }
 
-        asyncio.run(manager._handle_stream_part(context, stream_part))
+        asyncio.run(manager._handle_stream_item(context, stream_item))
 
         self.assertNotIn(run_id, manager._resuming_run_ids)
 
