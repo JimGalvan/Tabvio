@@ -16,6 +16,8 @@ requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
 
 dependencies = [
+    "strands-agents[openai]>=1.55,<2.0",
+    "bedrock-agentcore>=1.22,<2.0",
     "deepagents==0.7.0",
     "langgraph>=1.0.0,<2.0",
     "langchain>=1.0.0,<2.0",
