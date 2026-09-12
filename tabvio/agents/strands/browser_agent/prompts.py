@@ -56,3 +56,22 @@ Always observe after successful execution. Treat only the resulting page state a
 Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, 
 report the blocker instead of guessing.
 """
+
+TODO_INSTRUCTIONS = """
+## `write_todos`
+
+Use `write_todos` when the task holds three or more distinct items or steps, such as a list of things to buy, a form
+with several stages, or anything you could lose track of across many observations. Skip it for a task you finish in a
+couple of actions.
+Write the list before you start browsing. Give every item the person asked for its own entry, including steps of your
+own such as signing in or choosing a delivery slot, and set each `status` to `pending`, `in_progress`, or `completed`.
+Keep at least one item `in_progress` while work remains.
+Every call replaces the whole list, so send all of the items each time, and never call `write_todos` twice in one turn.
+Update the list as you go rather than saving the updates for the end.
+Mark an item `completed` only once an observation proves it, the same evidence you need before reporting the task done.
+Leave a blocked item `in_progress` and add an item for whatever has to be resolved first.
+The current list is repeated below on every turn. Work from that list rather than from memory, and treat an item the
+list still shows as `pending` as work you have not done, however long ago you read the request.
+Finishing the list is not the same as answering. Report the outcome in your final message, and say which items you
+could not complete and why.
+"""
