@@ -104,7 +104,7 @@ def deploy(image):
         allow(["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"],
               f"arn:aws:logs:{REGION}:{account}:log-group:/aws/bedrock-agentcore/runtimes/{NAME}*"),
         allow(["logs:DescribeLogGroups"], f"arn:aws:logs:{REGION}:{account}:log-group:*"),
-        allow(["xray:PutTraceSegments"], "*"),
+        allow(["xray:PutTraceSegments", "xray:PutSpans"], "*"),
         allow(["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"], [
             f"arn:aws:bedrock:{REGION}:{account}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
             "arn:aws:bedrock:us-*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",

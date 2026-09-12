@@ -10,6 +10,7 @@ from tabvio.remote.runtime import RemoteAgentRuntime
 
 async def check(runtime_arn):
     runtime = RemoteAgentRuntime(runtime_arn, uuid4(), uuid4(), (), None)
+    print(json.dumps({"run_id": str(runtime.thread_id)}), flush=True)
     events = []
     try:
         async with asyncio.timeout(300):
