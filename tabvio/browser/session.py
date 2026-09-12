@@ -21,6 +21,7 @@ from tabvio.browser.constants import (
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
+    OBSERVE_BUDGET_SECONDS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
@@ -148,14 +149,14 @@ class BrowserSession:
         self._elements = []
 
     async def _wait_for_page_to_load(self) -> None:
-        await asyncio.sleep(0.50)
+        await asyncio.sleep(1)
         try:
-            await self._page.wait_for_load_state("domcontentloaded", timeout=1_500)
+            await self._page.wait_for_load_state("domcontentloaded", timeout=3_500)
         except PlaywrightTimeoutError:
             pass
 
         try:
-            await self._page.wait_for_load_state("networkidle", timeout=1_500)
+            await self._page.wait_for_load_state("networkidle", timeout=5_500)
         except PlaywrightTimeoutError:
             pass
 
@@ -303,6 +304,16 @@ class BrowserSession:
         return Counter(line.strip() for line in text.splitlines() if line.strip())
 
     async def _observe_current_page(self) -> Observation:
+        try:
+            async with asyncio.timeout(OBSERVE_BUDGET_SECONDS):
+                return await self._observe_within_budget()
+        except TimeoutError:
+            raise TimeoutError(
+                "The page could not be observed within "
+                f"{OBSERVE_BUDGET_SECONDS} seconds"
+            ) from None
+
+    async def _observe_within_budget(self) -> Observation:
         await self._wait_for_page_to_load()
         result = json.loads(await self._scan_page())
 
