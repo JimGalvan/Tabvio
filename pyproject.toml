@@ -29,6 +29,7 @@ dependencies = [
     "playwright>=1.59.0,<2.0",
     "workos>=5.10",
     "cryptography>=43.0",
+    "aws-opentelemetry-distro>=0.18,<0.19",
 ]
 
 [tool.ruff]

@@ -4,7 +4,9 @@ from dataclasses import asdict
 from uuid import UUID
 
 from bedrock_agentcore import BedrockAgentCoreApp
+from opentelemetry import baggage, context
 
+from tabvio.agents.strands.shared.telemetry import flush_telemetry
 from tabvio.credentials.models import CredentialMetadata, CredentialSecret
 from tabvio.remote.connection import Connection
 from tabvio.runs.runtime import build_local_agent_runtime
@@ -40,6 +42,7 @@ class Worker:
         self.connection = Connection(websocket.send_json, websocket.receive_json, self.handle)
         self.runtime = None
         self.streaming = False
+        self.run_id = None
 
     async def handle(self, method, params):
         if method == "initialize":
@@ -51,6 +54,7 @@ class Worker:
                 tuple(UUID(value) for value in params.get("credential_ids", [])),
                 WorkerCredentials(self.connection, asyncio.get_running_loop()),
             )
+            self.run_id = str(UUID(params["thread_id"]))
             return {"ready": True}
         if self.runtime is None:
             raise RuntimeError("The agent has not been initialized")
@@ -70,6 +74,7 @@ class Worker:
         if self.streaming:
             raise RuntimeError("The agent is already processing a task")
         self.streaming = True
+        token = context.attach(baggage.set_baggage("session.id", self.run_id))
         try:
             agent_input = (
                 self.runtime.resume_input(params["input"])
@@ -84,6 +89,8 @@ class Worker:
             return {"output": await self.runtime.final_output()}
         finally:
             self.streaming = False
+            context.detach(token)
+            await asyncio.to_thread(flush_telemetry)
 
 
 @app.websocket

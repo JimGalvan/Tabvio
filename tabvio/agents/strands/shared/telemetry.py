@@ -3,10 +3,18 @@ import os
 
 logger = logging.getLogger(__name__)
 _telemetry_configured = False
+_cloudwatch_provider = None
 
 
 def configure_telemetry() -> None:
-    global _telemetry_configured
+    global _telemetry_configured, _cloudwatch_provider
+
+    if not _telemetry_configured and os.getenv("TABVIO_TRACE_LOG_GROUP"):
+        from tabvio.remote.telemetry import configure_cloudwatch
+
+        _cloudwatch_provider = configure_cloudwatch()
+        _telemetry_configured = True
+        return
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
     if _telemetry_configured or not endpoint:
@@ -25,3 +33,8 @@ def configure_telemetry() -> None:
 
     _telemetry_configured = True
     logger.info("Sending Strands traces and metrics to %s", endpoint)
+
+
+def flush_telemetry():
+    if _cloudwatch_provider:
+        _cloudwatch_provider.force_flush(timeout_millis=5000)
