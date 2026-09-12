@@ -6,8 +6,8 @@ from tabvio.browser.models import PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 
 CARD_FIELDS = [("card-autocomplete", "cc-number"), ("card-autocomplete", "cc-csc")]
-HOSTED_FIELDS = [("hosted-payment-field", "Stripe")]
-SDK_ONLY = [("payment-sdk", "Stripe")]
+PAY_BUTTON = [("pay-button", "place-order")]
+UNKNOWN_SIGNAL = [("payment-sdk", "Stripe")]
 
 CHECKOUT_URL = "https://shop.example.com/checkout"
 
@@ -30,17 +30,15 @@ class PaymentDetectionResultTests(unittest.TestCase):
         self.assertTrue(observed.needs_handoff(None))
         self.assertIn("cc-number", observed.describe())
 
-    def test_hosted_fields_stop_the_agent(self) -> None:
-        """The card inputs are cross-origin, so the frame is the whole signal."""
-        self.assertTrue(detection(CHECKOUT_URL, HOSTED_FIELDS).needs_handoff(None))
+    def test_a_pay_button_stops_the_agent(self) -> None:
+        """On a hosted card form the fields are cross-origin, so the button
+        the merchant owns is the only thing the top document can see."""
+        self.assertTrue(detection(CHECKOUT_URL, PAY_BUTTON).needs_handoff(None))
 
-    def test_a_payment_sdk_alone_is_not_enough(self) -> None:
-        """Stripe asks sites to load js.stripe.com everywhere for fraud scoring.
-
-        Treating that as a payment page would stop the agent on every page of
-        every shop that follows the advice.
-        """
-        observed = detection("https://shop.example.com/products/shoes", SDK_ONLY)
+    def test_a_signal_the_agent_does_not_act_on_is_ignored(self) -> None:
+        """Only the kinds listed as handoff kinds stop a run, so a signal
+        added for diagnostics can never start blocking pages by accident."""
+        observed = detection("https://shop.example.com/products/shoes", UNKNOWN_SIGNAL)
         self.assertFalse(observed.needs_handoff(None))
         self.assertEqual(observed.describe(), "")
 
@@ -65,10 +63,18 @@ class PaymentDetectionResultTests(unittest.TestCase):
 
     def test_a_new_signal_on_the_same_page_stops_the_agent_again(self) -> None:
         """A page that grows a card field after the user was asked is a new ask."""
-        acknowledged = detection(CHECKOUT_URL, HOSTED_FIELDS).fingerprint
+        acknowledged = detection(CHECKOUT_URL, PAY_BUTTON).fingerprint
 
-        observed = detection(CHECKOUT_URL, HOSTED_FIELDS + CARD_FIELDS)
+        observed = detection(CHECKOUT_URL, PAY_BUTTON + CARD_FIELDS)
         self.assertTrue(observed.needs_handoff(acknowledged))
+
+    def test_a_rising_order_total_is_not_a_new_page(self) -> None:
+        """Pay buttons carry the total, so the signal records the wording that
+        matched rather than the label, and a total that ticks up stays quiet."""
+        acknowledged = detection(CHECKOUT_URL, PAY_BUTTON).fingerprint
+
+        observed = detection(CHECKOUT_URL, PAY_BUTTON)
+        self.assertFalse(observed.needs_handoff(acknowledged))
 
     def test_leaving_the_payment_page_clears_the_block(self) -> None:
         acknowledged = detection(CHECKOUT_URL, CARD_FIELDS).fingerprint

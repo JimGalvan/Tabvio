@@ -1,57 +1,28 @@
 (() => {
-    const CARD_AUTOCOMPLETE_VALUES = new Set([
-        'cc-name',
-        'cc-given-name',
-        'cc-additional-name',
-        'cc-family-name',
+    const CARD_ENTRY_AUTOCOMPLETE_VALUES = new Set([
         'cc-number',
         'cc-exp',
         'cc-exp-month',
         'cc-exp-year',
         'cc-csc',
-        'cc-type',
     ]);
 
-    const PAYMENT_PROVIDER_HOST_PATTERNS = [
-        ['Stripe', /(^|\.)stripe\.com$/],
-        ['Braintree', /(^|\.)braintreegateway\.com$/],
-        ['Adyen', /(^|\.)adyen\.com$/],
-        ['PayPal', /(^|\.)paypal\.com$/],
-        ['Square', /(^|\.)squarecdn\.com$/],
-        ['Checkout.com', /(^|\.)checkout\.com$/],
-        ['Klarna', /(^|\.)klarna(cdn)?\.(com|net)$/],
-        ['Affirm', /(^|\.)affirm\.com$/],
-        ['Amazon Pay', /(^|\.)payments-amazon\.com$/],
-        ['Google Pay', /(^|\.)pay\.google\.com$/],
+    const PAY_BUTTON_PATTERNS = [
+        ['place-order', /\bplace\s+(your\s+|the\s+)?order\b/],
+        ['complete-purchase', /\bcomplete\s+(your\s+|the\s+)?(order|purchase|payment)\b/],
+        ['confirm-payment', /\bconfirm\s+(and\s+)?(pay|payment|purchase|order)\b/],
+        ['submit-payment', /\bsubmit\s+(your\s+|the\s+)?(order|payment)\b/],
+        ['authorize-payment', /\bauthori[sz]e\s+(the\s+)?payment\b/],
+        ['pay-now', /^pay(\s+(now|securely))?$/],
+        ['pay-amount', /^pay\s+[$€£¥]/],
     ];
 
-    const HOSTED_FRAME_NAMES = [
-        ['Stripe', /^__privateStripeFrame/],
-        ['Braintree', /^braintree-hosted-field/],
-        ['Adyen', /^adyen-checkout/],
-    ];
-
-    const MINIMUM_RENDERED_PIXELS = 16;
+    const BUTTON_SELECTOR =
+        'button, input[type="submit"], input[type="button"], [role="button"]';
+    const LONGEST_BUTTON_LABEL = 80;
 
     const signals = [];
     const seen = new Set();
-
-    function getPaymentProviderFromSource(iframeSourceUrl) {
-        let hostname;
-        try {
-            hostname = new URL(iframeSourceUrl, window.location.href).hostname;
-        } catch (error) {
-            return null;
-        }
-
-        for (const [providerName, hostnamePattern] of PAYMENT_PROVIDER_HOST_PATTERNS) {
-            const hostnameMatches = hostnamePattern.test(hostname);
-            if (hostnameMatches) {
-                return providerName;
-            }
-        }
-        return null;
-    }
 
     function record(type, value) {
         const key = type + '|' + value;
@@ -60,63 +31,47 @@
         signals.push({type: type, value: value});
     }
 
+    function readLabel(element) {
+        const label =
+            element.getAttribute('aria-label') ||
+            element.value ||
+            element.textContent ||
+            '';
+        return label.toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
     const fieldsWithAutocomplete = document.querySelectorAll(
         'input[autocomplete], select[autocomplete]',
     );
 
     for (const field of fieldsWithAutocomplete) {
+        if (field.disabled || field.type === 'hidden') {
+            continue;
+        }
+
         const autocompleteValues = (field.getAttribute('autocomplete') || '')
             .toLowerCase()
             .split(/\s+/);
 
         for (const autocompleteValue of autocompleteValues) {
-            if (CARD_AUTOCOMPLETE_VALUES.has(autocompleteValue)) {
+            if (CARD_ENTRY_AUTOCOMPLETE_VALUES.has(autocompleteValue)) {
                 record('card-autocomplete', autocompleteValue);
             }
         }
     }
 
-    function isVisiblyRendered(element) {
-        const rect = element.getBoundingClientRect();
-        const tooSmallToTypeInto =
-            rect.width < MINIMUM_RENDERED_PIXELS ||
-            rect.height < MINIMUM_RENDERED_PIXELS;
-        if (tooSmallToTypeInto) {
-            return false;
-        }
-
-        const style = window.getComputedStyle(element);
-        return (
-            style.display !== 'none' &&
-            style.visibility !== 'hidden' &&
-            style.opacity !== '0'
-        );
-    }
-
-    const iframes = document.querySelectorAll('iframe');
-    for (const iframe of iframes) {
-        if (!isVisiblyRendered(iframe)) {
+    for (const button of document.querySelectorAll(BUTTON_SELECTOR)) {
+        const label = readLabel(button);
+        if (!label || label.length > LONGEST_BUTTON_LABEL) {
             continue;
         }
 
-        const iframeSourceUrl = iframe.getAttribute('src');
-        const paymentProvider = getPaymentProviderFromSource(iframeSourceUrl);
-        if (paymentProvider) {
-            record('hosted-payment-field', paymentProvider);
-            continue;
+        for (const [patternName, pattern] of PAY_BUTTON_PATTERNS) {
+            if (pattern.test(label)) {
+                record('pay-button', patternName);
+                break;
+            }
         }
-
-        const name = iframe.getAttribute('name') || '';
-        for (const [label, pattern] of HOSTED_FRAME_NAMES) {
-            if (pattern.test(name)) record('hosted-payment-field', label);
-        }
-    }
-
-    const scripts = document.querySelectorAll('script[src]');
-    for (const script of scripts) {
-        const scriptSourceUrl = script.getAttribute('src');
-        const processor = getPaymentProviderFromSource(scriptSourceUrl);
-        if (processor) record('payment-sdk', processor);
     }
 
     return JSON.stringify({url: location.href, signals: signals});

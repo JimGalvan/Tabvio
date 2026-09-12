@@ -31,6 +31,7 @@ EXPECTED = {
     "sdk-only.html": False,
     "fraud-fingerprint.html": False,
     "login.html": False,
+    "wallet-widgets.html": False,
     "shipping.html": False,
     "cart.html": False,
     # The realistic flow next door, which is the same judgement on pages
