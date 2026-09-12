@@ -88,6 +88,7 @@ class RunManager:
                 credential_ids=tuple(selected_credential_ids),
                 credential_service=self._credential_service,
                 headless=self._headless,
+                run_id=run.id,
             )
             context = RunContext(run=run, runtime=runtime)
             self._contexts[run.id] = context

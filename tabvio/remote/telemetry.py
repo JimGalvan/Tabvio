@@ -49,10 +49,12 @@ class MetadataExporter(SpanExporter):
 
 class RunCorrelation(SpanProcessor):
     def on_start(self, span, parent_context=None):
-        run_id = baggage.get_baggage("session.id", context=parent_context)
-        if run_id:
-            span.set_attribute("session.id", run_id)
-            span.set_attribute("tabvio.run.id", run_id)
+        session_id = baggage.get_baggage("session.id", context=parent_context)
+        run_id = baggage.get_baggage("tabvio.run.id", context=parent_context)
+        if session_id:
+            span.set_attribute("session.id", session_id)
+        if run_id or session_id:
+            span.set_attribute("tabvio.run.id", run_id or session_id)
 
 
 def configure_cloudwatch():

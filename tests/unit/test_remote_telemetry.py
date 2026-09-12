@@ -13,7 +13,9 @@ def test_traces_keep_run_steps_without_sensitive_payloads():
     provider.add_span_processor(RunCorrelation())
     provider.add_span_processor(SimpleSpanProcessor(MetadataExporter(destination)))
     tracer = provider.get_tracer("test")
-    token = context.attach(baggage.set_baggage("session.id", "test-run"))
+    trace_context = baggage.set_baggage("session.id", "test-session")
+    trace_context = baggage.set_baggage("tabvio.run.id", "test-run", context=trace_context)
+    token = context.attach(trace_context)
     try:
         with tracer.start_as_current_span("invoke_agent Tabvio") as root:
             root.set_attribute("gen_ai.input.messages", "private prompt")
@@ -34,7 +36,7 @@ def test_traces_keep_run_steps_without_sensitive_payloads():
         assert spans[0].attributes["gen_ai.usage.input_tokens"] == 42
         assert spans[0].status.status_code == StatusCode.ERROR
         for span in spans:
-            assert span.attributes["session.id"] == "test-run"
+            assert span.attributes["session.id"] == "test-session"
             assert span.attributes["tabvio.run.id"] == "test-run"
             assert not span.events
             assert "private" not in span.to_json()

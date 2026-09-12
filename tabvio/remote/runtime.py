@@ -52,9 +52,10 @@ class RemoteBrowser:
 
 
 class RemoteAgentRuntime:
-    def __init__(self, runtime_arn, thread_id, user_id, credential_ids, credential_service):
+    def __init__(self, runtime_arn, thread_id, user_id, credential_ids, credential_service, run_id=None):
         self.runtime_arn = runtime_arn
         self.thread_id = thread_id
+        self.run_id = run_id or thread_id
         self.user_id = user_id
         self.credential_ids = credential_ids
         self.credential_service = credential_service
@@ -100,6 +101,7 @@ class RemoteAgentRuntime:
             self._listener = asyncio.create_task(self.connection.listen())
             await self.connection.call("initialize", {
                 "thread_id": str(self.thread_id),
+                "run_id": str(self.run_id),
                 "user_id": str(self.user_id) if self.user_id else None,
                 "credential_ids": [str(value) for value in self.credential_ids],
             })

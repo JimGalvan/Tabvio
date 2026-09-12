@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+from opentelemetry import baggage
 from starlette.testclient import TestClient
 
 from tabvio.remote import worker
@@ -23,6 +24,9 @@ def test_worker_rejects_unknown_browser_commands_and_closes_on_disconnect(monkey
 
 
 def test_worker_streams_and_resumes_the_same_agent(monkeypatch):
+    run_id = str(uuid4())
+    session_id = str(uuid4())
+
     class Runtime:
         def __init__(self):
             self.browser = SimpleNamespace(close=AsyncMock())
@@ -36,6 +40,8 @@ def test_worker_streams_and_resumes_the_same_agent(monkeypatch):
             return {"answer": value}
 
         async def stream(self, value):
+            assert baggage.get_baggage("session.id") == session_id
+            assert baggage.get_baggage("tabvio.run.id") == run_id
             self.inputs.append(value)
             yield {"kind": "message", "text": "working"}
 
@@ -46,7 +52,9 @@ def test_worker_streams_and_resumes_the_same_agent(monkeypatch):
     monkeypatch.setattr(worker, "build_local_agent_runtime", lambda *args: runtime)
     with TestClient(worker.app) as client:
         with client.websocket_connect("/ws") as socket:
-            socket.send_json({"id": "1", "method": "initialize", "params": {"thread_id": str(uuid4())}})
+            socket.send_json({"id": "1", "method": "initialize", "params": {
+                "thread_id": session_id, "run_id": run_id,
+            }})
             socket.receive_json()
             for resume in [False, True]:
                 socket.send_json({"id": "2", "method": "stream", "params": {"input": "hello", "resume": resume}})

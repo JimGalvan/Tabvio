@@ -43,6 +43,7 @@ class Worker:
         self.runtime = None
         self.streaming = False
         self.run_id = None
+        self.session_id = None
 
     async def handle(self, method, params):
         if method == "initialize":
@@ -54,7 +55,8 @@ class Worker:
                 tuple(UUID(value) for value in params.get("credential_ids", [])),
                 WorkerCredentials(self.connection, asyncio.get_running_loop()),
             )
-            self.run_id = str(UUID(params["thread_id"]))
+            self.session_id = str(UUID(params["thread_id"]))
+            self.run_id = str(UUID(params.get("run_id", params["thread_id"])))
             return {"ready": True}
         if self.runtime is None:
             raise RuntimeError("The agent has not been initialized")
@@ -74,7 +76,9 @@ class Worker:
         if self.streaming:
             raise RuntimeError("The agent is already processing a task")
         self.streaming = True
-        token = context.attach(baggage.set_baggage("session.id", self.run_id))
+        trace_context = baggage.set_baggage("session.id", self.session_id)
+        trace_context = baggage.set_baggage("tabvio.run.id", self.run_id, context=trace_context)
+        token = context.attach(trace_context)
         try:
             agent_input = (
                 self.runtime.resume_input(params["input"])

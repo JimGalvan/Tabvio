@@ -174,12 +174,12 @@ def build_local_agent_runtime(
     )
 
 
-def build_agent_runtime(thread_id, user_id, credential_ids=(), credential_service=None, headless=True):
+def build_agent_runtime(thread_id, user_id, credential_ids=(), credential_service=None, headless=True, run_id=None):
     from tabvio.config import read_agentcore_runtime_arn
 
     runtime_arn = read_agentcore_runtime_arn()
     if runtime_arn:
         from tabvio.remote.runtime import RemoteAgentRuntime
 
-        return RemoteAgentRuntime(runtime_arn, thread_id, user_id, credential_ids, credential_service)
+        return RemoteAgentRuntime(runtime_arn, thread_id, user_id, credential_ids, credential_service, run_id=run_id)
     return build_local_agent_runtime(thread_id, user_id, credential_ids, credential_service, headless)
