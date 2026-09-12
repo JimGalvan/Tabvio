@@ -63,11 +63,13 @@ def configure_cloudwatch():
     region = read_aws_region_setting()
     resource = Resource({
         "service.name": "tabvio_agent",
+        "aws.local.service": "tabvio_agent",
         "cloud.provider": "aws",
         "cloud.region": region,
         "cloud.platform": "aws_bedrock_agentcore",
         "aws.service.type": "gen_ai_agent",
         "gen_ai.agent.id": os.environ["TABVIO_TELEMETRY_AGENT_ARN"],
+        "cloud.resource_id": os.environ["TABVIO_TELEMETRY_AGENT_ARN"],
         "aws.log.group.names": os.environ["TABVIO_TRACE_LOG_GROUP"],
     })
     exporter = OTLPAwsSpanExporter(
