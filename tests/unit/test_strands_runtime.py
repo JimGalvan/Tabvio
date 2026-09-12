@@ -82,6 +82,21 @@ class StrandsRuntimeStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(runtime.pending_interrupt_id)
         self.assertEqual(await runtime.final_output(), "All done")
 
+    async def test_narration_does_not_leak_into_the_final_output(self) -> None:
+        agent = ScriptedAgent(
+            [
+                {"data": "Let me open the page."},
+                {"data": "Good, I can see it."},
+                {"result": build_result("end_turn", text="The code is HOME-7F3.")},
+            ]
+        )
+        runtime = build_runtime(agent)
+
+        items = await collect(runtime, "read the page code")
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(await runtime.final_output(), "The code is HOME-7F3.")
+
     async def test_tool_events_reach_the_stream_in_order(self) -> None:
         channel = AgentEventChannel()
         agent = ScriptedAgent(

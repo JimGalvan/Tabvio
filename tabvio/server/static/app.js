@@ -962,8 +962,6 @@ function handleRunEvent(serverEvent) {
 
   if (eventType === "agent.message.delta") {
     streamedMessage += payload.text || "";
-    resultOutput.textContent = streamedMessage;
-    resultPanel.hidden = !streamedMessage;
     return;
   }
 
