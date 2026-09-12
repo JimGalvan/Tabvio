@@ -128,7 +128,11 @@ def deploy(image):
             "TABVIO_TRACE_LOG_GROUP": "/aws/bedrock-agentcore/tabvio/traces",
             "TABVIO_TELEMETRY_AGENT_ARN": existing["agentRuntimeArn"],
             "AWS_GENAI_CONTENT_EXTRACTION_OPT_OUT": "true",
-            "OTEL_SEMCONV_STABILITY_OPT_IN": "gen_ai_latest_experimental,gen_ai_unredacted_attributes=",
+            "OTEL_SEMCONV_STABILITY_OPT_IN": (
+                "gen_ai_latest_experimental,gen_ai_span_attributes_only,"
+                "gen_ai_unredacted_attributes=gen_ai.input.messages;gen_ai.output.messages;"
+                "gen_ai.tool.call.arguments;gen_ai.tool.call.result"
+            ),
         }
     time.sleep(10)
     if existing:
