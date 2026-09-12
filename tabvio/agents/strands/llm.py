@@ -17,8 +17,11 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env", override=T
 OPENAI_STRONG_MODEL = "gpt-5.6-luna"
 OPENAI_FAST_MODEL = "gpt-5-nano"
 
-# Cross-region inference profiles. Bedrock rejects the bare model ids.
-BEDROCK_STRONG_MODEL = "us.anthropic.claude-sonnet-5"
+# Cross-region inference profiles; Bedrock rejects the bare model ids. Sonnet 5
+# and the Opus models answer "not available for this account", so the strong
+# model is Sonnet 4.6. Every model needs the Anthropic use case form submitted
+# for the account before it will answer at all.
+BEDROCK_STRONG_MODEL = "us.anthropic.claude-sonnet-4-6"
 BEDROCK_FAST_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
