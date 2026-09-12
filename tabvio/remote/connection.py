@@ -1,5 +1,10 @@
 import asyncio
+import base64
+import json
 from uuid import uuid4
+
+MAX_MESSAGE_BYTES = 8 * 1024 * 1024
+CHUNK_BYTES = 16 * 1024
 
 
 class Connection:
@@ -13,8 +18,33 @@ class Connection:
         self.closed = False
 
     async def send(self, message):
+        payload = json.dumps(message).encode("utf-8")
+        if len(payload) > MAX_MESSAGE_BYTES:
+            raise ValueError("The agent message is too large")
         async with self._send_lock:
-            await self._send(message)
+            if len(payload) <= CHUNK_BYTES:
+                await self._send(message)
+                return
+            for offset in range(0, len(payload), CHUNK_BYTES):
+                chunk = payload[offset:offset + CHUNK_BYTES]
+                await self._send({
+                    "chunk": base64.b64encode(chunk).decode("ascii"),
+                    "final": offset + CHUNK_BYTES >= len(payload),
+                })
+                await asyncio.sleep(0.005)
+
+    async def receive(self):
+        message = await self._receive()
+        if "chunk" not in message:
+            return message
+        payload = bytearray()
+        while True:
+            payload.extend(base64.b64decode(message["chunk"], validate=True))
+            if len(payload) > MAX_MESSAGE_BYTES:
+                raise ConnectionError("The agent message is too large")
+            if message["final"]:
+                return json.loads(payload)
+            message = await self._receive()
 
     async def call(self, method, params=None, timeout=60):
         if self.closed:
@@ -32,7 +62,7 @@ class Connection:
     async def listen(self):
         try:
             while True:
-                message = await self._receive()
+                message = await self.receive()
                 if "method" in message:
                     if len(self._handlers) >= 32:
                         raise ConnectionError("Too many pending agent commands")
