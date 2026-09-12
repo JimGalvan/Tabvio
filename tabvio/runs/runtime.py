@@ -87,6 +87,7 @@ class StrandsAgentRuntime:
                 await pump
             else:
                 pump.cancel()
+                await asyncio.gather(pump, return_exceptions=True)
 
     async def final_output(self) -> str:
         if self._last_message is None:
@@ -144,7 +145,7 @@ def _build_remote_browser():
     )
 
 
-def build_agent_runtime(
+def build_local_agent_runtime(
         thread_id: UUID,
         user_id: UUID | None,
         credential_ids: tuple[UUID, ...] = (),
@@ -171,3 +172,14 @@ def build_agent_runtime(
     return StrandsAgentRuntime(
         agent, browser, agent_context, sensitive_inputs, channel
     )
+
+
+def build_agent_runtime(thread_id, user_id, credential_ids=(), credential_service=None, headless=True):
+    from tabvio.config import read_agentcore_runtime_arn
+
+    runtime_arn = read_agentcore_runtime_arn()
+    if runtime_arn:
+        from tabvio.remote.runtime import RemoteAgentRuntime
+
+        return RemoteAgentRuntime(runtime_arn, thread_id, user_id, credential_ids, credential_service)
+    return build_local_agent_runtime(thread_id, user_id, credential_ids, credential_service, headless)

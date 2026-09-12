@@ -22,6 +22,10 @@ class SensitiveInputChannel:
     def pending(self) -> PendingSensitiveInput | None:
         return self._pending
 
+    def replace_pending(self, pending: PendingSensitiveInput | None) -> None:
+        self._pending = pending
+        self._withdrawn_reason = None
+
     @property
     def is_withdrawn(self) -> bool:
         """The code box is gone, but the agent step is still parked on it."""

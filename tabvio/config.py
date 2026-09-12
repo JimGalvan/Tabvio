@@ -12,6 +12,10 @@ TRACE_DIRECTORY = PROJECT_DIRECTORY / "data" / "traces"
 CREDENTIAL_KEY_LENGTH_BYTES = 32
 
 
+def read_agentcore_runtime_arn() -> str:
+    return os.getenv("TABVIO_AGENTCORE_RUNTIME_ARN", "").strip()
+
+
 def read_headless_setting() -> bool:
     configured_value = os.getenv("TABVIO_HEADLESS", "true").strip().lower()
     return configured_value not in {"false", "0", "no"}
