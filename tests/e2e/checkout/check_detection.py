@@ -29,6 +29,7 @@ EXPECTED = {
     "braintree-fields.html": True,
     # Pages the agent must stay free to work on.
     "sdk-only.html": False,
+    "fraud-fingerprint.html": False,
     "login.html": False,
     "shipping.html": False,
     "cart.html": False,

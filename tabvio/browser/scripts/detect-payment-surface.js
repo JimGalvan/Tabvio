@@ -31,6 +31,8 @@
         ['Adyen', /^adyen-checkout/],
     ];
 
+    const MINIMUM_RENDERED_PIXELS = 16;
+
     const signals = [];
     const seen = new Set();
 
@@ -74,8 +76,29 @@
         }
     }
 
+    function isVisiblyRendered(element) {
+        const rect = element.getBoundingClientRect();
+        const tooSmallToTypeInto =
+            rect.width < MINIMUM_RENDERED_PIXELS ||
+            rect.height < MINIMUM_RENDERED_PIXELS;
+        if (tooSmallToTypeInto) {
+            return false;
+        }
+
+        const style = window.getComputedStyle(element);
+        return (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0'
+        );
+    }
+
     const iframes = document.querySelectorAll('iframe');
     for (const iframe of iframes) {
+        if (!isVisiblyRendered(iframe)) {
+            continue;
+        }
+
         const iframeSourceUrl = iframe.getAttribute('src');
         const paymentProvider = getPaymentProviderFromSource(iframeSourceUrl);
         if (paymentProvider) {
