@@ -4,18 +4,12 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from langgraph.types import Command
-
-from tabvio.agents.langchain.browser_agent.browser_agent import build_browser_agent
-from tabvio.agents.strands.browser_agent.browser_agent import (
-    build_browser_agent as build_strands_browser_agent,
-)
+from tabvio.agents.strands.browser_agent.browser_agent import build_browser_agent
 from tabvio.agents.strands.browser_agent.context import AgentContext
 from tabvio.agents.strands.shared.events import AgentEventChannel
 from tabvio.browser.session import BrowserSession
 from tabvio.config import (
     TRACE_DIRECTORY,
-    read_agent_engine_setting,
     read_agentcore_browser_identifier,
     read_agentcore_session_timeout_seconds,
     read_aws_region_setting,
@@ -28,9 +22,6 @@ from tabvio.runs import constants
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
-
-# Both runtimes turn their engine's stream into these items, so the run manager
-# never sees a framework type: custom, message, interrupt.
 
 
 def extract_text(content: Any) -> str:
@@ -46,87 +37,6 @@ def extract_text(content: Any) -> str:
         elif isinstance(block, dict) and isinstance(block.get("text"), str):
             parts.append(block["text"])
     return "".join(parts)
-
-
-class LangChainAgentRuntime:
-    def __init__(self, agent, browser, context, sensitive_inputs, thread_id):
-        self.agent = agent
-        self.browser = browser
-        self.context = context
-        self.sensitive_inputs = sensitive_inputs
-        self.config = {"configurable": {"thread_id": str(thread_id)}}
-
-    def start_input(self, task: str) -> Any:
-        return {"messages": [{"role": "user", "content": task}]}
-
-    def resume_input(self, value: Any) -> Any:
-        return Command(resume=value)
-
-    async def stream(self, agent_input: Any):
-        stream = self.agent.astream(
-            agent_input,
-            config=self.config,
-            stream_mode=["messages", "custom", "updates"],
-            version="v2",
-            context=self.context,
-        )
-        async for part in stream:
-            item = self._normalize(part)
-            if item is not None:
-                yield item
-
-    async def final_output(self) -> str:
-        try:
-            state = await self.agent.aget_state(self.config)
-            messages = state.values.get("messages", [])
-            if messages:
-                return extract_text(messages[-1].content)
-        except Exception:
-            pass
-        return ""
-
-    def _normalize(self, part: dict[str, Any]) -> dict[str, Any] | None:
-        stream_type = part.get("type")
-        data = part.get("data")
-
-        if stream_type == "custom" and isinstance(data, dict):
-            return {
-                "kind": "custom",
-                "event_type": data.get("event_type"),
-                "payload": data.get("payload", {}),
-            }
-
-        if stream_type == "messages":
-            text = self._message_text(data)
-            if text:
-                return {"kind": "message", "text": text}
-            return None
-
-        if stream_type == "updates" and self._contains_interrupt(data):
-            return {"kind": "interrupt"}
-        return None
-
-    def _message_text(self, data: Any) -> str:
-        if not isinstance(data, (tuple, list)) or not data:
-            return ""
-        message = data[0]
-        if getattr(message, "type", None) not in {"ai", "assistant", "AIMessageChunk"}:
-            return ""
-        return extract_text(getattr(message, "content", ""))
-
-    def _contains_interrupt(self, value: Any) -> bool:
-        if isinstance(value, dict):
-            if "__interrupt__" in value:
-                return True
-            for nested in value.values():
-                if self._contains_interrupt(nested):
-                    return True
-
-        if isinstance(value, (list, tuple)):
-            for nested in value:
-                if self._contains_interrupt(nested):
-                    return True
-        return False
 
 
 class StrandsAgentRuntime:
@@ -250,24 +160,14 @@ def build_agent_runtime(
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
     sensitive_inputs = SensitiveInputChannel()
 
-    if read_agent_engine_setting() == "strands":
-        channel = AgentEventChannel()
-        agent = build_strands_browser_agent(
-            browser,
-            channel,
-            agent_context,
-            sensitive_inputs,
-            credential_service=credential_service,
-        )
-        return StrandsAgentRuntime(
-            agent, browser, agent_context, sensitive_inputs, channel
-        )
-
+    channel = AgentEventChannel()
     agent = build_browser_agent(
         browser,
+        channel,
+        agent_context,
         sensitive_inputs,
         credential_service=credential_service,
     )
-    return LangChainAgentRuntime(
-        agent, browser, agent_context, sensitive_inputs, thread_id
+    return StrandsAgentRuntime(
+        agent, browser, agent_context, sensitive_inputs, channel
     )

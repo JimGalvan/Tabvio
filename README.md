@@ -19,18 +19,14 @@ flowchart TB
     subgraph app["FastAPI application"]
         routes["Routes<br/>SSE, MJPEG, WebSocket"]
         manager["RunManager"]
-        runtime{{"Agent runtime<br/>TABVIO_AGENT_ENGINE"}}
+        runtime{{"Agent runtime"}}
     end
 
-    subgraph engines["Agent engines"]
-        strands["Strands engine"]
-        langchain["LangChain engine"]
-    end
-
+    agent["Strands agent<br/>browser tools, page-navigator"]
     playwright["Playwright browser session"]
 
     subgraph aws["AWS"]
-        bedrock["Bedrock<br/>Sonnet 5 and Haiku 4.5"]
+        bedrock["Bedrock<br/>Claude Haiku 4.5"]
         agentcore["AgentCore Browser"]
     end
 
@@ -40,27 +36,26 @@ flowchart TB
     routes --> manager
     manager --> runtime
     manager --> store
-    runtime --> strands
-    runtime -.-> langchain
-    strands --> bedrock
-    strands --> playwright
-    langchain --> playwright
+    runtime --> agent
+    agent --> bedrock
+    agent --> playwright
     playwright -->|"CDP"| agentcore
     manager -->|"live frames and pauses"| routes
     routes -->|"watch, answer, take control"| person
 ```
 
-The run manager never sees a framework type. Each engine turns its own stream
-into `custom`, `message`, and `interrupt` items, so the dashboard, the live
-view, the takeover socket, and the credential vault are the same code on both.
+The run manager never sees a framework type. The runtime turns the agent stream
+into `custom`, `message`, and `interrupt` items, and the dashboard, the live
+view, the takeover socket, and the credential vault all work from those.
 
 **Where the interesting parts live**
 
 | Concern | Path |
 | --- | --- |
-| Strands agent, tools, models | `tabvio/agents/strands/` |
-| LangChain agent, tools | `tabvio/agents/browser_agent/` |
-| Engine seam | `tabvio/runs/runtime.py` |
+| Browser agent, tools, step plan | `tabvio/agents/strands/browser_agent/` |
+| Page-navigator subagent | `tabvio/agents/strands/page_navigator/` |
+| Models, events, telemetry | `tabvio/agents/strands/shared/` |
+| Agent runtime and event normalising | `tabvio/runs/runtime.py` |
 | Run lifecycle and events | `tabvio/runs/service.py` |
 | Browser, scanning, payment detection | `tabvio/browser/` |
 | Managed browser over CDP | `tabvio/browser/agentcore.py` |
@@ -88,17 +83,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-## Agent engine
+## Models and browser
 
-Tabvio runs on either of two agent frameworks, chosen by `TABVIO_AGENT_ENGINE`.
-Both drive the same browser, credential vault, and takeover flow.
-
-| Value | Stack |
-| --- | --- |
-| `strands` | AWS Strands SDK, Bedrock models, AgentCore Browser |
-| `langchain` | LangGraph and deepagents, the original build |
-
-On the Strands engine, `TABVIO_MODEL_PROVIDER` picks Bedrock or OpenAI. Bedrock
+`TABVIO_MODEL_PROVIDER` picks Bedrock or OpenAI. Bedrock
 needs AWS credentials on the machine and both models enabled in `AWS_REGION`.
 Model ids must be cross-region inference profiles rather than bare ids; list
 what your account can reach with:

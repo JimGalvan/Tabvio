@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from tabvio.agents.strands.shared.events import AgentEventChannel
-from tabvio.runs.runtime import StrandsAgentRuntime
+from tabvio.runs.runtime import StrandsAgentRuntime, extract_text
 
 
 def build_result(stop_reason, interrupts=None, text=""):
@@ -157,6 +157,25 @@ class StrandsRuntimeResumeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "not waiting"):
             runtime.resume_input("go on")
+
+
+class ExtractTextTests(unittest.TestCase):
+    def test_plain_text_is_returned_as_is(self) -> None:
+        self.assertEqual(extract_text("Task complete"), "Task complete")
+
+    def test_text_blocks_are_joined(self) -> None:
+        content = [{"text": "Page code is "}, {"text": "HOME-7F3"}]
+
+        self.assertEqual(extract_text(content), "Page code is HOME-7F3")
+
+    def test_blocks_without_text_are_skipped(self) -> None:
+        content = [{"toolUse": {"name": "observe_page"}}, {"text": "done"}]
+
+        self.assertEqual(extract_text(content), "done")
+
+    def test_anything_else_is_empty(self) -> None:
+        self.assertEqual(extract_text(None), "")
+        self.assertEqual(extract_text({"text": "not a list"}), "")
 
 
 if __name__ == "__main__":

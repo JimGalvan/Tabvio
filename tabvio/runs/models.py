@@ -18,7 +18,7 @@ from tabvio.browser.constants import (
 from tabvio.clock import utc_now
 
 if TYPE_CHECKING:
-    from tabvio.runs.runtime import LangChainAgentRuntime, StrandsAgentRuntime
+    from tabvio.runs.runtime import StrandsAgentRuntime
 
 
 class RunStatus(StrEnum):
@@ -68,7 +68,7 @@ class RunEvent(BaseModel):
 @dataclass
 class RunContext:
     run: RunRecord
-    runtime: LangChainAgentRuntime | StrandsAgentRuntime
+    runtime: StrandsAgentRuntime
     events: list[RunEvent] = field(default_factory=list)
     event_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     frame_condition: asyncio.Condition = field(default_factory=asyncio.Condition)

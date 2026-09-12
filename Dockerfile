@@ -30,7 +30,6 @@ RUN mkdir -p /app/data
 EXPOSE 8000
 
 ENV TABVIO_HEADLESS=false \
-    TABVIO_BROWSER_CHANNEL=chrome \
-    TABVIO_AGENT_ENGINE=strands
+    TABVIO_BROWSER_CHANNEL=chrome
 
 CMD ["sh", "-c", "xvfb-run -a --server-args='-screen 0 1365x768x24' uvicorn tabvio.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -27,13 +27,6 @@ def read_browser_trace_setting() -> bool:
     return configured_value in {"true", "1", "yes"}
 
 
-def read_agent_engine_setting() -> str:
-    configured_value = os.getenv("TABVIO_AGENT_ENGINE", "langchain").strip().lower()
-    if configured_value not in {"langchain", "strands"}:
-        raise RuntimeError("TABVIO_AGENT_ENGINE must be langchain or strands")
-    return configured_value
-
-
 def read_model_provider_setting() -> str:
     configured_value = os.getenv("TABVIO_MODEL_PROVIDER", "openai").strip().lower()
     if configured_value not in {"openai", "bedrock"}:
