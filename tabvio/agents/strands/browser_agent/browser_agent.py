@@ -2,18 +2,18 @@ from pathlib import Path
 
 from strands import Agent, AgentSkills
 
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.browser_agent.prompts import SYSTEM_PROMPT
-from tabvio.agents.strands.events import AgentEventChannel
-from tabvio.agents.strands.llm import build_strong_model
-from tabvio.agents.strands.page_navigator import build_page_navigator
-from tabvio.agents.strands.telemetry import configure_telemetry
-from tabvio.agents.strands.tools import build_browser_tools
+from tabvio.agents.strands.browser_agent.context import AgentContext
+from tabvio.agents.strands.browser_agent.prompts import SYSTEM_PROMPT
+from tabvio.agents.strands.browser_agent.tools import build_browser_tools
+from tabvio.agents.strands.page_navigator.page_navigator import build_page_navigator
+from tabvio.agents.strands.shared.events import AgentEventChannel
+from tabvio.agents.strands.shared.llm import build_strong_model
+from tabvio.agents.strands.shared.telemetry import configure_telemetry
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 
-SKILLS_PATH = Path(__file__).resolve().parents[1] / "browser_agent" / "skills"
+SKILLS_PATH = Path(__file__).resolve().parent / "skills"
 
 
 def build_browser_agent(

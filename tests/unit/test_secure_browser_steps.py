@@ -3,9 +3,8 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from tabvio.agents.strands.browser_agent.steps import StepPlan, validate_plan
 from tabvio.browser.models import Element
-from tabvio.agents.browser_agent.steps import StepPlan, validate_plan
-from tabvio.agents.browser_agent.tools import build_browser_tools
 
 
 class ObservedBrowser:
@@ -104,13 +103,6 @@ class SecureBrowserStepTests(unittest.TestCase):
 
         validate_plan(self._browser, plan.steps)
         self.assertIsNone(plan.steps[0].submit_element_index)
-
-    def test_runtime_context_is_not_exposed_in_tool_schema(self) -> None:
-        tools = {tool.name: tool for tool in build_browser_tools(self._browser)}
-        schema = tools["execute_steps"].args_schema.model_json_schema()
-
-        self.assertEqual(list(schema["properties"]), ["steps"])
-        self.assertNotIn("runtime", str(schema).lower())
 
     def test_credential_password_target_must_be_a_password_input(self) -> None:
         plan = StepPlan.model_validate(

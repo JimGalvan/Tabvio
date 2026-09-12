@@ -1,25 +1,21 @@
-from pathlib import Path
-
+from botocore.config import Config as BotocoreConfig
 from dotenv import load_dotenv
 from strands.models import BedrockModel
 from strands.models.bedrock import CacheConfig
 from strands.models.openai import OpenAIModel
 
 from tabvio.config import (
+    PROJECT_DIRECTORY,
     read_aws_region_setting,
     read_fast_model_setting,
     read_model_provider_setting,
     read_strong_model_setting,
 )
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env", override=True)
+load_dotenv(dotenv_path=PROJECT_DIRECTORY / ".env", override=True)
 
 OPENAI_STRONG_MODEL = "gpt-5.6-luna"
 OPENAI_FAST_MODEL = "gpt-5-nano"
-
-# Cross-region inference profiles; Bedrock rejects the bare model ids. Haiku
-# drives both roles, so a run costs the same whichever agent is thinking.
-# Override TABVIO_STRONG_MODEL to give the browser agent something larger.
 BEDROCK_STRONG_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 BEDROCK_FAST_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
@@ -43,13 +39,18 @@ def build_fast_model():
 
 
 def _build_bedrock_model(model_id: str) -> BedrockModel:
-    # The observe-decide-act loop resends the system prompt and every tool schema
-    # each turn, so caching saves more than the model tier does. strict_tools stays
-    # off because the browser step plan is a discriminated union and Bedrock's
-    # strict mode rejects the oneOf schema that produces.
     return BedrockModel(
         model_id=model_id,
         region_name=read_aws_region_setting(),
         cache_config=CacheConfig(strategy="auto"),
         strict_tools=False,
+        boto_client_config=_bedrock_client_config(),
+    )
+
+
+def _bedrock_client_config() -> BotocoreConfig:
+    return BotocoreConfig(
+        connect_timeout=10,
+        read_timeout=60,
+        retries={"max_attempts": 3, "mode": "standard"},
     )

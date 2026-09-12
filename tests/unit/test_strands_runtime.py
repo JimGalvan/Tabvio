@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from tabvio.agents.strands.events import AgentEventChannel
+from tabvio.agents.strands.shared.events import AgentEventChannel
 from tabvio.runs.runtime import StrandsAgentRuntime
 
 

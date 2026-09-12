@@ -2,9 +2,12 @@ import json
 import unittest
 from uuid import uuid4
 
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.strands.events import AgentEventChannel
-from tabvio.agents.strands.tools import STEP_PLAN_SCHEMA, build_browser_tools
+from tabvio.agents.strands.browser_agent.context import AgentContext
+from tabvio.agents.strands.browser_agent.tools import (
+    STEP_PLAN_SCHEMA,
+    build_browser_tools,
+)
+from tabvio.agents.strands.shared.events import AgentEventChannel
 from tabvio.browser.constants import PAYMENT_HANDOFF_SIGNAL_KINDS
 from tabvio.browser.models import Element, PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult

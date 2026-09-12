@@ -113,8 +113,6 @@ class BrowserSession:
         )
 
     async def _open_context(self) -> BrowserContext:
-        # A browser reached over CDP already has one, and its viewport was fixed
-        # when the remote session started.
         if self._browser.contexts:
             return self._browser.contexts[0]
         return await self._browser.new_context(

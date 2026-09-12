@@ -1,11 +1,9 @@
-from langchain_core.tools import BaseTool, tool
+from strands import tool
 
 from tabvio.browser.session import BrowserSession
 
 
-def build_page_navigator_tools(browser_session: BrowserSession) -> list[BaseTool]:
-    """Build the tools for the page-navigator subagent."""
-
+def build_page_navigator_tools(browser_session: BrowserSession) -> list:
     @tool
     async def get_text_in_viewport() -> str:
         """Return text visible in the current browser viewport."""

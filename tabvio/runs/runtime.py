@@ -6,12 +6,12 @@ from uuid import UUID
 
 from langgraph.types import Command
 
-from tabvio.agents.browser_agent.browser_agent import build_browser_agent
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.strands.browser_agent import (
+from tabvio.agents.langchain.browser_agent.browser_agent import build_browser_agent
+from tabvio.agents.strands.browser_agent.browser_agent import (
     build_browser_agent as build_strands_browser_agent,
 )
-from tabvio.agents.strands.events import AgentEventChannel
+from tabvio.agents.strands.browser_agent.context import AgentContext
+from tabvio.agents.strands.shared.events import AgentEventChannel
 from tabvio.browser.session import BrowserSession
 from tabvio.config import (
     TRACE_DIRECTORY,

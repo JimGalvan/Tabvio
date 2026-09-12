@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
-from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.agents.langchain.browser_agent.tools import build_browser_tools
 from tabvio.browser.models import PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 
@@ -35,7 +35,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
                 loader = SimpleNamespace(ainvoke=AsyncMock(return_value={
                     "messages": [SimpleNamespace(content="true")],
                 }))
-                with patch("tabvio.agents.browser_agent.tools.build_page_loader_detector_subagent", return_value=loader), patch("tabvio.agents.browser_agent.tools.time.sleep"):
+                with patch("tabvio.agents.langchain.browser_agent.tools.build_page_loader_detector_subagent", return_value=loader), patch("tabvio.agents.langchain.browser_agent.tools.time.sleep"):
                     tool = {t.name: t for t in build_browser_tools(browser)}[name]
 
                     async def observe(state):

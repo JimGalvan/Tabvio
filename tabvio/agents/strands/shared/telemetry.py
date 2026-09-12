@@ -2,9 +2,6 @@ import logging
 import os
 
 logger = logging.getLogger(__name__)
-
-# Set once per process. Strands registers a global tracer provider, so calling
-# the setup twice would replace a working one.
 _telemetry_configured = False
 
 

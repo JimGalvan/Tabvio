@@ -5,8 +5,9 @@ from pydantic import ValidationError
 from strands import tool
 from strands.types.tools import ToolContext
 
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.browser_agent.steps import (
+from tabvio.agents.strands.browser_agent.context import AgentContext
+from tabvio.agents.strands.browser_agent.schema import inline_references
+from tabvio.agents.strands.browser_agent.steps import (
     BrowserStep,
     ClickStep,
     CredentialFillStep,
@@ -19,12 +20,11 @@ from tabvio.agents.browser_agent.steps import (
     step_reference,
     validate_plan,
 )
-from tabvio.agents.shared.verification import (
+from tabvio.agents.strands.shared.events import AgentEventChannel
+from tabvio.agents.strands.shared.verification import (
     describe_entered_code,
     explain_missing_code,
 )
-from tabvio.agents.strands.events import AgentEventChannel
-from tabvio.agents.strands.schema import inline_references
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 from tabvio.runs.sensitive_input import SensitiveInputChannel
@@ -42,9 +42,6 @@ def build_browser_tools(
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
     acknowledged_payment_surface: str | None = None
     pending_payment_observation = None
-
-    # Strands runs tools called in the same turn concurrently, and there is only
-    # one page. Tools take this on entry; the helpers below assume they hold it.
     browser_lock = asyncio.Lock()
 
     @tool(context=True)
