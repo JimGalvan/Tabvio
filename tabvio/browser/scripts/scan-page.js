@@ -348,6 +348,10 @@
     }
 
     function getRenderedText(element) {
+        const documentHasNoBody = !element;
+        if (documentHasNoBody) {
+            return '';
+        }
         return collapseWhitespace(element.innerText);
     }
 
