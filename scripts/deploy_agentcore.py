@@ -104,6 +104,7 @@ def deploy(image):
         allow(["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"],
               f"arn:aws:logs:{REGION}:{account}:log-group:/aws/bedrock-agentcore/runtimes/{NAME}*"),
         allow(["logs:DescribeLogGroups"], f"arn:aws:logs:{REGION}:{account}:log-group:*"),
+        allow(["xray:PutTraceSegments"], "*"),
         allow(["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"], [
             f"arn:aws:bedrock:{REGION}:{account}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
             "arn:aws:bedrock:us-*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -120,6 +121,15 @@ def deploy(image):
                   lifecycleConfiguration={"idleRuntimeSessionTimeout": 300, "maxLifetime": 1800})
     runtimes = client.list_agent_runtimes()["agentRuntimes"]
     existing = next((item for item in runtimes if item["agentRuntimeName"] == NAME), None)
+    if existing:
+        current = client.get_agent_runtime(agentRuntimeId=existing["agentRuntimeId"])
+        config["environmentVariables"] = {
+            **current.get("environmentVariables", {}),
+            "TABVIO_TRACE_LOG_GROUP": "/aws/bedrock-agentcore/tabvio/traces",
+            "TABVIO_TELEMETRY_AGENT_ARN": existing["agentRuntimeArn"],
+            "AWS_GENAI_CONTENT_EXTRACTION_OPT_OUT": "true",
+            "OTEL_SEMCONV_STABILITY_OPT_IN": "gen_ai_latest_experimental,gen_ai_unredacted_attributes=",
+        }
     time.sleep(10)
     if existing:
         result = client.update_agent_runtime(agentRuntimeId=existing["agentRuntimeId"], **config)
