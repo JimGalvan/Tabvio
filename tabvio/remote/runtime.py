@@ -12,6 +12,7 @@ from tabvio.config import read_aws_region_setting
 from tabvio.remote.connection import Connection
 from tabvio.runs.sensitive_input import PendingSensitiveInput, SensitiveInputChannel
 
+
 class RemoteBrowser:
     def __init__(self, runtime):
         self.runtime = runtime
