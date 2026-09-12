@@ -149,7 +149,7 @@ class BrowserSession:
         self._elements = []
 
     async def _wait_for_page_to_load(self) -> None:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.50)
         try:
             await self._page.wait_for_load_state("domcontentloaded", timeout=3_500)
         except PlaywrightTimeoutError:

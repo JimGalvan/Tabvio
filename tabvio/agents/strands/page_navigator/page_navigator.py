@@ -15,5 +15,9 @@ def build_page_navigator(browser: BrowserSession):
     )
     return navigator.as_tool(
         name="page-navigator",
-        description="Locate an off-screen target from a JSON keywords list.",
+        description=(
+            "Locate an off-screen target by reading viewport text for meaning and context. "
+            "Provide a natural-language description of the target and its identifying details. "
+            "Returns whether it was found, supporting text, and the reason for stopping."
+        ),
     )
