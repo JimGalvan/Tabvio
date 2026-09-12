@@ -76,7 +76,7 @@ def configure():
                             "query": f"SOURCE '{TRACE_GROUP}' | {query}"}}
             for index, (title, query) in enumerate([
                 ("Recent agent turns — Run matches the Tabvio run ID", RUN_QUERY),
-                ("Model and tool steps — prompts and page contents are excluded", STEP_QUERY),
+                ("Model and tool steps — obvious secrets are redacted", STEP_QUERY),
             ])
         ],
     }))
