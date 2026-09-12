@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import logging
 from contextlib import suppress
 from uuid import UUID
 
@@ -12,9 +11,6 @@ from websockets.asyncio.client import connect
 from tabvio.config import read_aws_region_setting
 from tabvio.remote.connection import Connection
 from tabvio.runs.sensitive_input import PendingSensitiveInput, SensitiveInputChannel
-
-logger = logging.getLogger(__name__)
-
 
 class RemoteBrowser:
     def __init__(self, runtime):
@@ -167,7 +163,7 @@ class RemoteAgentRuntime:
 
     async def close(self):
         async with self._close_lock:
-            if self._closed:
+            if self._closed and not self._attempted:
                 return
             self._closed = True
             self.ready = False
@@ -176,13 +172,16 @@ class RemoteAgentRuntime:
                     with suppress(Exception):
                         await self.connection.call("close", timeout=20)
             finally:
-                if self._socket:
-                    await self._socket.close()
-                if self._listener:
-                    self._listener.cancel()
-                    await asyncio.gather(self._listener, return_exceptions=True)
-                if self._attempted:
-                    await asyncio.to_thread(self._stop_session)
+                try:
+                    if self._socket:
+                        await self._socket.close()
+                finally:
+                    if self._listener:
+                        self._listener.cancel()
+                        await asyncio.gather(self._listener, return_exceptions=True)
+                    if self._attempted:
+                        await asyncio.to_thread(self._stop_session)
+                        self._attempted = False
 
     def _stop_session(self):
         client = boto3.client("bedrock-agentcore", region_name=read_aws_region_setting())

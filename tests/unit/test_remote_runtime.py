@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -46,5 +46,29 @@ def test_sensitive_input_state_arrives_before_the_ui_event():
         })
         assert runtime.sensitive_inputs.require(request_id).element_index == 3
         assert await runtime._events.get() == event
+
+    asyncio.run(check())
+
+
+def test_runtime_is_stopped_even_when_socket_close_fails():
+    runtime = RemoteAgentRuntime("arn", uuid4(), uuid4(), (), None)
+    runtime._attempted = True
+    runtime._socket = SimpleNamespace(close=AsyncMock(side_effect=ConnectionError("disconnected")))
+    runtime._stop_session = Mock()
+    with pytest.raises(ConnectionError):
+        asyncio.run(runtime.close())
+    runtime._stop_session.assert_called_once()
+
+
+def test_failed_runtime_stop_can_be_retried():
+    runtime = RemoteAgentRuntime("arn", uuid4(), uuid4(), (), None)
+    runtime._attempted = True
+    runtime._stop_session = Mock(side_effect=[ConnectionError("unavailable"), None])
+
+    async def check():
+        with pytest.raises(ConnectionError):
+            await runtime.close()
+        await runtime.close()
+        assert runtime._stop_session.call_count == 2
 
     asyncio.run(check())
