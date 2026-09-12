@@ -15,6 +15,7 @@ from playwright.async_api import (
 from playwright.async_api import Frame as PlaywrightFrame
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from tabvio.browser.browser_utils import evaluate_with_timeout
 from tabvio.browser.constants import (
     BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
@@ -280,7 +281,9 @@ class BrowserSession:
                     "domcontentloaded", timeout=LOAD_TIMEOUT_MS
                 )
                 await active_iframe.wait_for_load_state("load", timeout=LOAD_TIMEOUT_MS)
-                return await active_iframe.evaluate(self._get_script("scan-page.js"))
+                return await evaluate_with_timeout(
+                    active_iframe, self._get_script("scan-page.js")
+                )
             except Exception as exception:
                 if attempt == final_attempt:
                     raise
@@ -292,7 +295,9 @@ class BrowserSession:
 
     async def _capture_page_snapshot(self, page):
         try:
-            text = await page.evaluate(self._get_script("capture-page-snapshot.js"))
+            text = await evaluate_with_timeout(
+                page, self._get_script("capture-page-snapshot.js")
+            )
         except Exception:
             return Counter()
         return Counter(line.strip() for line in text.splitlines() if line.strip())
@@ -329,12 +334,13 @@ class BrowserSession:
         return None
 
     async def get_text_in_viewport(self) -> str:
-        return await self._active_frame().evaluate(
-            self._get_script("get-text-in-viewport.js")
+        return await evaluate_with_timeout(
+            self._active_frame(), self._get_script("get-text-in-viewport.js")
         )
 
     async def scroll(self, amount: float) -> str:
-        position = await self._active_frame().evaluate(
+        position = await evaluate_with_timeout(
+            self._active_frame(),
             self._get_script("scroll-by-pages.js"),
             amount,
         )
@@ -354,8 +360,9 @@ class BrowserSession:
         if bounding_box is None:
             raise RuntimeError("The selected frame is not visible")
 
-        border = await frame_element.evaluate(
-            "element => ({horizontal: element.clientLeft, vertical: element.clientTop})"
+        border = await evaluate_with_timeout(
+            frame_element,
+            "element => ({horizontal: element.clientLeft, vertical: element.clientTop})",
         )
         return (
             bounding_box["x"] + border["horizontal"] + horizontal,
@@ -393,7 +400,8 @@ class BrowserSession:
         element = self.get_stored_element(element_index)
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
-        await self._active_frame().evaluate(
+        await evaluate_with_timeout(
+            self._active_frame(),
             self._get_script("mask-sensitive-field.js"),
             {"x": element.cx, "y": element.cy},
         )
