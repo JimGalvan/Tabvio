@@ -507,10 +507,13 @@ class BrowserSession:
             self._context = None
 
         if self._browser is not None:
-            await self._browser.close()
-            self._browser = None
-
-        if self._remote_browser is not None:
+            try:
+                await self._browser.close()
+            finally:
+                self._browser = None
+                if self._remote_browser is not None:
+                    await self._remote_browser.close()
+        elif self._remote_browser is not None:
             await self._remote_browser.close()
 
         if self._playwright is not None:
