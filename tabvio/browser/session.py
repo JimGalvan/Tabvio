@@ -22,6 +22,7 @@ from tabvio.browser.constants import (
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
     OBSERVE_BUDGET_SECONDS,
+    SCAN_BUDGET_SECONDS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
@@ -273,6 +274,15 @@ class BrowserSession:
         return self._iframe
 
     async def _scan_page(self) -> str:
+        try:
+            async with asyncio.timeout(SCAN_BUDGET_SECONDS):
+                return await self._scan_until_the_page_settles()
+        except TimeoutError:
+            raise TimeoutError(
+                f"The page could not be scanned within {SCAN_BUDGET_SECONDS} seconds"
+            ) from None
+
+    async def _scan_until_the_page_settles(self) -> str:
         """Scan the page, following it if it navigates mid-scan."""
         final_attempt = OBSERVE_ATTEMPTS - 1
         for attempt in range(OBSERVE_ATTEMPTS):
