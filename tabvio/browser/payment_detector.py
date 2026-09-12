@@ -4,6 +4,7 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
+from tabvio.browser.browser_utils import evaluate_with_timeout
 from tabvio.browser.models import PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 
@@ -32,7 +33,7 @@ class PaymentDetector:
 
         for frame in list(page.frames):
             try:
-                result = json.loads(await frame.evaluate(script))
+                result = json.loads(await evaluate_with_timeout(frame, script))
             except Exception as exception:
                 logger.debug(
                     "Payment detection skipped frame %s: %s", frame.url, exception

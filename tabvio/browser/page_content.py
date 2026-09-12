@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 from playwright.async_api import Page
 
-from tabvio.browser.browser_utils import BrowserUtils
+from tabvio.browser.browser_utils import BrowserUtils, evaluate_with_timeout
 
 WHITESPACE = re.compile(r"\s+")
 
@@ -112,7 +112,9 @@ async def get_frame_texts(page: Page) -> Dict[int, str]:
     for index, iframe in enumerate(page.frames):
         if iframe.is_detached():
             continue
-        page_text = json.loads(await iframe.evaluate(scan_script))['pageText']
+        page_text = json.loads(
+            await evaluate_with_timeout(iframe, scan_script)
+        )['pageText']
         frames[index] = page_text
     return frames
 
