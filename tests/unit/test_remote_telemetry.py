@@ -7,7 +7,7 @@ from opentelemetry.trace import Status, StatusCode
 from tabvio.remote.telemetry import MetadataExporter, RunCorrelation
 
 
-def test_traces_keep_run_steps_without_sensitive_payloads():
+def test_traces_keep_inputs_and_outputs_with_secrets_redacted():
     destination = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(RunCorrelation())
@@ -18,12 +18,13 @@ def test_traces_keep_run_steps_without_sensitive_payloads():
     token = context.attach(trace_context)
     try:
         with tracer.start_as_current_span("invoke_agent Tabvio") as root:
-            root.set_attribute("gen_ai.input.messages", "private prompt")
+            root.set_attribute("gen_ai.input.messages", "Open https://example.com")
+            root.set_attribute("gen_ai.output.messages", "The page is ready")
             with tracer.start_as_current_span("execute_tool fill_sensitive") as tool:
                 tool.set_attributes({
                     "gen_ai.tool.name": "fill_sensitive",
-                    "gen_ai.tool.call.arguments": "private password",
-                    "gen_ai.tool.call.result": "private page",
+                    "gen_ai.tool.call.arguments": '{"url":"https://example.com","password":"secret-value"}',
+                    "gen_ai.tool.call.result": "Page ready; bearer hidden-token",
                     "gen_ai.usage.input_tokens": 42,
                 })
                 tool.add_event("input", {"value": "private code"})
@@ -39,7 +40,13 @@ def test_traces_keep_run_steps_without_sensitive_payloads():
             assert span.attributes["session.id"] == "test-session"
             assert span.attributes["tabvio.run.id"] == "test-run"
             assert not span.events
-            assert "private" not in span.to_json()
+        root_span = spans[1]
+        tool_span = spans[0]
+        assert root_span.attributes["gen_ai.input.messages"] == "Open https://example.com"
+        assert root_span.attributes["gen_ai.output.messages"] == "The page is ready"
+        assert "https://example.com" in tool_span.attributes["gen_ai.tool.call.arguments"]
+        assert "secret-value" not in tool_span.attributes["gen_ai.tool.call.arguments"]
+        assert "hidden-token" not in tool_span.attributes["gen_ai.tool.call.result"]
     finally:
         context.detach(token)
         provider.shutdown()

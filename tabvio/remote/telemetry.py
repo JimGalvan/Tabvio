@@ -1,4 +1,6 @@
+import json
 import os
+import re
 
 from botocore.session import Session
 from opentelemetry import baggage
@@ -16,12 +18,59 @@ SAFE_ATTRIBUTES = {
     "gen_ai.tool.name", "gen_ai.tool.call.id", "gen_ai.tool.status",
 }
 SAFE_PREFIXES = ("gen_ai.usage.", "gen_ai.server.")
+DETAIL_ATTRIBUTES = {
+    "gen_ai.input.messages", "gen_ai.output.messages",
+    "gen_ai.tool.call.arguments", "gen_ai.tool.call.result",
+}
+SENSITIVE_KEYS = {
+    "password", "passcode", "token", "secret", "authorization", "cookie",
+    "api_key", "apikey", "access_key", "secret_key", "mfa_code",
+}
+SENSITIVE_TEXT = re.compile(
+    r"(?i)\b(password|passcode|token|secret|authorization|api[ _-]?key|mfa[ _-]?code)"
+    r"\s*(?:is|=|:)\s*(?:bearer\s+)?[^\s,;]+"
+)
+BEARER_TOKEN = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]+")
+JWT_TOKEN = re.compile(r"\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b")
+AWS_ACCESS_KEY = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
+
+
+def redact_details(value):
+    if not isinstance(value, str):
+        return value
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return redact_text(value)
+    return json.dumps(redact_data(parsed), ensure_ascii=False)
+
+
+def redact_data(value):
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if key.lower() in SENSITIVE_KEYS else redact_data(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_data(item) for item in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+
+
+def redact_text(value):
+    value = SENSITIVE_TEXT.sub(lambda match: f"{match.group(1)}: [REDACTED]", value)
+    value = BEARER_TOKEN.sub("Bearer [REDACTED]", value)
+    value = JWT_TOKEN.sub("[REDACTED]", value)
+    return AWS_ACCESS_KEY.sub("[REDACTED]", value)
 
 
 def metadata_only(span):
     attributes = {
-        key: value for key, value in (span.attributes or {}).items()
+        key: redact_details(value) if key in DETAIL_ATTRIBUTES else value
+        for key, value in (span.attributes or {}).items()
         if key in SAFE_ATTRIBUTES or key.startswith(SAFE_PREFIXES)
+        or key in DETAIL_ATTRIBUTES
     }
     return ReadableSpan(
         name=span.name, context=span.context, parent=span.parent,
