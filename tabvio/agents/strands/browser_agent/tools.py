@@ -6,6 +6,7 @@ from strands import tool
 from strands.types.tools import ToolContext
 
 from tabvio.agents.strands.browser_agent.context import AgentContext
+from tabvio.agents.strands.browser_agent.payment_summary import generate_payment_summary
 from tabvio.agents.strands.browser_agent.schema import inline_references
 from tabvio.agents.strands.browser_agent.steps import (
     BrowserStep,
@@ -42,6 +43,7 @@ def build_browser_tools(
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
     acknowledged_payment_surface: str | None = None
     pending_payment_observation = None
+    pending_payment_question: str | None = None
     browser_lock = asyncio.Lock()
 
     @tool(context=True)
@@ -108,6 +110,7 @@ def build_browser_tools(
                     "id": str(item.id),
                     "name": item.name,
                     "allowed_domains": item.allowed_domains,
+                    "available_fields": item.available_fields,
                     "preferred_verification": preferred,
                 }
             )
@@ -122,23 +125,29 @@ def build_browser_tools(
 
         # Remembered so the replay after the interrupt does not navigate again.
         pending_payment_observation = detection
-        guard_payment_surface(tool_context, detection)
+        await guard_payment_surface(tool_context, detection, page_state)
         pending_payment_observation = None
         observation = await browser.attempt_observe_page()
         return observation.page_state
 
-    def guard_payment_surface(tool_context: ToolContext, detection=None) -> None:
-        nonlocal acknowledged_payment_surface
+    async def guard_payment_surface(
+            tool_context: ToolContext, detection=None, page_state: str = ""
+    ) -> None:
+        nonlocal acknowledged_payment_surface, pending_payment_question
 
         detection = detection or browser.payment_detection_result
         if not detection.needs_handoff(acknowledged_payment_surface):
             return
 
-        question = (
-            "This page can take a payment, so I have stopped before touching it. "
-            "Take control of the browser, enter the payment details yourself, "
-            "then tell me when I can continue."
-        )
+        if pending_payment_question is None:
+            summary = await generate_payment_summary(tool_context.agent, page_state)
+            handoff = (
+                "This page can take a payment, so I have stopped before touching it. "
+                "Take control of the browser, enter the payment details yourself, "
+                "then tell me when I can continue."
+            )
+            pending_payment_question = f"{summary}\n\n{handoff}" if summary else handoff
+        question = pending_payment_question
         channel.publish(
             "input.required",
             {"question": question, "payment_signals": detection.get_signals},
@@ -147,12 +156,13 @@ def build_browser_tools(
             "browser-payment-handoff", reason={"question": question}
         )
         acknowledged_payment_surface = detection.fingerprint
+        pending_payment_question = None
 
     @tool(inputSchema={"json": STEP_PLAN_SCHEMA}, context=True)
     async def execute_steps(steps: list, tool_context: ToolContext) -> str:
         """Validate and execute browser steps, including credential and MFA steps."""
         async with browser_lock:
-            guard_payment_surface(tool_context)
+            await guard_payment_surface(tool_context)
 
             try:
                 plan = StepPlan.model_validate({"steps": steps})
@@ -234,7 +244,9 @@ def build_browser_tools(
             agent_context.user_id,
             browser.current_hostname,
         )
-        value = secret.login if step.field == "login" else secret.password
+        value = getattr(secret, step.field)
+        if not value:
+            raise ValueError(f"The selected credential has no saved {step.field} field")
         await browser.fill(step.element_index, value)
         del secret, value
 

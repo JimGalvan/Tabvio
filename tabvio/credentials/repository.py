@@ -26,6 +26,7 @@ class CredentialRepository:
                     allowed_domains_json TEXT NOT NULL,
                     login_hint TEXT NOT NULL,
                     encrypted_payload BLOB,
+                    available_fields_json TEXT NOT NULL DEFAULT '["login", "password"]',
                     is_default INTEGER NOT NULL DEFAULT 0,
                     preferred_verification_json TEXT NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL,
@@ -48,6 +49,11 @@ class CredentialRepository:
                 connection.execute(
                     "ALTER TABLE credentials ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"
                 )
+            if "available_fields_json" not in credential_columns:
+                connection.execute(
+                    "ALTER TABLE credentials ADD COLUMN available_fields_json "
+                    "TEXT NOT NULL DEFAULT '[\"login\", \"password\"]'"
+                )
             if "preferred_verification_json" not in credential_columns:
                 connection.execute(
                     "ALTER TABLE credentials "
@@ -62,14 +68,15 @@ class CredentialRepository:
                     """
                     INSERT INTO credentials (
                         id, user_id, name, allowed_domains_json, login_hint,
-                        encrypted_payload, is_default, preferred_verification_json,
+                        encrypted_payload, available_fields_json, is_default, preferred_verification_json,
                         created_at, updated_at, revoked_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         allowed_domains_json = excluded.allowed_domains_json,
                         login_hint = excluded.login_hint,
                         encrypted_payload = excluded.encrypted_payload,
+                        available_fields_json = excluded.available_fields_json,
                         is_default = excluded.is_default,
                         preferred_verification_json = excluded.preferred_verification_json,
                         updated_at = excluded.updated_at,
@@ -82,6 +89,7 @@ class CredentialRepository:
                         json.dumps(credential.allowed_domains),
                         credential.login_hint,
                         credential.encrypted_payload,
+                        json.dumps(credential.available_fields),
                         int(credential.is_default),
                         json.dumps(
                             [method.value for method in credential.preferred_verification]
@@ -140,6 +148,7 @@ class CredentialRepository:
             allowed_domains=json.loads(row["allowed_domains_json"]),
             login_hint=row["login_hint"],
             encrypted_payload=row["encrypted_payload"],
+            available_fields=json.loads(row["available_fields_json"]),
             is_default=bool(row["is_default"]),
             preferred_verification=CredentialRepository._read_verification(row),
             created_at=row["created_at"],

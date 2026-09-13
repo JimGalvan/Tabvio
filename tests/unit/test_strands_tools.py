@@ -1,6 +1,9 @@
 import json
 import unittest
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
+
+from strands.interrupt import Interrupt, InterruptException
 
 from tabvio.agents.strands.browser_agent.context import AgentContext
 from tabvio.agents.strands.browser_agent.tools import (
@@ -166,13 +169,27 @@ class ExecuteStepsTests(unittest.IsolatedAsyncioTestCase):
         tools, _ = build_tools(browser)
         tool_context = RecordingToolContext()
 
-        await tools["execute_steps"](
-            steps=[{"action": "click", "element_index": 4}],
-            tool_context=tool_context,
-        )
+        tool_context.agent = None
+
+        def raise_interrupt(name, reason):
+            tool_context.raised.append((name, reason))
+            raise InterruptException(Interrupt(id="payment", name=name, reason=reason))
+
+        tool_context.interrupt = raise_interrupt
+
+        with patch(
+            "tabvio.agents.strands.browser_agent.tools.generate_payment_summary",
+            new=AsyncMock(return_value="I reached checkout."),
+        ), self.assertRaises(InterruptException):
+            await tools["execute_steps"](
+                steps=[{"action": "click", "element_index": 4}],
+                tool_context=tool_context,
+            )
 
         raised_names = [name for name, _ in tool_context.raised]
         self.assertIn("browser-payment-handoff", raised_names)
+        self.assertEqual(browser.clicks, [])
+        self.assertEqual(browser.fills, [])
 
 
 class RequestUserInputTests(unittest.TestCase):

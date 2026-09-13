@@ -586,6 +586,44 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.credential-contact-fields,
+.credential-remove-fields {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+
+.credential-contact-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.credential-form legend {
+  padding: 0 5px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+#credential-remove-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.credential-remove-fields label {
+  display: flex;
+  align-items: center;
+}
+
+.credential-remove-fields input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--signal);
+}
+
 /* A checkbox row, unlike the stacked label/field pairs around it. */
 .credential-form label.credential-default-toggle {
   grid-column: 1 / -1;
@@ -1121,7 +1159,8 @@ a:focus-visible {
   }
 
   .credential-keyring,
-  .credential-form {
+  .credential-form,
+  .credential-contact-fields {
     grid-template-columns: 1fr;
   }
 

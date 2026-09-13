@@ -21,7 +21,6 @@ from tabvio.browser.constants import (
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
-    OBSERVE_BUDGET_SECONDS,
     SCAN_BUDGET_SECONDS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
@@ -149,15 +148,16 @@ class BrowserSession:
         self._next_iframe_id = 0
         self._elements = []
 
-    async def _wait_for_page_to_load(self) -> None:
-        await asyncio.sleep(0.50)
+    async def _wait_for_page_to_load(self, static_wait: float = 0.50, dom_wait: float = 3_500,
+                                     network_wait: float = 5_500) -> None:
+        await asyncio.sleep(static_wait)
         try:
-            await self._page.wait_for_load_state("domcontentloaded", timeout=3_500)
+            await self._page.wait_for_load_state("domcontentloaded", timeout=dom_wait)
         except PlaywrightTimeoutError:
             pass
 
         try:
-            await self._page.wait_for_load_state("networkidle", timeout=5_500)
+            await self._page.wait_for_load_state("networkidle", timeout=network_wait)
         except PlaywrightTimeoutError:
             pass
 
@@ -169,9 +169,11 @@ class BrowserSession:
 
         await self._page.goto(url, timeout=LOAD_TIMEOUT_MS)
         self._reset_page_state(self._page)
+        await self._wait_for_page_to_load(static_wait=0.50, dom_wait=2_500, network_wait=3_500)
         return await self._observe_current_page()
 
     async def attempt_observe_page(self) -> Observation:
+        await self._wait_for_page_to_load(static_wait=0.25, dom_wait=0.50, network_wait=2_000)
         return await self._observe_current_page()
 
     @staticmethod
@@ -314,17 +316,6 @@ class BrowserSession:
         return Counter(line.strip() for line in text.splitlines() if line.strip())
 
     async def _observe_current_page(self) -> Observation:
-        try:
-            async with asyncio.timeout(OBSERVE_BUDGET_SECONDS):
-                return await self._observe_within_budget()
-        except TimeoutError:
-            raise TimeoutError(
-                "The page could not be observed within "
-                f"{OBSERVE_BUDGET_SECONDS} seconds"
-            ) from None
-
-    async def _observe_within_budget(self) -> Observation:
-        await self._wait_for_page_to_load()
         result = json.loads(await self._scan_page())
 
         self._elements = []

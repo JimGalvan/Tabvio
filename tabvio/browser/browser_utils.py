@@ -18,3 +18,6 @@ class BrowserUtils:
         except TimeoutError:
             raise TimeoutError("The page stopped responding to scripts after "
                 f"{EVALUATE_TIMEOUT_SECONDS} seconds") from None
+
+
+evaluate_with_timeout = BrowserUtils.evaluate_with_timeout

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from tabvio.browser.session import BrowserSession
+from tabvio.credentials.models import CredentialField
 
 
 class StrictStep(BaseModel):
@@ -36,7 +37,7 @@ class PressStep(StrictStep):
 class CredentialFillStep(StrictStep):
     action: Literal["fill_credential"]
     credential_id: UUID
-    field: Literal["login", "password"]
+    field: CredentialField
     element_index: int = Field(ge=0)
 
 

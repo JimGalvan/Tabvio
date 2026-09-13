@@ -61,15 +61,26 @@
           <div class="credential-manager-heading">
             <div>
               <p class="stage-label">Credential keyring</p>
-              <p>Passwords stay encrypted and can only be used on the domains you allow. Write <code>*.example.com</code> to cover subdomains such as a separate login page.</p>
+              <p>Save login or contact details for the domains you allow. Login and password are optional. Write <code>*.example.com</code> to cover subdomains such as a separate login page.</p>
             </div>
             <button class="history-refresh" type="button" id="credential-manager-close">Close</button>
           </div>
           <form class="credential-form" id="credential-form">
-            <label>Name<input id="credential-name" required maxlength="80" placeholder="Personal GitHub"></label>
-            <label>Login<input id="credential-login" autocomplete="username" placeholder="you@example.com"></label>
-            <label>Password<input id="credential-password" type="password" autocomplete="new-password" placeholder="Enter password"></label>
+            <label>Name<input id="credential-name" required maxlength="80" placeholder="Personal account or contact details"></label>
+            <label>Login (optional)<input id="credential-login" maxlength="320" autocomplete="username" placeholder="you@example.com"></label>
+            <label>Password (optional)<input id="credential-password" type="password" maxlength="2000" autocomplete="new-password" placeholder="Optional password"></label>
             <label>Allowed domains<input id="credential-domains" required placeholder="github.com, *.github.com"></label>
+            <fieldset class="credential-contact-fields">
+              <legend>Contact details (optional)</legend>
+              <label>Email<input id="credential-email" type="email" maxlength="320" autocomplete="email" placeholder="you@example.com"></label>
+              <label>First name<input id="credential-first-name" maxlength="100" autocomplete="given-name" placeholder="First name"></label>
+              <label>Last name<input id="credential-last-name" maxlength="100" autocomplete="family-name" placeholder="Last name"></label>
+              <label>Phone<input id="credential-phone" type="tel" maxlength="50" autocomplete="tel" placeholder="Include country code, e.g. +1"></label>
+            </fieldset>
+            <fieldset class="credential-remove-fields" id="credential-remove-fields" hidden>
+              <legend>Remove saved fields</legend>
+              <div id="credential-remove-options"></div>
+            </fieldset>
             <label>Preferred verification<select id="credential-verification">
                 <option value="">Ask me each time</option>
                 <option value="sms">Text message</option>

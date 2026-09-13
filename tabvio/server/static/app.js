@@ -57,8 +57,23 @@ const credentialManager = document.querySelector("#credential-manager");
 const credentialManagerClose = document.querySelector("#credential-manager-close");
 const credentialForm = document.querySelector("#credential-form");
 const credentialName = document.querySelector("#credential-name");
-const credentialLogin = document.querySelector("#credential-login");
-const credentialPassword = document.querySelector("#credential-password");
+const credentialFields = {
+  login: document.querySelector("#credential-login"),
+  password: document.querySelector("#credential-password"),
+  email: document.querySelector("#credential-email"),
+  first_name: document.querySelector("#credential-first-name"),
+  last_name: document.querySelector("#credential-last-name"),
+  phone: document.querySelector("#credential-phone"),
+};
+const credentialFieldLabels = {
+  login: "Login", password: "Password", email: "Email",
+  first_name: "First name", last_name: "Last name", phone: "Phone",
+};
+const credentialFieldPlaceholders = Object.fromEntries(
+  Object.entries(credentialFields).map(([field, input]) => [field, input.placeholder]),
+);
+const credentialRemoveFields = document.querySelector("#credential-remove-fields");
+const credentialRemoveOptions = document.querySelector("#credential-remove-options");
 const credentialDomains = document.querySelector("#credential-domains");
 const credentialDefault = document.querySelector("#credential-default");
 const credentialVerification = document.querySelector("#credential-verification");
@@ -207,14 +222,16 @@ credentialForm.addEventListener("submit", async (formEvent) => {
     is_default: credentialDefault.checked,
     preferred_verification: chosenVerificationMethods(),
   };
-  if (credentialLogin.value.trim()) {
-    body.login = credentialLogin.value.trim();
+  for (const [field, input] of Object.entries(credentialFields)) {
+    const value = field === "password" ? input.value : input.value.trim();
+    if (input.disabled) {
+      body[field] = null;
+    } else if (value) {
+      body[field] = value;
+    }
   }
-  if (credentialPassword.value) {
-    body.password = credentialPassword.value;
-  }
-  if (!editingCredentialId && (!body.login || !body.password)) {
-    credentialMessage.textContent = "Login and password are required for a new credential.";
+  if (!editingCredentialId && !Object.keys(credentialFields).some((field) => body[field])) {
+    credentialMessage.textContent = "Add at least one login, password, or contact detail.";
     return;
   }
 
@@ -330,7 +347,7 @@ function renderCredentialList() {
     }
     const detail = document.createElement("span");
     detail.textContent =
-      `${credential.login_hint} · ${credential.allowed_domains.join(", ")}` +
+      [credential.login_hint, credential.allowed_domains.join(", ")].filter(Boolean).join(" · ") +
       describeVerification(credential.preferred_verification);
     summary.append(name, detail);
 
@@ -352,12 +369,22 @@ function renderCredentialList() {
 }
 
 function beginCredentialEdit(credential) {
+  resetCredentialForm();
   editingCredentialId = credential.id;
   credentialName.value = credential.name;
-  credentialLogin.value = "";
-  credentialLogin.placeholder = `Keep ${credential.login_hint}`;
-  credentialPassword.value = "";
-  credentialPassword.placeholder = "Leave blank to keep current password";
+  for (const field of credential.available_fields) {
+    const input = credentialFields[field];
+    input.placeholder = "Leave blank to keep saved value";
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.addEventListener("change", () => {
+      input.disabled = checkbox.checked;
+    });
+    label.append(checkbox, credentialFieldLabels[field]);
+    credentialRemoveOptions.append(label);
+  }
+  credentialRemoveFields.hidden = false;
   credentialDomains.value = credential.allowed_domains.join(", ");
   credentialDefault.checked = Boolean(credential.is_default);
   const [preferred = "", fallback = ""] = credential.preferred_verification || [];
@@ -372,8 +399,12 @@ function beginCredentialEdit(credential) {
 function resetCredentialForm() {
   editingCredentialId = null;
   credentialForm.reset();
-  credentialLogin.placeholder = "you@example.com";
-  credentialPassword.placeholder = "Enter password";
+  for (const [field, input] of Object.entries(credentialFields)) {
+    input.placeholder = credentialFieldPlaceholders[field];
+    input.disabled = false;
+  }
+  credentialRemoveFields.hidden = true;
+  credentialRemoveOptions.replaceChildren();
   credentialSaveButton.textContent = "Save credential";
   credentialEditCancel.hidden = true;
   credentialMessage.textContent = "";

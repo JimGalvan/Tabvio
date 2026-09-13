@@ -38,15 +38,20 @@ class CredentialService:
             user_id=user_id,
             name=request.name,
             allowed_domains=self._normalize_domains(request.allowed_domains),
-            login_hint=self._mask_login(request.login),
+            login_hint="",
             encrypted_payload=b"",
             is_default=request.is_default,
             preferred_verification=self._normalize_verification(request.preferred_verification),
         )
         secret = CredentialSecret(
             login=request.login,
-            password=request.password.get_secret_value(),
+            password=request.password.get_secret_value() if request.password is not None else None,
+            email=request.email,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            phone=request.phone,
         )
+        self._refresh_secret_metadata(credential, secret)
         credential.encrypted_payload = self._cipher.encrypt(
             secret.model_dump_json().encode(), self._associated_data(credential)
         )
@@ -68,11 +73,13 @@ class CredentialService:
             credential.name = request.name
         if request.allowed_domains is not None:
             credential.allowed_domains = self._normalize_domains(request.allowed_domains)
-        if request.login is not None:
-            secret.login = request.login
-            credential.login_hint = self._mask_login(request.login)
-        if request.password is not None:
-            secret.password = request.password.get_secret_value()
+        for field in CredentialSecret.model_fields:
+            if field in request.model_fields_set:
+                value = getattr(request, field)
+                if field == "password" and value is not None:
+                    value = value.get_secret_value()
+                setattr(secret, field, value)
+        self._refresh_secret_metadata(credential, secret)
         if request.is_default is not None:
             credential.is_default = request.is_default
         if request.preferred_verification is not None:
@@ -159,6 +166,13 @@ class CredentialService:
             if method not in ordered:
                 ordered.append(method)
         return ordered
+
+    @staticmethod
+    def _refresh_secret_metadata(credential: CredentialRecord, secret: CredentialSecret) -> None:
+        credential.available_fields = [field for field, value in secret.model_dump().items() if value]
+        if not credential.available_fields:
+            raise CredentialInvalidError("Add at least one login, password, or contact detail")
+        credential.login_hint = CredentialService._mask_login(secret.login) if secret.login else ""
 
     @staticmethod
     def _mask_login(login: str) -> str:

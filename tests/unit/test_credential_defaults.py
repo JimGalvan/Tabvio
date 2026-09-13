@@ -119,6 +119,7 @@ class CredentialDefaultTests(unittest.TestCase):
         stored = repository.list_for_user("22222222-2222-4222-8222-222222222222")
         self.assertEqual([item.name for item in stored], ["Existing"])
         self.assertFalse(stored[0].is_default)
+        self.assertEqual(stored[0].available_fields, ["login", "password"])
 
 
 if __name__ == "__main__":
