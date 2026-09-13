@@ -15,7 +15,7 @@ from playwright.async_api import (
 from playwright.async_api import Frame as PlaywrightFrame
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from tabvio.browser.browser_utils import evaluate_with_timeout
+from tabvio.browser.browser_utils import evaluate_with_timeout, normalize_key
 from tabvio.browser.constants import (
     BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
@@ -447,9 +447,10 @@ class BrowserSession:
     async def press(self, element_index: int, value: str) -> str:
         page = self._require_page()
 
+        key = normalize_key(value)
         await self._click_element(element_index)
-        await page.keyboard.press(value)
-        return f"Pressed {value} on element [{element_index}]"
+        await page.keyboard.press(key)
+        return f"Pressed {key} on element [{element_index}]"
 
     async def switch_tab(self, tab_id: str) -> str:
         if self._context is None:
