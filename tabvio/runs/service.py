@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from collections import OrderedDict
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
@@ -698,6 +699,7 @@ class RunManager:
 
     async def _capture_frames(self, context: RunContext) -> None:
         capture_failure_active = False
+        failing_since = None
 
         while not context.run.status.is_terminal:
             taken_over = context.controller_count > 0
@@ -709,7 +711,11 @@ class RunManager:
                 raise
             except Exception as exception:
                 logger.warning("Browser frame capture failed for run %s: %s", context.run.id, exception)
-                if not capture_failure_active:
+                if failing_since is None:
+                    failing_since = time.monotonic()
+
+                outage_seconds = time.monotonic() - failing_since
+                if not capture_failure_active and outage_seconds >= constants.FRAME_CAPTURE_GRACE_SECONDS:
                     capture_failure_active = True
                     await self._publish(context, "browser.capture.failed",
                                         {"message": "Live view paused; retrying automatically"})
@@ -723,6 +729,7 @@ class RunManager:
                     context.frame_sequence += 1
                     context.frame_condition.notify_all()
 
+                failing_since = None
                 if capture_failure_active:
                     capture_failure_active = False
                     await self._publish(context, "browser.capture.recovered",

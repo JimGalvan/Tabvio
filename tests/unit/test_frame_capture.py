@@ -40,6 +40,7 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
             patch.object(constants, "FRAME_CAPTURE_TIMEOUT_SECONDS", self.WAIT_TIMEOUT_SECONDS),
             patch.object(constants, "FRAME_RETRY_INTERVAL_SECONDS", self.TEST_INTERVAL_SECONDS),
             patch.object(constants, "FRAME_INTERVAL_SECONDS", self.TEST_INTERVAL_SECONDS),
+            patch.object(constants, "FRAME_CAPTURE_GRACE_SECONDS", 0.0),
         ]
         for constant_patcher in self._constant_patchers:
             constant_patcher.start()
@@ -48,7 +49,7 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._temporary_directory.cleanup()
 
-    async def test_capture_retries_and_recovers_after_a_failure(self) -> None:
+    async def test_an_outage_past_the_grace_period_is_announced_and_recovered(self) -> None:
         run = RunRecord(task="Capture a frame", max_runtime_seconds=300, user_id=self._owner_id)
         browser = RecoveringBrowser()
         context = RunContext(
@@ -72,6 +73,31 @@ class FrameCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("browser.capture.failed", event_types)
         self.assertIn("browser.capture.recovered", event_types)
         self.assertEqual(self._manager.get_latest_frame(run.id, self._owner_id), b"jpeg-frame")
+
+    async def test_a_blip_inside_the_grace_period_is_not_announced(self) -> None:
+        run = RunRecord(task="Capture a frame", max_runtime_seconds=300, user_id=self._owner_id)
+        browser = RecoveringBrowser()
+        context = RunContext(
+            run=run,
+            runtime=SimpleNamespace(browser=browser),
+        )
+        self._repository.save_run(run)
+        self._manager._contexts[run.id] = context
+
+        with patch.object(constants, "FRAME_CAPTURE_GRACE_SECONDS", 60.0):
+            capture_task = asyncio.create_task(self._manager._capture_frames(context))
+            await asyncio.wait_for(
+                self._wait_for_latest_frame(context),
+                timeout=self.WAIT_TIMEOUT_SECONDS,
+            )
+            run.status = RunStatus.SUCCEEDED
+            await capture_task
+
+        event_types = [event.event_type for event in context.events]
+        self.assertEqual(context.latest_frame, b"jpeg-frame")
+        self.assertGreaterEqual(browser.capture_attempts, 2)
+        self.assertNotIn("browser.capture.failed", event_types)
+        self.assertNotIn("browser.capture.recovered", event_types)
 
     async def test_latest_frame_distinguishes_unknown_and_uncached_runs(self) -> None:
         run = RunRecord(
