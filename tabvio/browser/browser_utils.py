@@ -10,13 +10,11 @@ class BrowserUtils:
         script_path = Path(__file__).resolve().parent / "scripts" / name
         return script_path.read_text(encoding="utf-8")
 
-
-async def evaluate_with_timeout(frame, script, argument=None):
-    try:
-        async with asyncio.timeout(EVALUATE_TIMEOUT_SECONDS):
-            return await frame.evaluate(script, argument)
-    except TimeoutError:
-        raise TimeoutError(
-            "The page stopped responding to scripts after "
-            f"{EVALUATE_TIMEOUT_SECONDS} seconds"
-        ) from None
+    @staticmethod
+    async def evaluate_with_timeout(frame, script, argument=None):
+        try:
+            async with asyncio.timeout(EVALUATE_TIMEOUT_SECONDS):
+                return await frame.evaluate(script, argument)
+        except TimeoutError:
+            raise TimeoutError("The page stopped responding to scripts after "
+                f"{EVALUATE_TIMEOUT_SECONDS} seconds") from None

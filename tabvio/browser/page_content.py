@@ -112,9 +112,12 @@ async def get_frame_texts(page: Page) -> Dict[int, str]:
     for index, iframe in enumerate(page.frames):
         if iframe.is_detached():
             continue
-        page_text = json.loads(
-            await evaluate_with_timeout(iframe, scan_script)
-        )['pageText']
+        try:
+            result = await BrowserUtils.evaluate_with_timeout(iframe, scan_script)
+            page_text = json.loads(result)['pageText']
+        except TimeoutError:
+            frames[index] = "[Frame unavailable: script evaluation timed out]"
+            continue
         frames[index] = page_text
     return frames
 
