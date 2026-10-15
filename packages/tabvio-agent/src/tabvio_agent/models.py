@@ -5,10 +5,7 @@ from uuid import UUID
 
 CredentialField: TypeAlias = Literal["login", "password", "email", "first_name", "last_name", "phone"]
 BrowserAction: TypeAlias = Literal["click", "fill", "select", "press", "fill_credential", "request_mfa_code"]
-SessionStatus: TypeAlias = Literal[
-    "queued", "running", "waiting_for_input", "ready_for_follow_up",
-    "succeeded", "failed", "cancelled", "timed_out",
-]
+SessionStatus: TypeAlias = Literal["running", "waiting_for_input", "failed", "cancelled"]
 ControlKey: TypeAlias = Literal[
     "Enter", "Tab", "Backspace", "Delete", "Escape", "ArrowUp", "ArrowDown",
     "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Control+A", "Meta+A",

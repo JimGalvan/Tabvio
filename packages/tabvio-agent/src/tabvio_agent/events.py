@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal, TypeAlias
 from uuid import UUID
 
-from tabvio_agent.models import BrowserAction, SessionStatus, Todo
+from tabvio_agent.models import BrowserAction, Todo
 
 
 @dataclass(frozen=True)
@@ -100,23 +100,8 @@ class TaskTodosEvent:
 
 
 @dataclass(frozen=True)
-class RunCreatedEvent:
-    task: str
-    status: SessionStatus
-    event_type: Literal["run.created"] = field(default="run.created", init=False)
-
-
-@dataclass(frozen=True)
-class RunStatusEvent:
-    status: SessionStatus
-    follow_up_expires_at: datetime | None = None
-    event_type: Literal["run.status"] = field(default="run.status", init=False)
-
-
-@dataclass(frozen=True)
 class RunCompletedEvent:
     output: str
-    follow_up_expires_at: datetime | None = None
     event_type: Literal["run.completed"] = field(default="run.completed", init=False)
 
 
@@ -139,22 +124,6 @@ class TakeoverStartedEvent:
 @dataclass(frozen=True)
 class TakeoverEndedEvent:
     event_type: Literal["takeover.ended"] = field(default="takeover.ended", init=False)
-
-
-@dataclass(frozen=True)
-class FollowUpStartedEvent:
-    task: str
-    event_type: Literal["follow_up.started"] = field(default="follow_up.started", init=False)
-
-
-@dataclass(frozen=True)
-class FollowUpEndedEvent:
-    event_type: Literal["follow_up.ended"] = field(default="follow_up.ended", init=False)
-
-
-@dataclass(frozen=True)
-class FollowUpExpiredEvent:
-    event_type: Literal["follow_up.expired"] = field(default="follow_up.expired", init=False)
 
 
 @dataclass(frozen=True)
@@ -184,16 +153,11 @@ AgentEvent: TypeAlias = (
     | BrowserTabChangedEvent
     | BrowserObservationEvent
     | TaskTodosEvent
-    | RunCreatedEvent
-    | RunStatusEvent
     | RunCompletedEvent
     | RunFailedEvent
     | RunCancelledEvent
     | TakeoverStartedEvent
     | TakeoverEndedEvent
-    | FollowUpStartedEvent
-    | FollowUpEndedEvent
-    | FollowUpExpiredEvent
     | BrowserCaptureFailedEvent
     | BrowserCaptureRecoveredEvent
 )
