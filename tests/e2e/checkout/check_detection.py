@@ -34,6 +34,7 @@ EXPECTED = {
     "wallet-widgets.html": False,
     "shipping.html": False,
     "cart.html": False,
+    "../nav/form.html": False,
     # The realistic flow next door, which is the same judgement on pages
     # that look like a shop rather than like a test case.
     "../shop/product.html": False,
