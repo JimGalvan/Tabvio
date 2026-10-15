@@ -1,15 +1,52 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 from tabvio_agent.exceptions import SessionNotWaitingForInputError
 
-from .session_support import build_session, next_event
+from .session_support import build_session, next_event, ready
 from .test_session_sensitive_input import sensitive_tools
 
 
 class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_close_preserves_a_completed_turn_while_frame_capture_pauses(self):
+        session, browser = build_session(AIMessage(content="Done"))
+        self.addAsyncCleanup(session.close)
+        pausing = asyncio.Event()
+        proceed = asyncio.Event()
+        closing_started = asyncio.Event()
+        pause_frame_capture = session._pause_frame_capture
+
+        async def pause():
+            pausing.set()
+            await proceed.wait()
+            await pause_frame_capture()
+
+        async def close():
+            closing_started.set()
+            await session.close()
+
+        events = session.events()
+        with patch.object(session, "_pause_frame_capture", side_effect=pause):
+            await session.start("Go")
+            await ready(session, events)
+            await pausing.wait()
+            self.assertFalse(session._execution_task.done())
+            closing = asyncio.create_task(close())
+            await closing_started.wait()
+            proceed.set()
+            await closing
+
+        remaining = []
+        async for event in events:
+            remaining.append(event.event_type)
+        self.assertEqual(remaining, [])
+        self.assertEqual(session._status, "ready_for_follow_up")
+        self.assertTrue(session._execution_task.done())
+        browser.close.assert_awaited_once()
+
     async def test_cancel_running_execution_emits_one_terminal_event(self):
         session, browser = build_session()
         self.addAsyncCleanup(session.close)
