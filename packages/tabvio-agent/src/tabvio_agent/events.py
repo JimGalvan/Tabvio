@@ -138,26 +138,31 @@ class BrowserCaptureRecoveredEvent:
     event_type: Literal["browser.capture.recovered"] = field(default="browser.capture.recovered", init=False)
 
 
-AgentEvent: TypeAlias = (
-    AgentMessageDeltaEvent
-    | InputRequiredEvent
+_InputEvent: TypeAlias = (
+    InputRequiredEvent
     | InputReceivedEvent
     | SensitiveInputRequiredEvent
     | SensitiveInputReceivedEvent
     | SensitiveInputCancelledEvent
-    | BrowserNavigationStartedEvent
+)
+_BrowserEvent: TypeAlias = (
+    BrowserNavigationStartedEvent
     | BrowserNavigationCompletedEvent
     | BrowserActionStartedEvent
     | BrowserActionCompletedEvent
     | BrowserActionFailedEvent
     | BrowserTabChangedEvent
     | BrowserObservationEvent
-    | TaskTodosEvent
-    | RunCompletedEvent
+    | BrowserCaptureFailedEvent
+    | BrowserCaptureRecoveredEvent
+)
+_SessionEvent: TypeAlias = (
+    RunCompletedEvent
     | RunFailedEvent
     | RunCancelledEvent
     | TakeoverStartedEvent
     | TakeoverEndedEvent
-    | BrowserCaptureFailedEvent
-    | BrowserCaptureRecoveredEvent
+)
+AgentEvent: TypeAlias = (
+    AgentMessageDeltaEvent | _InputEvent | _BrowserEvent | TaskTodosEvent | _SessionEvent
 )
