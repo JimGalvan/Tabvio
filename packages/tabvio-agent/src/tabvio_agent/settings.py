@@ -11,6 +11,3 @@ class AgentSettings:
     headless: bool = True
     browser_channel: str | None = None
     trace_path: Path | None = None
-    load_timeout_ms: int = constants.DEFAULT_LOAD_TIMEOUT_MS
-    evaluate_timeout_seconds: float = constants.DEFAULT_EVALUATE_TIMEOUT_SECONDS
-    scan_budget_seconds: float = constants.DEFAULT_SCAN_BUDGET_SECONDS
