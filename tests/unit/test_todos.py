@@ -1,41 +1,24 @@
-import json
 import unittest
+from uuid import uuid4
 
-from strands.agent.state import AgentState
-from strands.hooks import BeforeModelCallEvent, BeforeToolsEvent
+from deepagents import create_deep_agent
+from langchain.agents.middleware import TodoListMiddleware
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+from langgraph.checkpoint.memory import InMemorySaver
 
-from tabvio.agents.strands.browser_agent.todos import (
-    TODO_STATE_KEY,
-    TodoPromptHook,
-    build_write_todos,
-    render_todos,
-)
-
-BASE_PROMPT = "You are a web browser agent."
-
-
-class FakeAgent:
-    def __init__(self, system_prompt=BASE_PROMPT):
-        self.system_prompt = system_prompt
-        self.state = AgentState()
+from tabvio.agents.browser_agent.browser_agent import build_browser_agent
+from tabvio.agents.browser_agent.prompts import TODO_SYSTEM_PROMPT
+from tabvio.browser.session import BrowserSession
+from tabvio.runs.runtime import LangChainAgentRuntime
+from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 
-class FakeToolContext:
-    def __init__(self, agent):
-        self.agent = agent
+class ScriptedModel(GenericFakeChatModel):
+    disable_streaming: bool = True
 
-
-class RecordingChannel:
-    def __init__(self):
-        self.published = []
-
-    def publish(self, event_type, payload):
-        self.published.append((event_type, payload))
-
-
-def build_tool():
-    channel = RecordingChannel()
-    return build_write_todos(channel)._tool_func, channel
+    def bind_tools(self, tools, **kwargs):
+        return self
 
 
 def shopping_list():
@@ -46,142 +29,48 @@ def shopping_list():
     ]
 
 
-class WriteTodosTest(unittest.TestCase):
-    def test_stores_the_list_in_agent_state(self):
-        write_todos, _ = build_tool()
-        agent = FakeAgent()
-
-        write_todos(todos=shopping_list(), tool_context=FakeToolContext(agent))
-
-        self.assertEqual(agent.state.get(TODO_STATE_KEY), shopping_list())
-
-    def test_returns_the_rendered_list(self):
-        write_todos, _ = build_tool()
-
-        result = write_todos(
-            todos=shopping_list(), tool_context=FakeToolContext(FakeAgent())
-        )
-
-        self.assertIn("[x] Sign in to Walmart", result)
-        self.assertIn("[~] Add bananas", result)
-        self.assertIn("[ ] Add 60 eggs", result)
-
-    def test_replaces_the_whole_list(self):
-        write_todos, _ = build_tool()
-        agent = FakeAgent()
-        context = FakeToolContext(agent)
-
-        write_todos(todos=shopping_list(), tool_context=context)
-        write_todos(
-            todos=[{"content": "Choose a delivery slot", "status": "pending"}],
-            tool_context=context,
-        )
-
-        stored = agent.state.get(TODO_STATE_KEY)
-        self.assertEqual(len(stored), 1)
-        self.assertEqual(stored[0]["content"], "Choose a delivery slot")
-
-    def test_publishes_the_list_for_the_live_view(self):
-        write_todos, channel = build_tool()
-
-        write_todos(todos=shopping_list(), tool_context=FakeToolContext(FakeAgent()))
-
-        self.assertEqual(channel.published, [("task.todos", {"todos": shopping_list()})])
-
-    def test_rejects_an_unknown_status_without_touching_state(self):
-        write_todos, channel = build_tool()
-        agent = FakeAgent()
-
-        result = write_todos(
-            todos=[{"content": "Add bananas", "status": "almost"}],
-            tool_context=FakeToolContext(agent),
-        )
-
-        self.assertEqual(json.loads(result)["kind"], "validation_error")
-        self.assertIsNone(agent.state.get(TODO_STATE_KEY))
-        self.assertEqual(channel.published, [])
+def write_todos_call(call_id):
+    return {"name": "write_todos", "args": {"todos": shopping_list()}, "id": call_id}
 
 
-class TodoPromptTest(unittest.TestCase):
-    def test_appends_the_current_list_to_the_prompt(self):
-        agent = FakeAgent()
-        agent.state.set(TODO_STATE_KEY, shopping_list())
-        hook = TodoPromptHook(BASE_PROMPT)
-
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-
-        self.assertTrue(agent.system_prompt.startswith(BASE_PROMPT))
-        self.assertIn("## Current task list", agent.system_prompt)
-        self.assertIn("[ ] Add 60 eggs", agent.system_prompt)
-
-    def test_leaves_the_prompt_alone_before_a_list_is_written(self):
-        agent = FakeAgent()
-        hook = TodoPromptHook(BASE_PROMPT)
-
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-
-        self.assertEqual(agent.system_prompt, BASE_PROMPT)
-
-    def test_rebuilds_from_state_rather_than_stacking_lists(self):
-        agent = FakeAgent()
-        hook = TodoPromptHook(BASE_PROMPT)
-
-        agent.state.set(TODO_STATE_KEY, shopping_list())
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-        agent.state.set(TODO_STATE_KEY, [{"content": "Add bananas", "status": "completed"}])
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-
-        self.assertEqual(agent.system_prompt.count("## Current task list"), 1)
-        self.assertNotIn("Add 60 eggs", agent.system_prompt)
-
-    def test_is_unchanged_while_the_list_is_unchanged(self):
-        agent = FakeAgent()
-        agent.state.set(TODO_STATE_KEY, shopping_list())
-        hook = TodoPromptHook(BASE_PROMPT)
-
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-        first = agent.system_prompt
-        hook.show_current_todos(BeforeModelCallEvent(agent=agent))
-
-        self.assertEqual(agent.system_prompt, first)
+def build_runtime(*messages):
+    model = ScriptedModel(messages=iter(messages))
+    agent = create_deep_agent(
+        model=model,
+        checkpointer=InMemorySaver(),
+        middleware=[TodoListMiddleware(system_prompt=TODO_SYSTEM_PROMPT)],
+    )
+    return LangChainAgentRuntime(agent, browser=None, context=None, sensitive_inputs=None, thread_id=uuid4())
 
 
-class ParallelWriteTest(unittest.TestCase):
-    def build_message(self, tool_names):
-        content = []
-        for name in tool_names:
-            content.append({"toolUse": {"name": name, "toolUseId": name, "input": {}}})
-        return {"role": "assistant", "content": content}
-
-    def test_cancels_a_turn_that_writes_the_list_twice(self):
-        hook = TodoPromptHook(BASE_PROMPT)
-        event = BeforeToolsEvent(
-            agent=FakeAgent(),
-            message=self.build_message(["write_todos", "write_todos"]),
-            invocation_state={},
-        )
-
-        hook.reject_parallel_writes(event)
-
-        self.assertIn("cannot run twice", str(event.cancel))
-
-    def test_allows_one_write_alongside_other_tools(self):
-        hook = TodoPromptHook(BASE_PROMPT)
-        event = BeforeToolsEvent(
-            agent=FakeAgent(),
-            message=self.build_message(["write_todos", "observe_page"]),
-            invocation_state={},
-        )
-
-        hook.reject_parallel_writes(event)
-
-        self.assertFalse(event.cancel)
+async def todo_events(runtime):
+    events = []
+    async for item in runtime.stream(runtime.start_input("buy groceries")):
+        if item.get("event_type") == "task.todos":
+            events.append(item)
+    return events
 
 
-class RenderTest(unittest.TestCase):
-    def test_renders_nothing_when_the_list_is_empty_or_missing(self):
-        self.assertEqual(render_todos(None), "")
-        self.assertEqual(render_todos([]), "")
+class TodoEventTests(unittest.IsolatedAsyncioTestCase):
+    async def test_writing_todos_publishes_the_list(self) -> None:
+        runtime = build_runtime(AIMessage(content="", tool_calls=[write_todos_call("w1")]), AIMessage(content="Done."))
+        events = await todo_events(runtime)
+        self.assertEqual(events, [{"kind": "custom", "event_type": "task.todos", "payload": {"todos": shopping_list()}}])
+
+    async def test_parallel_writes_are_rejected_without_publishing(self) -> None:
+        parallel = AIMessage(content="", tool_calls=[write_todos_call("a"), write_todos_call("b")])
+        runtime = build_runtime(parallel, AIMessage(content="Done."))
+        self.assertEqual(await todo_events(runtime), [])
+
+
+class BrowserAgentTodoTests(unittest.TestCase):
+    def test_the_browser_agent_offers_write_todos(self) -> None:
+        agent = build_browser_agent(BrowserSession(), SensitiveInputChannel())
+        tool_names = agent.nodes["tools"].bound.tools_by_name
+        self.assertIn("write_todos", tool_names)
+
+    def test_the_todo_prompt_carries_the_browsing_guidance(self) -> None:
+        self.assertIn("Mark an item `completed` only once an observation proves it", TODO_SYSTEM_PROMPT)
 
 
 if __name__ == "__main__":
