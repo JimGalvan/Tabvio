@@ -17,6 +17,11 @@ SENSITIVE_INPUT_TAKEOVER_REASON = (
     "the person took control of the browser and may have changed the page"
 )
 MAX_LISTED_RUNS = 50
+AGENT_STREAM_MODES = ["messages", "custom", "updates"]
+AGENT_STREAM_VERSION = "v2"
+AGENT_INTERRUPT_KEY = "__interrupt__"
+ASSISTANT_MESSAGE_TYPES = {"ai", "AIMessageChunk"}
+MAIN_AGENT_MODEL_NAMESPACE = "model:"
 
 # AgentCore browser sessions bill by the minute, so this caps a run that is
 # abandoned without its browser being closed.

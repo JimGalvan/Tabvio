@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from tabvio.agents.strands.browser_agent.browser_agent import build_browser_agent
-from tabvio.agents.strands.browser_agent.context import AgentContext
-from tabvio.agents.strands.shared.events import AgentEventChannel
+from langgraph.types import Command
+
+from tabvio.agents.browser_agent.browser_agent import build_browser_agent
+from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.browser.session import BrowserSession
 from tabvio.config import (
     TRACE_DIRECTORY,
@@ -123,6 +124,67 @@ class StrandsAgentRuntime:
         return {"kind": "interrupt"}
 
 
+class LangChainAgentRuntime:
+    def __init__(self, agent, browser, context, sensitive_inputs, thread_id):
+        self.agent = agent
+        self.browser = browser
+        self.context = context
+        self.sensitive_inputs = sensitive_inputs
+        self.config = {"configurable": {"thread_id": str(thread_id)}}
+
+    def start_input(self, task: str) -> Any:
+        return {"messages": [{"role": "user", "content": task}]}
+
+    def resume_input(self, value: Any) -> Any:
+        return Command(resume=value)
+
+    async def stream(self, agent_input: Any):
+        parts = self.agent.astream(
+            agent_input,
+            config=self.config,
+            stream_mode=constants.AGENT_STREAM_MODES,
+            version=constants.AGENT_STREAM_VERSION,
+            context=self.context,
+        )
+        async for part in parts:
+            item = self._normalize(part)
+            if item:
+                yield item
+
+    async def final_output(self) -> str:
+        state = await self.agent.aget_state(self.config)
+        messages = state.values.get("messages", [])
+        if not messages:
+            return ""
+        return extract_text(messages[-1].content)
+
+    def _normalize(self, part: dict[str, Any]) -> dict[str, Any] | None:
+        stream_type = part["type"]
+        data = part["data"]
+        if stream_type == "custom":
+            return {"kind": "custom", "event_type": data["event_type"], "payload": data["payload"]}
+        if stream_type == "messages":
+            text = self._assistant_text(data)
+            if text:
+                return {"kind": "message", "text": text}
+            return None
+        if stream_type == "updates" and constants.AGENT_INTERRUPT_KEY in data:
+            return {"kind": "interrupt"}
+        return None
+
+    def _assistant_text(self, data: tuple[Any, dict[str, Any]]) -> str:
+        message, metadata = data
+        if message.type not in constants.ASSISTANT_MESSAGE_TYPES:
+            return ""
+        if not self._is_from_main_agent(metadata):
+            return ""
+        return extract_text(message.content)
+
+    def _is_from_main_agent(self, metadata: dict[str, Any]) -> bool:
+        namespace = metadata.get("langgraph_checkpoint_ns") or ""
+        return namespace.startswith(constants.MAIN_AGENT_MODEL_NAMESPACE)
+
+
 def _trace_path_for_run(thread_id: UUID) -> Path | None:
     if not read_browser_trace_setting():
         return None
@@ -160,18 +222,8 @@ def build_local_agent_runtime(
     )
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
     sensitive_inputs = SensitiveInputChannel()
-
-    channel = AgentEventChannel()
-    agent = build_browser_agent(
-        browser,
-        channel,
-        agent_context,
-        sensitive_inputs,
-        credential_service=credential_service,
-    )
-    return StrandsAgentRuntime(
-        agent, browser, agent_context, sensitive_inputs, channel
-    )
+    agent = build_browser_agent(browser, sensitive_inputs, credential_service=credential_service)
+    return LangChainAgentRuntime(agent, browser, agent_context, sensitive_inputs, thread_id)
 
 
 def build_agent_runtime(thread_id, user_id, credential_ids=(), credential_service=None, headless=True, run_id=None):
