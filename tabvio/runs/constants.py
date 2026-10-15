@@ -24,7 +24,3 @@ ASSISTANT_MESSAGE_TYPES = {"ai", "AIMessageChunk"}
 MAIN_AGENT_MODEL_NAMESPACE = "model:"
 TODOS_STATE_KEY = "todos"
 TODOS_EVENT_TYPE = "task.todos"
-
-# AgentCore browser sessions bill by the minute, so this caps a run that is
-# abandoned without its browser being closed.
-DEFAULT_AGENTCORE_SESSION_TIMEOUT_SECONDS = 3600

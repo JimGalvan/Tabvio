@@ -11,10 +11,6 @@ from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.browser.session import BrowserSession
 from tabvio.config import (
     TRACE_DIRECTORY,
-    read_agentcore_browser_identifier,
-    read_agentcore_session_timeout_seconds,
-    read_aws_region_setting,
-    read_browser_backend_setting,
     read_browser_channel_setting,
     read_browser_trace_setting,
 )
@@ -200,23 +196,7 @@ def _trace_path_for_run(thread_id: UUID) -> Path | None:
     return TRACE_DIRECTORY / f"{thread_id}.zip"
 
 
-def _build_remote_browser():
-    if read_browser_backend_setting() != "agentcore":
-        return None
-
-    # Imported here so a local run never needs boto3 credentials loaded.
-    from tabvio.browser.agentcore import AgentCoreBrowser
-
-    return AgentCoreBrowser(
-        region=read_aws_region_setting(),
-        identifier=read_agentcore_browser_identifier(),
-        session_timeout_seconds=read_agentcore_session_timeout_seconds(
-            constants.DEFAULT_AGENTCORE_SESSION_TIMEOUT_SECONDS
-        ),
-    )
-
-
-def build_local_agent_runtime(
+def build_agent_runtime(
         thread_id: UUID,
         user_id: UUID | None,
         credential_ids: tuple[UUID, ...] = (),
@@ -227,20 +207,8 @@ def build_local_agent_runtime(
         headless=headless,
         trace_path=_trace_path_for_run(thread_id),
         browser_channel=read_browser_channel_setting(),
-        remote_browser=_build_remote_browser(),
     )
     agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
     sensitive_inputs = SensitiveInputChannel()
     agent = build_browser_agent(browser, sensitive_inputs, credential_service=credential_service)
     return LangChainAgentRuntime(agent, browser, agent_context, sensitive_inputs, thread_id)
-
-
-def build_agent_runtime(thread_id, user_id, credential_ids=(), credential_service=None, headless=True, run_id=None):
-    from tabvio.config import read_agentcore_runtime_arn
-
-    runtime_arn = read_agentcore_runtime_arn()
-    if runtime_arn:
-        from tabvio.remote.runtime import RemoteAgentRuntime
-
-        return RemoteAgentRuntime(runtime_arn, thread_id, user_id, credential_ids, credential_service, run_id=run_id)
-    return build_local_agent_runtime(thread_id, user_id, credential_ids, credential_service, headless)
