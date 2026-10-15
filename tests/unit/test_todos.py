@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from deepagents import create_deep_agent
@@ -65,7 +67,8 @@ class TodoEventTests(unittest.IsolatedAsyncioTestCase):
 
 class BrowserAgentTodoTests(unittest.TestCase):
     def test_the_browser_agent_offers_write_todos(self) -> None:
-        agent = build_browser_agent(BrowserSession(), SensitiveInputChannel())
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            agent = build_browser_agent(BrowserSession(), SensitiveInputChannel())
         tool_names = agent.nodes["tools"].bound.tools_by_name
         self.assertIn("write_todos", tool_names)
 
