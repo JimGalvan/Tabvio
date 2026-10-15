@@ -1,8 +1,10 @@
 import unittest
+import json
 from uuid import uuid4
 
 from pydantic import ValidationError
 
+from tabvio.agents.browser_agent.schema_utils import SchemaUtils
 from tabvio.agents.browser_agent.steps import StepPlan, validate_plan
 from tabvio.browser.models import Element
 
@@ -150,6 +152,29 @@ class SecureBrowserStepTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "must be final"):
             validate_plan(self._browser, plan.steps)
+
+
+class StepPlanSchemaTests(unittest.TestCase):
+    def test_schema_uses_strict_compatible_union_and_required_nullable_fields(self):
+        original = StepPlan.model_json_schema()
+        before = json.dumps(original)
+        schema = SchemaUtils.inline_references(original)
+        serialized = json.dumps(schema)
+        for unsupported in ("$ref", "$defs", "discriminator", "oneOf", "default"):
+            self.assertNotIn(unsupported, serialized)
+        self.assertEqual(json.dumps(original), before)
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["required"], ["steps"])
+        actions = []
+        for branch in schema["properties"]["steps"]["items"]["anyOf"]:
+            actions.append(branch["properties"]["action"]["const"])
+            self.assertFalse(branch["additionalProperties"])
+            self.assertEqual(branch["required"], list(branch["properties"]))
+            if branch["properties"]["action"]["const"] == "request_mfa_code":
+                self.assertIn({"type": "null"}, branch["properties"]["submit_element_index"]["anyOf"])
+        self.assertEqual(sorted(actions), [
+            "click", "fill", "fill_credential", "press", "request_mfa_code", "select",
+        ])
 
 
 if __name__ == "__main__":
