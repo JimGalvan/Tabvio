@@ -29,7 +29,7 @@ class CredentialMetadata:
     login_hint: str
     is_default: bool
     available_fields: tuple[CredentialField, ...] = ("login", "password")
-    preferred_verification: tuple[VerificationMethod, ...] = ()
+    preferred_verification: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

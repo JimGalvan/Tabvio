@@ -4,14 +4,14 @@ import logging
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from tabvio.agents.browser_agent.constants import (
+from tabvio_agent.browser_agent.constants import (
     HISTORY_CHARACTER_LIMIT,
     PAGE_CHARACTER_LIMIT,
     REQUEST_CHARACTER_LIMIT,
     SUMMARY_TIMEOUT_SECONDS,
 )
-from tabvio.agents.settings import AgentSettings
-from tabvio.agents.shared.llm import build_fast_model
+from tabvio_agent.settings import AgentSettings
+from tabvio_agent.shared.llm import build_fast_model
 
 logger = logging.getLogger(__name__)
 

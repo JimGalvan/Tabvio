@@ -1,7 +1,7 @@
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 
-from tabvio.agents.shared import constants
+from tabvio_agent.shared import constants
 
 
 def build_strong_model(model: str) -> BaseChatModel:

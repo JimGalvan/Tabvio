@@ -6,7 +6,7 @@ from tabvio_agent.models import CredentialMetadata, CredentialSecret
 
 class CredentialProvider(Protocol):
     async def list_selected(self) -> tuple[CredentialMetadata, ...]:
-        raise NotImplementedError
+        ...
 
     async def resolve(self, credential_id: UUID, domain: str) -> CredentialSecret:
-        raise NotImplementedError
+        ...
