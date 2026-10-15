@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal, TypeAlias
 from uuid import UUID
 
-from tabvio_agent.models import BrowserAction, Todo
+from tabvio_agent.models import BrowserAction, SessionStatus, Todo
 
 
 @dataclass(frozen=True)
@@ -138,6 +138,18 @@ class BrowserCaptureRecoveredEvent:
     event_type: Literal["browser.capture.recovered"] = field(default="browser.capture.recovered", init=False)
 
 
+@dataclass(frozen=True)
+class SessionStatusEvent:
+    status: SessionStatus
+    event_type: Literal["run.status"] = field(default="run.status", init=False)
+
+
+@dataclass(frozen=True)
+class BrowserControlAppliedEvent:
+    detail: str
+    event_type: Literal["browser.control.applied"] = field(default="browser.control.applied", init=False)
+
+
 _InputEvent: TypeAlias = (
     InputRequiredEvent
     | InputReceivedEvent
@@ -162,6 +174,8 @@ _SessionEvent: TypeAlias = (
     | RunCancelledEvent
     | TakeoverStartedEvent
     | TakeoverEndedEvent
+    | SessionStatusEvent
+    | BrowserControlAppliedEvent
 )
 AgentEvent: TypeAlias = (
     AgentMessageDeltaEvent | _InputEvent | _BrowserEvent | TaskTodosEvent | _SessionEvent
