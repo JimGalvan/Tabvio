@@ -127,7 +127,7 @@ def build_agent_runtime(
     agent_context = AgentContext()
     sensitive_inputs = SensitiveInputChannel()
     credential_provider = None
-    if credential_service is not None and credential_ids and user_id is not None:
+    if credential_service and credential_ids and user_id:
         credential_provider = CredentialServiceProvider(credential_service, user_id, credential_ids)
     agent = build_browser_agent(browser, sensitive_inputs, credential_provider=credential_provider)
     return LangChainAgentRuntime(agent, browser, agent_context, sensitive_inputs, thread_id)

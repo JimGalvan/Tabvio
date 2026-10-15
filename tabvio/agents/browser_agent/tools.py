@@ -89,7 +89,7 @@ def build_browser_tools(
     @tool
     async def list_selected_credentials(runtime: ToolRuntime[AgentContext]) -> str:
         """List safe metadata for credentials selected for this run."""
-        if credential_provider is None:
+        if not credential_provider:
             return "[]"
         metadata = await credential_provider.list_selected()
 
@@ -222,7 +222,7 @@ def build_browser_tools(
         return None
 
     async def fill_credential(step: CredentialFillStep) -> None:
-        if credential_provider is None:
+        if not credential_provider:
             raise RuntimeError("Credential storage is not configured")
         secret = await credential_provider.resolve(step.credential_id, browser.current_hostname)
         value = getattr(secret, step.field)
