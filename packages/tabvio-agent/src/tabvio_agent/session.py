@@ -222,17 +222,16 @@ class BrowserAgentSession:
             yield event
 
     async def cancel(self) -> None:
-        async with self._command_lock:
-            if self._closed or self._terminal:
-                return
-            if self._execution_task and not self._execution_task.done():
-                self._execution_task.cancel()
-                await self._await_task(self._execution_task)
-            if not self._terminal:
-                self._terminal = True
-                await self._emit(RunCancelledEvent())
-                await self._set_status("cancelled")
-            await self._finish_resources()
+        if self._closed or self._terminal:
+            return
+        if self._execution_task and not self._execution_task.done():
+            self._execution_task.cancel()
+            await self._await_task(self._execution_task)
+        if not self._terminal:
+            self._terminal = True
+            await self._emit(RunCancelledEvent())
+            await self._set_status("cancelled")
+        await self._finish_resources()
 
     async def close(self) -> None:
         async with self._command_lock:

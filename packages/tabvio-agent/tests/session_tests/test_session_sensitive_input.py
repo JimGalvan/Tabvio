@@ -72,6 +72,37 @@ class SessionSensitiveInputTests(unittest.IsolatedAsyncioTestCase):
             "entered": True, "submitted": "Filled element [8] and submitted it",
         })
 
+    async def test_cancel_closes_the_browser_during_sensitive_submission(self):
+        session, browser, events, request = await self.park(submit_element_index=12)
+        entered = asyncio.Event()
+        browser_closed = asyncio.Event()
+
+        async def fill(*args):
+            entered.set()
+            await browser_closed.wait()
+            raise RuntimeError("Browser closed before submission")
+
+        browser.fill_sensitive.side_effect = fill
+        browser.close.side_effect = browser_closed.set
+        submitting = asyncio.create_task(session.submit_sensitive_input(request.request_id, "123456"))
+        await entered.wait()
+        try:
+            async with asyncio.timeout(2):
+                await session.cancel()
+            with self.assertRaisesRegex(RuntimeError, "Browser closed before submission"):
+                await submitting
+        finally:
+            submitting.cancel()
+            await asyncio.gather(submitting, return_exceptions=True)
+
+        browser.close.assert_awaited_once()
+        self.assertTrue(session._execution_task.done())
+        remaining = []
+        async for event in events:
+            remaining.append(event.event_type)
+        self.assertEqual(remaining, ["run.status", "run.cancelled", "run.status"])
+        self.assertEqual(session._status, "cancelled")
+
     async def test_declining_sends_the_agent_back_without_a_code(self):
         session, browser, events, request = await self.park()
         with patch.object(session._runtime, "resume_input", wraps=session._runtime.resume_input) as resume:
