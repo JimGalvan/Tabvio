@@ -35,7 +35,10 @@ class PaymentDetectionResult:
 
     def needs_handoff(self, acknowledged: str | None) -> bool:
         fingerprint = self.fingerprint
-        return fingerprint is not None and fingerprint != acknowledged
+        for signal in self._signals:
+            if signal.type in PAYMENT_HANDOFF_SIGNAL_KINDS and signal.type != "pay-button":
+                return fingerprint is not None and fingerprint != acknowledged
+        return False
 
     def describe(self) -> str:
         signals = self.get_signals

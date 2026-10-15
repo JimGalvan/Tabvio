@@ -30,8 +30,18 @@ class PaymentDetectionResultTests(unittest.TestCase):
         self.assertTrue(observed.needs_handoff(None))
         self.assertIn("cc-number", observed.describe())
 
-    def test_a_pay_button_stops_the_agent(self) -> None:
-        self.assertTrue(detection(CHECKOUT_URL, PAY_BUTTON).needs_handoff(None))
+    def test_a_pay_button_alone_does_not_stop_the_agent(self) -> None:
+        self.assertFalse(detection(CHECKOUT_URL, PAY_BUTTON).needs_handoff(None))
+
+    def test_a_pay_button_with_a_card_field_stops_the_agent(self) -> None:
+        observed = detection(CHECKOUT_URL, PAY_BUTTON + [CARD_FIELDS[0]])
+        self.assertTrue(observed.needs_handoff(None))
+
+    def test_each_card_autocomplete_field_stops_the_agent_on_its_own(self) -> None:
+        for value in ("cc-number", "cc-exp", "cc-exp-month", "cc-exp-year", "cc-csc"):
+            with self.subTest(value=value):
+                observed = detection(CHECKOUT_URL, [("card-autocomplete", value)])
+                self.assertTrue(observed.needs_handoff(None))
 
     def test_a_signal_the_agent_does_not_act_on_is_ignored(self) -> None:
         observed = detection("https://shop.example.com/products/shoes", UNKNOWN_SIGNAL)
@@ -62,9 +72,9 @@ class PaymentDetectionResultTests(unittest.TestCase):
         self.assertTrue(observed.needs_handoff(acknowledged))
 
     def test_a_rising_order_total_is_not_a_new_page(self) -> None:
-        acknowledged = detection(CHECKOUT_URL, PAY_BUTTON).fingerprint
+        acknowledged = detection(CHECKOUT_URL, PAY_BUTTON + CARD_FIELDS).fingerprint
 
-        observed = detection(CHECKOUT_URL, PAY_BUTTON)
+        observed = detection(CHECKOUT_URL, PAY_BUTTON + CARD_FIELDS)
         self.assertFalse(observed.needs_handoff(acknowledged))
 
     def test_leaving_the_payment_page_clears_the_block(self) -> None:
