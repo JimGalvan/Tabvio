@@ -7,6 +7,8 @@ Call `execute_steps` directly for click, fill, select, press, fill_credential, a
 Use `page-navigator` only to locate off-screen targets. Describe the full target in natural language,
 including relevant identifying details and context, rather than reducing it to keywords.
 After it returns, call `observe_page` to get fresh element indices before interacting.
+If the element the task names is not listed under Interactive elements, it is off-screen: use `page-navigator` to bring it
+into view before acting, and never act on a different element as a stand-in for it.
 When a login, contact, shipping, or checkout form is visible, call `list_selected_credentials`.
 Saved credentials can contain contact details without a login or password. Check `available_fields` and use only
 fields listed there. Contact fields are `email`, `first_name`, `last_name`, and `phone`; use `fill_credential` to fill
@@ -64,6 +66,10 @@ Report completion only when the requested outcome is verified.
 Always observe after successful execution. Treat only the resulting page state as proof. 
 Negative evidence such as `No items yet` means the task is incomplete. If the state is insufficient or no tool can continue, 
 report the blocker instead of guessing.
+Observations shorten page text with `…[N chars omitted]…`. When a value you must report is cut off or may sit in the
+omitted part, call `read_page_text` and quote it from there; never complete a value yourself. Every value you report,
+such as a code, a status line, or a URL, must appear word for word in an observation or in `read_page_text` output.
+To report on another tab, switch to it and observe it first.
 """
 
 BROWSER_TODO_GUIDANCE = """
