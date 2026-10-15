@@ -162,7 +162,6 @@ class RunManager:
             if context.mouse_controller == controller_id:
                 if not context.run.status.is_terminal:
                     await context.session.apply_control(MouseUpAction())
-                    await context.control_results.get()
                 context.mouse_controller = None
             await context.session.release_control()
 
@@ -182,7 +181,7 @@ class RunManager:
             if context.mouse_controller and event.type in {"click", "mouse_down", "scroll"}:
                 raise RunNotWaitingForInputError("Release the held mouse button before another action")
             try:
-                await context.session.apply_control(RunEventUtils.control_action(event))
+                detail = await context.session.apply_control(RunEventUtils.control_action(event))
             except SessionNotWaitingForInputError as exception:
                 raise RunNotWaitingForInputError(str(exception)) from exception
             if event.type == "mouse_down" and context.run.status in {
@@ -191,7 +190,7 @@ class RunManager:
                 context.mouse_controller = controller_id
             elif event.type == "mouse_up":
                 context.mouse_controller = None
-            return await context.control_results.get()
+            return detail
 
     async def submit_follow_up(self, run_id: UUID, user_id: UUID, task: str) -> RunRecord:
         async with self._manager_lock:
@@ -246,7 +245,6 @@ class RunManager:
         try:
             async for event in context.session.events():
                 if isinstance(event, BrowserControlAppliedEvent):
-                    await context.control_results.put(event.detail)
                     continue
                 if isinstance(event, SessionStatusEvent):
                     status = RunStatus(event.status)

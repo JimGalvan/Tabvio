@@ -148,7 +148,7 @@ class BrowserAgentSession:
                 await self._emit(TakeoverStartedEvent())
             self._start_frame_capture()
 
-    async def apply_control(self, action: BrowserControlAction) -> None:
+    async def apply_control(self, action: BrowserControlAction) -> str:
         async with self._control_lock:
             if action.type == "mouse_up":
                 await self._release_control_mouse()
@@ -159,6 +159,7 @@ class BrowserAgentSession:
                     raise SessionNotWaitingForInputError("Release the held mouse button before another action")
                 detail = await self._apply_control(action)
             await self._emit(BrowserControlAppliedEvent(detail))
+            return detail
 
     async def _apply_control(self, action: BrowserControlAction) -> str:
         if action.type == "mouse_down":

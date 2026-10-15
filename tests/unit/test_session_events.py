@@ -168,11 +168,34 @@ class SessionEventBookkeepingTests(unittest.IsolatedAsyncioTestCase):
         await self.status(RunStatus.WAITING_FOR_INPUT)
         async def applied(action):
             await self.emit(BrowserControlAppliedEvent("Clicked"))
+            return "Clicked"
         self.session.apply_control = AsyncMock(side_effect=applied)
         detail = await self.manager.apply_control(self.context, BrowserControlEvent(type="click", x=10, y=20))
         self.assertEqual(detail, "Clicked")
         for event in self.context.events:
             self.assertNotEqual(event.event_type, "browser.control.applied")
+
+    async def test_ending_during_control_returns_the_result_and_releases_the_lock(self):
+        await self.emit(RunCompletedEvent("Done"), SessionStatusEvent("ready_for_follow_up"))
+        await self.status(RunStatus.READY_FOR_FOLLOW_UP)
+        entered = asyncio.Event()
+        proceed = asyncio.Event()
+
+        async def applied(action):
+            entered.set()
+            await proceed.wait()
+            await self.emit(BrowserControlAppliedEvent("Clicked"))
+            return "Clicked"
+
+        self.session.apply_control = AsyncMock(side_effect=applied)
+        applying = asyncio.create_task(self.manager.apply_control(self.context, BrowserControlEvent(type="click")))
+        await entered.wait()
+        await self.manager.end_session(self.run.id, self.owner)
+        self.assertTrue(self.context.event_task.done())
+        proceed.set()
+        async with asyncio.timeout(2):
+            self.assertEqual(await applying, "Clicked")
+        self.assertFalse(self.context.control_lock.locked())
 
     async def test_frame_fan_out_and_terminal_cache_keep_the_latest_frame(self):
         first_viewer = self.manager.stream_frames(self.run.id, self.owner)

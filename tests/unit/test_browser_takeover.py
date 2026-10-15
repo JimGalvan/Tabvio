@@ -90,9 +90,7 @@ class TakeoverControllerTests(unittest.IsolatedAsyncioTestCase):
         session = AsyncMock()
         run = build_run(uuid4(), status=RunStatus.WAITING_FOR_INPUT)
         context = RunContext(run=run, session=session)
-        async def applied(action):
-            await context.control_results.put("Applied")
-        session.apply_control.side_effect = applied
+        session.apply_control.return_value = "Applied"
         manager = app_module.run_manager
         await manager.apply_control(context, BrowserControlEvent(type="mouse_down", x=100, y=200), "owner")
         await manager.apply_control(context, BrowserControlEvent(type="mouse_up"), "other")

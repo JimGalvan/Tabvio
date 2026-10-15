@@ -44,7 +44,7 @@ class SessionTakeoverTests(unittest.IsolatedAsyncioTestCase):
             (ClickAction(100, 200), "Clicked"), (TextAction("hello"), "Typed text"),
             (KeyAction("Enter"), "Pressed Enter"), (ScrollAction(10, 20, 300), "Scrolled"),
         ):
-            self.assertIsNone(await session.apply_control(action))
+            self.assertEqual(await session.apply_control(action), detail)
             self.assertEqual((await next_event(events, "browser.control.applied")).detail, detail)
         browser.user_click.assert_awaited_once_with(100, 200)
         browser.user_text.assert_awaited_once_with("hello")

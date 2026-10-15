@@ -79,7 +79,6 @@ class RunContext:
     frame_task: asyncio.Task[None] | None = None
     follow_up_expiry_task: asyncio.Task[None] | None = None
     sensitive_input_request_id: UUID | None = None
-    control_results: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
     mouse_controller: str | None = None
     control_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
