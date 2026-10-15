@@ -2,8 +2,10 @@
 __pycache__/
 /.venv/
 /data/
-/*.egg-info/
+*.egg-info/
 /.idea/
 /.pytest_cache/
 /.ruff_cache/
 **/.ipynb_checkpoints/
+build/
+dist/
