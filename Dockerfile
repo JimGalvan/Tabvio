@@ -11,13 +11,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY packages/tabvio-agent/pyproject.toml ./packages/tabvio-agent/pyproject.toml
+RUN uv sync --frozen --no-dev --no-install-workspace
 
 # Google Chrome rather than the Chromium Playwright bundles: Chromium names
 # itself HeadlessChrome to every site it visits, and bot detection refuses it.
 # Xvfb supplies the display Chrome needs to run headful, which is what drops
 # that name from its user agent and client hints.
-RUN uv run playwright install --with-deps chrome \
+RUN uv run --no-sync playwright install --with-deps chrome \
     && apt-get update \
     && apt-get install -y --no-install-recommends xvfb xauth \
     && rm -rf /var/lib/apt/lists/*

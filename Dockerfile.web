@@ -10,8 +10,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY packages/tabvio-agent/pyproject.toml ./packages/tabvio-agent/pyproject.toml
+RUN uv sync --frozen --no-dev --no-install-workspace
 COPY tabvio ./tabvio
+COPY packages/tabvio-agent/src ./packages/tabvio-agent/src
 RUN uv sync --frozen --no-dev
 RUN mkdir -p /app/data
 

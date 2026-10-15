@@ -12,8 +12,10 @@ data/
 notebooks/
 tests/
 docs/
-*.egg-info/
+**/*.egg-info/
 .dockerignore
 Dockerfile
 railway.json
 README.md
+**/build/
+dist/
