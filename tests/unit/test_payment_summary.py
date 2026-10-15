@@ -2,67 +2,66 @@ import asyncio
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
-from strands.interrupt import Interrupt, InterruptException
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import GraphInterrupt
+from langgraph.graph import MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
+from langgraph.types import Command, Interrupt
 
-from tabvio.agents.strands.browser_agent.context import AgentContext
-from tabvio.agents.strands.browser_agent.payment_summary import (
+from tabvio.agents.browser_agent.context import AgentContext
+from tabvio.agents.browser_agent.payment_summary import (
     generate_payment_summary,
     summary_evidence,
 )
-from tabvio.agents.strands.browser_agent.tools import build_browser_tools
-from tabvio.agents.strands.shared.events import AgentEventChannel
+from tabvio.agents.browser_agent.tools import build_browser_tools
 from tabvio.browser.models import PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 
-SUMMARY_MODULE = "tabvio.agents.strands.browser_agent.payment_summary"
+SUMMARY_MODULE = "tabvio.agents.browser_agent.payment_summary"
 SUMMARY_TEXT = "I added two items and selected standard delivery. The total is USD 48.50."
 PAGE_STATE = "Checkout: two items. Total USD 48.50. Card number: [empty]"
 
 
-def source_agent():
-    return SimpleNamespace(
-        messages=[
-            {"role": "user", "content": [{"text": "Buy two items with standard delivery"}]},
-            {"role": "assistant", "content": [{"toolUse": {
-                "name": "execute_steps", "toolUseId": "step-1",
-                "input": {"steps": [{"action": "click", "element_index": 4}]},
-            }}]},
-            {"role": "user", "content": [{"toolResult": {
-                "toolUseId": "step-1", "status": "success",
-                "content": [{"text": '{"ok": true, "completed": ["click[4]"]}'}],
-            }}]},
+def source_state():
+    return {
+        "messages": [
+            HumanMessage("Buy two items with standard delivery"),
+            AIMessage("", tool_calls=[{
+                "name": "execute_steps", "id": "step-1",
+                "args": {"steps": [{"action": "click", "element_index": 4}]},
+            }]),
+            ToolMessage('{"ok": true, "completed": ["click[4]"]}', tool_call_id="step-1"),
         ],
-        state={"todos": [{"content": "Choose delivery", "status": "completed"}]},
-    )
+        "todos": [{"content": "Choose delivery", "status": "completed"}],
+    }
 
 
 class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.model_patch = patch(f"{SUMMARY_MODULE}.build_fast_model")
-        self.model_patch.start()
+        self.model_patch = patch(f"{SUMMARY_MODULE}.build_summary_model")
+        self.model_factory = self.model_patch.start()
         self.addCleanup(self.model_patch.stop)
-        self.agent_patch = patch(f"{SUMMARY_MODULE}.Agent")
-        self.agent_factory = self.agent_patch.start()
-        self.addCleanup(self.agent_patch.stop)
-        result = MagicMock(stop_reason="end_turn")
-        result.__str__.return_value = f" {SUMMARY_TEXT}\n"
-        self.invoke = AsyncMock(return_value=result)
-        self.agent_factory.return_value.invoke_async = self.invoke
+        self.invoke = AsyncMock(return_value=AIMessage(
+            f" {SUMMARY_TEXT}\n", response_metadata={"finish_reason": "stop"}
+        ))
+        self.model_factory.return_value.ainvoke = self.invoke
 
     async def test_summary_uses_history_todos_and_current_page_without_tools(self):
-        agent = source_agent()
-        before = json.dumps(agent.messages)
+        agent = source_state()
+        before = list(agent["messages"])
         summary = await generate_payment_summary(agent, PAGE_STATE)
 
         self.assertEqual(summary, SUMMARY_TEXT)
-        self.assertEqual(self.agent_factory.call_args.kwargs["tools"], [])
-        self.assertEqual(json.dumps(agent.messages), before)
-        evidence = json.loads(self.invoke.call_args.args[0])
+        self.model_factory.return_value.bind_tools.assert_not_called()
+        self.assertEqual(agent["messages"], before)
+        evidence = json.loads(self.invoke.call_args.args[0][1].content)
         self.assertIn("Buy two items", evidence["original_request"])
         self.assertIn("click[4]", evidence["recent_history_excerpt"])
-        self.assertIn("[x] Choose delivery", evidence["current_todos"])
+        self.assertEqual(evidence["current_todos"], agent["todos"])
         self.assertEqual(evidence["current_page_snapshot"], PAGE_STATE)
 
     async def test_model_failure_and_empty_or_incomplete_results_return_no_summary(self):
@@ -72,17 +71,17 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
                     self.invoke.side_effect = outcome
                 else:
                     self.invoke.side_effect = None
-                    result = MagicMock(
-                        stop_reason="max_tokens" if outcome == "incomplete" else "end_turn"
+                    self.invoke.return_value = AIMessage(
+                        outcome, response_metadata={
+                            "finish_reason": "length" if outcome == "incomplete" else "stop"
+                        },
                     )
-                    result.__str__.return_value = outcome
-                    self.invoke.return_value = result
-                self.assertEqual(await generate_payment_summary(source_agent(), PAGE_STATE), "")
+                self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
 
     async def test_timeout_cancels_summary_and_returns_no_summary(self):
         cancelled = asyncio.Event()
 
-        async def stall(_):
+        async def stall(*args, **kwargs):
             try:
                 await asyncio.Future()
             finally:
@@ -90,21 +89,27 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
 
         self.invoke.side_effect = stall
         with patch(f"{SUMMARY_MODULE}.SUMMARY_TIMEOUT_SECONDS", 0.01):
-            self.assertEqual(await generate_payment_summary(source_agent(), PAGE_STATE), "")
+            self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
         self.assertTrue(cancelled.is_set())
 
     async def test_run_cancellation_is_not_swallowed(self):
         self.invoke.side_effect = asyncio.CancelledError()
         with self.assertRaises(asyncio.CancelledError):
-            await generate_payment_summary(source_agent(), PAGE_STATE)
+            await generate_payment_summary(source_state(), PAGE_STATE)
+
+    async def test_incomplete_responses_result_is_not_shown(self):
+        self.invoke.return_value = AIMessage(
+            SUMMARY_TEXT, response_metadata={"status": "incomplete"}
+        )
+        self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
 
     def test_long_history_keeps_request_and_recent_results_and_omits_images_and_reasoning(self):
-        agent = source_agent()
-        agent.messages.insert(1, {"role": "user", "content": [
-            {"text": "old observation" * 10_000},
-            {"image": {"source": {"bytes": b"image-data"}}},
-            {"reasoningContent": {"text": "private reasoning"}},
-        ]})
+        agent = source_state()
+        agent["messages"].insert(1, HumanMessage(content=[
+            {"type": "text", "text": "old observation" * 10_000},
+            {"type": "image", "data": "image-data"},
+            {"type": "reasoning", "text": "private reasoning"},
+        ]))
         evidence = summary_evidence(agent, PAGE_STATE)
         parsed = json.loads(evidence)
         self.assertLessEqual(len(parsed["recent_history_excerpt"]), 60_000)
@@ -127,67 +132,177 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             attempt_observe_page=AsyncMock(return_value=SimpleNamespace(page_state="Refreshed after payment")),
             switch_tab=AsyncMock(return_value=PAGE_STATE),
         )
-        self.channel = AgentEventChannel()
-        self.tools = {
-            tool.tool_name: tool._tool_func
-            for tool in build_browser_tools(self.browser, self.channel, AgentContext(user_id=None))
-        }
-        self.context = SimpleNamespace(agent=source_agent(), interrupt=MagicMock(side_effect=self.pause))
+        self.events = []
+        event_patch = patch(
+            "tabvio.agents.browser_agent.tools.publish_custom_event",
+            side_effect=lambda event_type, payload: self.events.append(
+                {"event_type": event_type, "payload": payload}
+            ),
+        )
+        event_patch.start()
+        self.addCleanup(event_patch.stop)
+        self.tools = {}
+        for browser_tool in build_browser_tools(self.browser):
+            self.tools[browser_tool.name] = browser_tool.coroutine
+        self.runtime = SimpleNamespace(context=AgentContext(user_id=None), state=source_state())
+        interrupt_patch = patch(
+            "tabvio.agents.browser_agent.tools.interrupt", side_effect=self.pause
+        )
+        self.interrupt = interrupt_patch.start()
+        self.addCleanup(interrupt_patch.stop)
 
     @staticmethod
-    def pause(name, reason):
-        raise InterruptException(Interrupt(id="payment", name=name, reason=reason))
+    def pause(value):
+        raise GraphInterrupt((Interrupt(value=value, id="payment"),))
 
-    async def questions(self):
+    def questions(self):
         questions = []
-        self.channel.finish()
-        while (item := await self.channel.next_item())["kind"] != "finished":
-            if item.get("event_type") == "input.required":
+        for item in self.events:
+            if item["event_type"] == "input.required":
                 questions.append(item["payload"]["question"])
+        self.events.clear()
         return questions
 
     async def test_summary_is_shown_before_pause_and_reused_on_resume_without_navigation(self):
         with patch(
-            "tabvio.agents.strands.browser_agent.tools.generate_payment_summary",
+            "tabvio.agents.browser_agent.tools.generate_payment_summary",
             new=AsyncMock(return_value=SUMMARY_TEXT),
         ) as summary:
-            with self.assertRaises(InterruptException) as raised:
-                await self.tools["navigate_and_observe"]("https://shop.example/pay", self.context)
-            question = raised.exception.interrupt.reason["question"]
+            with self.assertRaises(GraphInterrupt) as raised:
+                await self.tools["navigate_and_observe"]("https://shop.example/pay", self.runtime)
+            payload = raised.exception.args[0][0].value
+            self.assertEqual(payload["kind"], "payment_handoff")
+            question = payload["question"]
             self.assertTrue(question.startswith(SUMMARY_TEXT + "\n\n"))
             self.assertIn("enter the payment details yourself", question)
-            self.assertEqual(await self.questions(), [question])
+            self.assertEqual(self.events[-1], {
+                "event_type": "input.required",
+                "payload": {"question": question, "payment_signals": self.detection.get_signals},
+            })
+            self.assertEqual(self.questions(), [question])
             self.browser.attempt_observe_page.assert_not_awaited()
-            summary.assert_awaited_once_with(self.context.agent, PAGE_STATE)
+            summary.assert_awaited_once_with(self.runtime.state, PAGE_STATE)
 
-            self.context.interrupt.side_effect = None
-            result = await self.tools["navigate_and_observe"]("https://shop.example/pay", self.context)
+            self.interrupt.side_effect = None
+            result = await self.tools["navigate_and_observe"]("https://shop.example/pay", self.runtime)
             self.assertEqual(result, "Refreshed after payment")
             self.browser.attempt_navigate_and_observe.assert_awaited_once()
             self.browser.attempt_observe_page.assert_awaited_once()
             summary.assert_awaited_once()
-            self.assertEqual(await self.questions(), [question])
+            self.assertEqual(self.questions(), [question])
 
-            await self.tools["observe_page"](self.context)
+            await self.tools["observe_page"](self.runtime)
             summary.assert_awaited_once()
-            self.assertEqual(await self.questions(), [])
+            self.assertEqual(self.questions(), [])
 
             self.browser.payment_detection_result = PaymentDetectionResult(
                 url="https://another-shop.example/pay", signals=self.detection.signals
             )
-            self.context.interrupt.side_effect = self.pause
-            with self.assertRaises(InterruptException):
-                await self.tools["observe_page"](self.context)
+            self.interrupt.side_effect = self.pause
+            with self.assertRaises(GraphInterrupt):
+                await self.tools["observe_page"](self.runtime)
             self.assertEqual(summary.await_count, 2)
 
     async def test_model_failure_still_publishes_the_original_handoff_and_interrupts(self):
-        with patch(f"{SUMMARY_MODULE}.build_fast_model", side_effect=RuntimeError("unavailable")):
-            with self.assertRaises(InterruptException):
-                await self.tools["switch_tab"]("tab:2", self.context)
-        questions = await self.questions()
+        with patch(f"{SUMMARY_MODULE}.build_summary_model", side_effect=RuntimeError("unavailable")):
+            with self.assertRaises(GraphInterrupt):
+                await self.tools["switch_tab"]("tab:2", self.runtime)
+        questions = self.questions()
         self.assertEqual(len(questions), 1)
         self.assertTrue(questions[0].startswith("This page can take a payment"))
         self.browser.attempt_observe_page.assert_not_awaited()
+
+    async def test_payment_guard_interrupts_before_validating_or_executing_steps(self):
+        self.browser.get_stored_element = AsyncMock()
+        self.browser.click = AsyncMock()
+        self.browser.fill = AsyncMock()
+        with patch(
+            "tabvio.agents.browser_agent.tools.generate_payment_summary",
+            new=AsyncMock(return_value=SUMMARY_TEXT),
+        ) as summary:
+            with self.assertRaises(GraphInterrupt):
+                await self.tools["execute_steps"]([
+                    {"action": "click", "element_index": 4},
+                ], self.runtime)
+
+        summary.assert_awaited_once_with(self.runtime.state, "")
+        self.browser.get_stored_element.assert_not_called()
+        self.browser.click.assert_not_awaited()
+        self.browser.fill.assert_not_awaited()
+        self.assertEqual(self.events[0]["event_type"], "input.required")
+
+    async def test_observe_and_switch_replay_refresh_without_repeating_browser_calls(self):
+        for name, args in (("observe_page", ()), ("switch_tab", ("tab:2",))):
+            with self.subTest(tool=name):
+                self.events.clear()
+                self.browser.attempt_observe_page.reset_mock()
+                self.browser.switch_tab.reset_mock()
+                self.interrupt.side_effect = self.pause
+                tools = {}
+                for browser_tool in build_browser_tools(self.browser):
+                    tools[browser_tool.name] = browser_tool.coroutine
+                with patch(
+                    "tabvio.agents.browser_agent.tools.generate_payment_summary",
+                    new=AsyncMock(return_value=SUMMARY_TEXT),
+                ) as summary:
+                    with self.assertRaises(GraphInterrupt):
+                        await tools[name](*args, self.runtime)
+                    first_event = self.events[0]
+                    self.interrupt.side_effect = None
+                    result = await tools[name](*args, self.runtime)
+
+                self.assertEqual(result, "Refreshed after payment")
+                summary.assert_awaited_once()
+                if name == "observe_page":
+                    self.assertEqual(first_event["event_type"], "browser.observation")
+                    self.assertEqual(self.browser.attempt_observe_page.await_count, 2)
+                    self.browser.switch_tab.assert_not_awaited()
+                else:
+                    self.assertEqual(first_event, {
+                        "event_type": "browser.tab.changed", "payload": {"tab_id": "tab:2"},
+                    })
+                    self.browser.switch_tab.assert_awaited_once_with("tab:2")
+                    self.browser.attempt_observe_page.assert_awaited_once()
+
+
+class PaymentGraphTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tool_runtime_injection_and_payment_resume_through_a_checkpoint(self):
+        browser = SimpleNamespace(
+            payment_detection_result=PaymentDetectionResult(
+                url="https://shop.example/pay",
+                signals=(PaymentSignal(type="card-autocomplete", value="cc-number"),),
+            ),
+            attempt_navigate_and_observe=AsyncMock(return_value=SimpleNamespace(page_state=PAGE_STATE)),
+            attempt_observe_page=AsyncMock(return_value=SimpleNamespace(page_state="Payment complete")),
+        )
+        graph = StateGraph(MessagesState, context_schema=AgentContext)
+        graph.add_node("tools", ToolNode(build_browser_tools(browser)))
+        graph.set_entry_point("tools")
+        graph.set_finish_point("tools")
+        agent = graph.compile(checkpointer=InMemorySaver())
+        config = {"configurable": {"thread_id": str(uuid4())}}
+        call_id = str(uuid4())
+        with patch(
+            "tabvio.agents.browser_agent.tools.generate_payment_summary",
+            new=AsyncMock(return_value=SUMMARY_TEXT),
+        ) as summary:
+            paused = await agent.ainvoke({"messages": [
+                HumanMessage("Buy two items with standard delivery"),
+                AIMessage("", tool_calls=[{
+                    "id": call_id, "name": "navigate_and_observe",
+                    "args": {"url": "https://shop.example/pay"},
+                }]),
+            ]}, config, context=AgentContext(user_id=None))
+            payload = paused["__interrupt__"][0].value
+            self.assertEqual(payload["kind"], "payment_handoff")
+            self.assertTrue(payload["question"].startswith(SUMMARY_TEXT))
+            resumed = await agent.ainvoke(Command(resume="Continue"), config)
+        self.assertNotIn("__interrupt__", resumed)
+        self.assertEqual(resumed["messages"][-1].content, "Payment complete")
+        self.assertEqual(resumed["messages"][-1].tool_call_id, call_id)
+        browser.attempt_navigate_and_observe.assert_awaited_once()
+        browser.attempt_observe_page.assert_awaited_once()
+        summary.assert_awaited_once()
 
 
 if __name__ == "__main__":
