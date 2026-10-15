@@ -132,7 +132,7 @@ class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(results[1], SessionNotWaitingForInputError)
         await session._execution_task
 
-    async def test_close_waits_for_sensitive_submission_and_stops_the_resumed_turn(self):
+    async def test_close_refuses_resume_after_sensitive_submission_finishes(self):
         call = {"name": "request_code", "args": {}, "id": str(uuid4())}
         session, browser = build_session(
             AIMessage(content="", tool_calls=[call]), AIMessage(content="Done"), tools=sensitive_tools,
@@ -148,11 +148,12 @@ class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
             await proceed.wait()
             return "Submitted"
         browser.fill_sensitive.side_effect = fill
+        browser.close.side_effect = proceed.set
         submitted = asyncio.create_task(session.submit_sensitive_input(request.request_id, "123456"))
         await entered.wait()
-        closing = asyncio.create_task(session.close())
-        proceed.set()
-        await asyncio.gather(submitted, closing)
+        await session.close()
+        with self.assertRaisesRegex(RuntimeError, "already been closed"):
+            await submitted
         self.assertTrue(session._closed)
         self.assertTrue(session._execution_task.done())
         self.assertIsNone(session._capture_task)

@@ -240,12 +240,10 @@ class BrowserAgentSession:
         await self._await_task(self._execution_task)
 
     async def close(self) -> None:
-        async with self._command_lock:
-            if self._execution_task and not self._execution_task.done():
-                if not self._terminal and self._status != "ready_for_follow_up":
-                    self._execution_task.cancel()
-                await self._await_task(self._execution_task)
-            await self._finish_resources()
+        if self._status == "ready_for_follow_up" or self._execution_task is None:
+            await self._terminate()
+        else:
+            await self.cancel()
 
     async def __aenter__(self) -> Self:
         return self

@@ -103,6 +103,37 @@ class SessionSensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(remaining, ["run.status", "run.cancelled", "run.status"])
         self.assertEqual(session._status, "cancelled")
 
+    async def test_close_interrupts_sensitive_submission_without_resuming(self):
+        session, browser, events, request = await self.park(submit_element_index=12)
+        entered = asyncio.Event()
+        browser_closed = asyncio.Event()
+
+        async def fill(*args):
+            entered.set()
+            await browser_closed.wait()
+            raise RuntimeError("Browser closed before submission")
+
+        browser.fill_sensitive.side_effect = fill
+        browser.close.side_effect = browser_closed.set
+        with patch.object(session._runtime, "stream", wraps=session._runtime.stream) as stream:
+            submitting = asyncio.create_task(session.submit_sensitive_input(request.request_id, "123456"))
+            await entered.wait()
+            try:
+                async with asyncio.timeout(2):
+                    await session.close()
+                    with self.assertRaisesRegex(RuntimeError, "Browser closed before submission"):
+                        await submitting
+                stream.assert_not_called()
+            finally:
+                browser_closed.set()
+                submitting.cancel()
+                await asyncio.gather(submitting, return_exceptions=True)
+
+        browser.close.assert_awaited_once()
+        self.assertTrue(session._execution_task.done())
+        self.assertIsNone(session._capture_task)
+        self.assertTrue(session._closed)
+
     async def test_declining_sends_the_agent_back_without_a_code(self):
         session, browser, events, request = await self.park()
         with patch.object(session._runtime, "resume_input", wraps=session._runtime.resume_input) as resume:
