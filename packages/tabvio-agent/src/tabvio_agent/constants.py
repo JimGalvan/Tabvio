@@ -1,2 +1,9 @@
 DEFAULT_STRONG_MODEL = "openai:gpt-5.6-luna"
 DEFAULT_FAST_MODEL = "openai:gpt-5-nano"
+AGENT_STREAM_MODES = ["messages", "custom", "updates"]
+AGENT_STREAM_VERSION = "v2"
+AGENT_INTERRUPT_KEY = "__interrupt__"
+ASSISTANT_MESSAGE_TYPES = {"ai", "AIMessageChunk"}
+MAIN_AGENT_MODEL_NAMESPACE = "model:"
+TODOS_STATE_KEY = "todos"
+TODOS_EVENT_TYPE = "task.todos"

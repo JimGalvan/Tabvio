@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, SecretStr, model_validator
 
-from tabvio.browser.constants import (
+from tabvio_agent.browser.constants import (
     CONTROL_KEYS,
     MAX_CONTROL_SCROLL_PIXELS,
     VIEWPORT_HEIGHT,
@@ -18,7 +18,7 @@ from tabvio.browser.constants import (
 from tabvio.clock import utc_now
 
 if TYPE_CHECKING:
-    from tabvio.runs.runtime import LangChainAgentRuntime
+    from tabvio_agent.runtime import LangChainAgentRuntime
 
 
 class RunStatus(StrEnum):

@@ -20,7 +20,7 @@ from tabvio.runs.exceptions import (
     RunNotWaitingForInputError,
     SensitiveInputNotPendingError,
 )
-from tabvio.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
+from tabvio_agent.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio.runs.models import (
     BrowserControlEvent,
     RunContext,
