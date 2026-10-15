@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, patch
 
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import interrupt
@@ -43,11 +42,13 @@ def ask_person(question: str) -> str:
 def build_session(*messages, settings=None, tools=None, browser=None):
     browser = browser or FakeBrowser()
     model = ScriptedModel(messages=iter(messages))
-    agent = create_deep_agent(
-        model=model, tools=tools or [ask_person], checkpointer=InMemorySaver(),
-    )
+    def build_agent(browser, channel, settings, **kwargs):
+        selected_tools = tools(browser, channel) if callable(tools) else tools
+        return create_deep_agent(
+            model=model, tools=selected_tools or [ask_person], checkpointer=InMemorySaver(),
+        )
     with patch("tabvio_agent.session.BrowserSession", return_value=browser):
-        with patch("tabvio_agent.session.build_browser_agent", return_value=agent):
+        with patch("tabvio_agent.session.build_browser_agent", side_effect=build_agent):
             session = BrowserAgentSession(settings or AgentSettings())
     return session, browser
 
