@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from tabvio.agents.page_navigator.tools import build_page_navigator_tools
+from tabvio_agent.page_navigator.tools import build_page_navigator_tools
 
 
 class PageNavigatorToolsTests(unittest.IsolatedAsyncioTestCase):

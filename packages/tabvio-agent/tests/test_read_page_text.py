@@ -1,7 +1,7 @@
 import unittest
 
-from tabvio.agents.browser_agent.constants import PAGE_TEXT_CHARACTER_LIMIT
-from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio_agent.browser_agent.constants import PAGE_TEXT_CHARACTER_LIMIT
+from tabvio_agent.browser_agent.tools import build_browser_tools
 
 
 class TextOnlyBrowser:

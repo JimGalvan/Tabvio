@@ -15,13 +15,13 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, Interrupt
 from pydantic import ValidationError
 
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.browser_agent.schema_utils import SchemaUtils
-from tabvio.agents.browser_agent.steps import StepPlan, validate_plan
-from tabvio.agents.browser_agent.tools import build_browser_tools
-from tabvio.browser.models import Element
-from tabvio.browser.payment_detection_result import PaymentDetectionResult
-from tabvio.runs.sensitive_input import SensitiveInputChannel
+from tabvio_agent.browser_agent.context import AgentContext
+from tabvio_agent.browser_agent.schema_utils import SchemaUtils
+from tabvio_agent.browser_agent.steps import StepPlan, validate_plan
+from tabvio_agent.browser_agent.tools import build_browser_tools
+from tabvio_agent.browser.models import Element
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
+from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 
 class ObservedBrowser:
@@ -218,7 +218,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             self.tools[browser_tool.name] = browser_tool
         self.events = []
         event_patch = patch(
-            "tabvio.agents.browser_agent.tools.publish_custom_event",
+            "tabvio_agent.browser_agent.tools.publish_custom_event",
             side_effect=lambda event_type, payload: self.events.append(
                 {"event_type": event_type, "payload": payload}
             ),
@@ -304,7 +304,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         })
 
     async def test_unsuccessful_mfa_resume_clears_request_and_reports_failure(self):
-        with patch("tabvio.agents.browser_agent.tools.interrupt", return_value={"entered": False}):
+        with patch("tabvio_agent.browser_agent.tools.interrupt", return_value={"entered": False}):
             result = json.loads(await self.tools["execute_steps"].coroutine([{
                 "action": "request_mfa_code", "element_index": 3,
                 "prompt": "Enter the code", "submit_element_index": 4,
@@ -320,7 +320,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
 
     def test_question_interrupt_keeps_the_frontend_payload(self):
         question = "Which delivery slot?"
-        with patch("tabvio.agents.browser_agent.tools.interrupt", return_value="Tomorrow") as pause:
+        with patch("tabvio_agent.browser_agent.tools.interrupt", return_value="Tomorrow") as pause:
             answer = self.tools["request_user_input"].func(question, self.runtime)
         self.assertEqual(answer, "Tomorrow")
         pause.assert_called_once_with({"kind": "question", "question": question})
@@ -332,13 +332,13 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         def pause(value):
             raise GraphInterrupt((Interrupt(value=value, id=str(uuid4())),))
 
-        with patch("tabvio.agents.browser_agent.tools.interrupt", side_effect=pause):
+        with patch("tabvio_agent.browser_agent.tools.interrupt", side_effect=pause):
             with self.assertRaises(GraphInterrupt) as raised:
                 await self.tools["execute_steps"].coroutine(steps, self.runtime)
         request = self.sensitive_inputs.pending
         self.assertEqual(request.submit_element_index, 4)
         self.assertEqual(raised.exception.args[0][0].value, {"kind": "mfa_code", "request_id": str(request.id)})
-        with patch("tabvio.agents.browser_agent.tools.interrupt", return_value={"entered": True}):
+        with patch("tabvio_agent.browser_agent.tools.interrupt", return_value={"entered": True}):
             result = json.loads(await self.tools["execute_steps"].coroutine(steps, self.runtime))
         self.assertTrue(result["ok"])
         self.assertIsNone(self.sensitive_inputs.pending)

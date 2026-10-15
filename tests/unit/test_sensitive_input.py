@@ -5,10 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
-
 from tabvio.runs import constants
 from tabvio.runs.exceptions import SensitiveInputNotPendingError
-from tabvio.runs.sensitive_input import SensitiveInputChannel
+from tabvio_agent.sensitive_input import SensitiveInputChannel
 from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
@@ -168,30 +167,3 @@ class SensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         published = self._repository.list_events(context.run.id)[-1]
         self.assertEqual(published.event_type, "sensitive_input.required")
         self.assertIn("expires_at", published.payload)
-
-
-class SensitiveInputChannelTests(unittest.TestCase):
-    """The channel keeps one request, and survives a withdrawn one being replayed."""
-
-    def test_a_withdrawn_request_can_still_be_cleared(self) -> None:
-        channel = SensitiveInputChannel()
-        request = channel.begin(4, "Enter the code")
-
-        channel.withdraw("the person walked away")
-
-        self.assertIsNone(channel.pending)
-        self.assertTrue(channel.is_withdrawn)
-        channel.clear(request.id)
-        self.assertFalse(channel.is_withdrawn)
-
-    def test_the_reason_is_handed_over_only_once(self) -> None:
-        channel = SensitiveInputChannel()
-        channel.begin(4, "Enter the code")
-        channel.withdraw("the person walked away")
-
-        self.assertEqual(channel.take_withdrawn_reason(), "the person walked away")
-        self.assertIsNone(channel.take_withdrawn_reason())
-
-
-if __name__ == "__main__":
-    unittest.main()

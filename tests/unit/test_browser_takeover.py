@@ -10,11 +10,11 @@ from uuid import uuid4
 
 from fastapi import WebSocketDisconnect
 
-from tabvio.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
+from tabvio_agent.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio.runs import constants
 from tabvio.runs.models import BrowserControlEvent, RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
-from tabvio.runs.sensitive_input import SensitiveInputChannel
+from tabvio_agent.sensitive_input import SensitiveInputChannel
 from tabvio.runs.service import RunManager
 from tabvio.server import routes as app_module
 from tests.support import anonymous_client, build_run, signed_in_client

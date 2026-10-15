@@ -12,17 +12,17 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, Interrupt
 
-from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.browser_agent.payment_summary import (
+from tabvio_agent.browser_agent.context import AgentContext
+from tabvio_agent.browser_agent.payment_summary import (
     generate_payment_summary,
     summary_evidence,
 )
-from tabvio.agents.browser_agent.tools import build_browser_tools
-from tabvio.agents.settings import AgentSettings
-from tabvio.browser.models import PaymentSignal
-from tabvio.browser.payment_detection_result import PaymentDetectionResult
+from tabvio_agent.browser_agent.tools import build_browser_tools
+from tabvio_agent.settings import AgentSettings
+from tabvio_agent.browser.models import PaymentSignal
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 
-SUMMARY_MODULE = "tabvio.agents.browser_agent.payment_summary"
+SUMMARY_MODULE = "tabvio_agent.browser_agent.payment_summary"
 SUMMARY_TEXT = "I added two items and selected standard delivery. The total is USD 48.50."
 PAGE_STATE = "Checkout: two items. Total USD 48.50. Card number: [empty]"
 
@@ -138,7 +138,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         )
         self.events = []
         event_patch = patch(
-            "tabvio.agents.browser_agent.tools.publish_custom_event",
+            "tabvio_agent.browser_agent.tools.publish_custom_event",
             side_effect=lambda event_type, payload: self.events.append(
                 {"event_type": event_type, "payload": payload}
             ),
@@ -150,7 +150,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             self.tools[browser_tool.name] = browser_tool.coroutine
         self.runtime = SimpleNamespace(context=AgentContext(), state=source_state())
         interrupt_patch = patch(
-            "tabvio.agents.browser_agent.tools.interrupt", side_effect=self.pause
+            "tabvio_agent.browser_agent.tools.interrupt", side_effect=self.pause
         )
         self.interrupt = interrupt_patch.start()
         self.addCleanup(interrupt_patch.stop)
@@ -169,7 +169,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_summary_is_shown_before_pause_and_reused_on_resume_without_navigation(self):
         with patch(
-            "tabvio.agents.browser_agent.tools.generate_payment_summary",
+            "tabvio_agent.browser_agent.tools.generate_payment_summary",
             new=AsyncMock(return_value=SUMMARY_TEXT),
         ) as summary:
             with self.assertRaises(GraphInterrupt) as raised:
@@ -221,7 +221,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.browser.click = AsyncMock()
         self.browser.fill = AsyncMock()
         with patch(
-            "tabvio.agents.browser_agent.tools.generate_payment_summary",
+            "tabvio_agent.browser_agent.tools.generate_payment_summary",
             new=AsyncMock(return_value=SUMMARY_TEXT),
         ) as summary:
             with self.assertRaises(GraphInterrupt):
@@ -246,7 +246,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
                 for browser_tool in build_browser_tools(self.browser):
                     tools[browser_tool.name] = browser_tool.coroutine
                 with patch(
-                    "tabvio.agents.browser_agent.tools.generate_payment_summary",
+                    "tabvio_agent.browser_agent.tools.generate_payment_summary",
                     new=AsyncMock(return_value=SUMMARY_TEXT),
                 ) as summary:
                     with self.assertRaises(GraphInterrupt):
@@ -287,7 +287,7 @@ class PaymentGraphTests(unittest.IsolatedAsyncioTestCase):
         config = {"configurable": {"thread_id": str(uuid4())}}
         call_id = str(uuid4())
         with patch(
-            "tabvio.agents.browser_agent.tools.generate_payment_summary",
+            "tabvio_agent.browser_agent.tools.generate_payment_summary",
             new=AsyncMock(return_value=SUMMARY_TEXT),
         ) as summary:
             paused = await agent.ainvoke({"messages": [

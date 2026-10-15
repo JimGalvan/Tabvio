@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-from tabvio.browser.page_content import PageContent
+from tabvio_agent.browser.page_content import PageContent
 
 
 class PageContentTests(unittest.IsolatedAsyncioTestCase):
@@ -18,7 +18,7 @@ class PageContentTests(unittest.IsolatedAsyncioTestCase):
             json.dumps({"pageText": "Card number Expiration Security code"}),
             json.dumps({"pageText": ""}),
         ])
-        with patch("tabvio.browser.page_content.evaluate_with_timeout", evaluate):
+        with patch("tabvio_agent.browser.page_content.evaluate_with_timeout", evaluate):
             content = await PageContent.get_page_content(page, char_budget=400)
 
         self.assertIn("iframe[0] Checkout", content)
@@ -29,7 +29,7 @@ class PageContentTests(unittest.IsolatedAsyncioTestCase):
     async def test_observation_cancellation_is_not_treated_as_missing_content(self):
         page = SimpleNamespace(frames=[Mock(is_detached=Mock(return_value=False))])
         with patch(
-            "tabvio.browser.page_content.evaluate_with_timeout",
+            "tabvio_agent.browser.page_content.evaluate_with_timeout",
             AsyncMock(side_effect=asyncio.CancelledError),
         ):
             with self.assertRaises(asyncio.CancelledError):

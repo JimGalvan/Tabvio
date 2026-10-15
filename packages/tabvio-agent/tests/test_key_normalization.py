@@ -1,6 +1,6 @@
 import unittest
 
-from tabvio.browser.browser_utils import normalize_key
+from tabvio_agent.browser.browser_utils import normalize_key
 
 
 class KeyNormalizationTests(unittest.TestCase):

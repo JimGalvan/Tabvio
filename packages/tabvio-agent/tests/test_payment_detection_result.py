@@ -2,8 +2,8 @@
 
 import unittest
 
-from tabvio.browser.models import PaymentSignal
-from tabvio.browser.payment_detection_result import PaymentDetectionResult
+from tabvio_agent.browser.models import PaymentSignal
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 
 CARD_FIELDS = [("card-autocomplete", "cc-number"), ("card-autocomplete", "cc-csc")]
 PAY_BUTTON = [("pay-button", "place-order")]
