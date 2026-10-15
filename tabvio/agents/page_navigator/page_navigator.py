@@ -2,10 +2,10 @@ from typing import Any
 
 from langchain_quickjs import CodeInterpreterMiddleware
 
-from tabvio.agents.shared.llm import build_fast_model
 from tabvio.agents.page_navigator.prompts import SYSTEM_PROMPT
-from tabvio.browser.session import BrowserSession
 from tabvio.agents.page_navigator.tools import build_page_navigator_tools
+from tabvio.agents.shared.llm import build_fast_model
+from tabvio.browser.session import BrowserSession
 
 
 def build_page_navigator(browser: BrowserSession) -> dict[str, Any]:

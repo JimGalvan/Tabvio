@@ -1,18 +1,18 @@
 from pathlib import Path
 
 from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend, CompositeBackend
+from deepagents.backends import CompositeBackend, FilesystemBackend
 from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
 
 from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.shared.llm import build_strong_model
-from tabvio.runs.sensitive_input import SensitiveInputChannel
-from tabvio.agents.page_navigator.page_navigator import build_page_navigator
 from tabvio.agents.browser_agent.prompts import SYSTEM_PROMPT, TODO_SYSTEM_PROMPT
-from tabvio.browser.session import BrowserSession
 from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.agents.page_navigator.page_navigator import build_page_navigator
+from tabvio.agents.shared.llm import build_strong_model
+from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
+from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 
 def build_browser_agent(
