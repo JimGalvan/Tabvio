@@ -27,28 +27,6 @@ def read_browser_trace_setting() -> bool:
     return configured_value in {"true", "1", "yes"}
 
 
-def read_model_provider_setting() -> str:
-    configured_value = os.getenv("TABVIO_MODEL_PROVIDER", "openai").strip().lower()
-    if configured_value not in {"openai", "bedrock"}:
-        raise RuntimeError("TABVIO_MODEL_PROVIDER must be openai or bedrock")
-    return configured_value
-
-
-def read_aws_region_setting() -> str:
-    configured_value = os.getenv("AWS_REGION", "").strip()
-    return configured_value or "us-west-2"
-
-
-def read_strong_model_setting(default: str) -> str:
-    configured_value = os.getenv("TABVIO_STRONG_MODEL", "").strip()
-    return configured_value or default
-
-
-def read_fast_model_setting(default: str) -> str:
-    configured_value = os.getenv("TABVIO_FAST_MODEL", "").strip()
-    return configured_value or default
-
-
 def read_langchain_model_setting(name: str, default: str) -> str:
     configured_value = os.getenv(name, "").strip() or default
     provider, separator, model_id = configured_value.partition(":")

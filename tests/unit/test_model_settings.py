@@ -90,17 +90,6 @@ class ModelSettingsTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "TABVIO_STRONG_MODEL must use provider:model"):
                         config.read_langchain_model_setting("TABVIO_STRONG_MODEL", "openai:default-model")
 
-    def test_legacy_provider_setting_does_not_control_langchain_models(self) -> None:
-        with patch.dict(os.environ, {"TABVIO_MODEL_PROVIDER": "bedrock"}):
-            with patch.object(llm, "init_chat_model") as initialize:
-                llm.build_strong_model()
-                initialize.assert_called_once_with("openai:gpt-5.6-luna", reasoning_effort="none")
-
-    def test_legacy_readers_still_accept_bare_model_ids(self) -> None:
-        with patch.dict(os.environ, {"TABVIO_STRONG_MODEL": "strong-id", "TABVIO_FAST_MODEL": "fast-id"}):
-            self.assertEqual(config.read_strong_model_setting("default"), "strong-id")
-            self.assertEqual(config.read_fast_model_setting("default"), "fast-id")
-
     def test_importing_model_builders_does_not_load_settings_or_create_models(self) -> None:
         with patch("dotenv.load_dotenv") as load_dotenv:
             with patch("langchain.chat_models.init_chat_model") as initialize:
