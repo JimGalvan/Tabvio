@@ -243,37 +243,46 @@ class RunManager:
         self._completed_frames.clear()
 
     async def _forward_events(self, context: RunContext) -> None:
-        async for event in context.session.events():
-            if isinstance(event, BrowserControlAppliedEvent):
-                await context.control_results.put(event.detail)
-                continue
-            if isinstance(event, SessionStatusEvent):
-                status = RunStatus(event.status)
-                if status == RunStatus.TIMED_OUT:
-                    context.run.error = None
-                await self._set_status(context, status)
-                if status == RunStatus.READY_FOR_FOLLOW_UP:
-                    context.follow_up_expiry_task = asyncio.create_task(
-                        self._expire_follow_up_window(context), name=f"follow-up-expiry-{context.run.id}",
-                    )
-                elif status.is_terminal:
-                    await self._finish_context(context)
-                continue
-            payload = RunEventUtils.payload(event)
-            if event.event_type == "run.completed":
-                context.run.final_output = event.output
-                context.run.follow_up_expires_at = utc_now() + timedelta(seconds=self._follow_up_window_seconds)
-                payload["follow_up_expires_at"] = context.run.follow_up_expires_at.isoformat()
-            elif event.event_type == "run.failed":
-                context.run.error = event.error
-                context.run.follow_up_expires_at = None
-            elif event.event_type == "run.cancelled":
-                context.run.follow_up_expires_at = None
-            elif event.event_type == "sensitive_input.required":
-                context.sensitive_input_request_id = event.request_id
-            elif event.event_type in {"sensitive_input.received", "sensitive_input.cancelled"}:
-                context.sensitive_input_request_id = None
-            await self._publish(context, event.event_type, payload, persist=event.event_type != "agent.message.delta")
+        try:
+            async for event in context.session.events():
+                if isinstance(event, BrowserControlAppliedEvent):
+                    await context.control_results.put(event.detail)
+                    continue
+                if isinstance(event, SessionStatusEvent):
+                    status = RunStatus(event.status)
+                    if status == RunStatus.TIMED_OUT:
+                        context.run.error = None
+                    await self._set_status(context, status)
+                    if status == RunStatus.READY_FOR_FOLLOW_UP:
+                        context.follow_up_expiry_task = asyncio.create_task(
+                            self._expire_follow_up_window(context), name=f"follow-up-expiry-{context.run.id}",
+                        )
+                    elif status.is_terminal:
+                        await self._finish_context(context)
+                    continue
+                payload = RunEventUtils.payload(event)
+                if event.event_type == "run.completed":
+                    context.run.final_output = event.output
+                    context.run.follow_up_expires_at = utc_now() + timedelta(seconds=self._follow_up_window_seconds)
+                    payload["follow_up_expires_at"] = context.run.follow_up_expires_at.isoformat()
+                elif event.event_type == "run.failed":
+                    context.run.error = event.error
+                    context.run.follow_up_expires_at = None
+                elif event.event_type == "run.cancelled":
+                    context.run.follow_up_expires_at = None
+                elif event.event_type == "sensitive_input.required":
+                    context.sensitive_input_request_id = event.request_id
+                elif event.event_type in {"sensitive_input.received", "sensitive_input.cancelled"}:
+                    context.sensitive_input_request_id = None
+                await self._publish(context, event.event_type, payload, persist=event.event_type != "agent.message.delta")
+        except Exception as exception:
+            context.run.error = str(exception)
+            context.run.follow_up_expires_at = None
+            try:
+                await self._publish(context, "run.failed", {"error": str(exception)})
+                await self._set_status(context, RunStatus.FAILED)
+            finally:
+                await self._finish_context(context)
 
     async def _forward_frames(self, context: RunContext) -> None:
         async for frame in context.session.screen_frames():

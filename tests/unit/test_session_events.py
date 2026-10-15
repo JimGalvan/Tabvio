@@ -121,6 +121,31 @@ class SessionEventBookkeepingTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(self.run.id, self.manager._active_run_ids)
         self.assertNotIn(self.run.id, self.manager._contexts)
 
+    async def test_event_persistence_failure_fails_the_run_and_releases_capacity(self):
+        save_event = self.repository.save_event
+
+        def fail_once(event):
+            if event.event_type == "input.required":
+                raise RuntimeError("Persistence unavailable")
+            save_event(event)
+
+        with patch.object(self.repository, "save_event", side_effect=fail_once):
+            await self.emit(InputRequiredEvent("Continue?"), SessionStatusEvent("waiting_for_input"))
+            await self.context.event_task
+
+        stored_run = self.repository.get_run(self.run.id)
+        self.assertEqual(stored_run.status, RunStatus.FAILED)
+        self.assertEqual(stored_run.error, "Persistence unavailable")
+        self.assertIsNone(stored_run.follow_up_expires_at)
+        events = self.repository.list_events(self.run.id)
+        self.assertEqual(events[-2].event_type, "run.failed")
+        self.assertEqual(events[-2].payload, {"error": "Persistence unavailable"})
+        self.assertEqual(events[-1].payload, {"status": "failed"})
+        self.session.close.assert_awaited_once()
+        self.assertTrue(self.context.frame_task.done())
+        self.assertNotIn(self.run.id, self.manager._active_run_ids)
+        self.assertNotIn(self.run.id, self.manager._contexts)
+
     async def test_timeout_status_preserves_the_existing_failed_event_payload(self):
         await self.emit(RunFailedEvent("The run exceeded its execution time limit"), SessionStatusEvent("timed_out"))
         await self.context.event_task
