@@ -1,11 +1,18 @@
-"""Language-model configuration for Tabvio's browser agent."""
-
-from pathlib import Path
-
-from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env", override=True)
+from tabvio.config import read_langchain_model_setting
 
-model = init_chat_model("openai:gpt-5-nano", reasoning_effort="low")
-strong_model = init_chat_model("openai:gpt-5.6-luna", reasoning_effort="none")
+
+def build_strong_model() -> BaseChatModel:
+    model = read_langchain_model_setting("TABVIO_STRONG_MODEL", "openai:gpt-5.6-luna")
+    if model.startswith("openai:"):
+        return init_chat_model(model, reasoning_effort="none")
+    return init_chat_model(model)
+
+
+def build_fast_model() -> BaseChatModel:
+    model = read_langchain_model_setting("TABVIO_FAST_MODEL", "openai:gpt-5-nano")
+    if model.startswith("openai:"):
+        return init_chat_model(model, reasoning_effort="low")
+    return init_chat_model(model)

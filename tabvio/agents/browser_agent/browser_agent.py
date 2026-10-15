@@ -2,11 +2,11 @@ from pathlib import Path
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend, CompositeBackend
-from langchain.agents.middleware import ModelFallbackMiddleware, ModelRetryMiddleware, TodoListMiddleware
+from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
 
 from tabvio.agents.browser_agent.context import AgentContext
-from tabvio.agents.shared.llm import strong_model
+from tabvio.agents.shared.llm import build_strong_model
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 from tabvio.agents.page_navigator.page_navigator import build_page_navigator
 from tabvio.agents.browser_agent.prompts import SYSTEM_PROMPT, TODO_SYSTEM_PROMPT
@@ -46,7 +46,7 @@ def build_browser_agent(
     )
 
     agent = create_deep_agent(
-        model=strong_model,
+        model=build_strong_model(),
         backend=backend,
         checkpointer=InMemorySaver(),
         system_prompt=SYSTEM_PROMPT,
@@ -59,7 +59,6 @@ def build_browser_agent(
                 backoff_factor=2.0,
                 initial_delay=1.0,
             ),
-            ModelFallbackMiddleware(strong_model),
             TodoListMiddleware(system_prompt=TODO_SYSTEM_PROMPT),
         ],
         context_schema=AgentContext,

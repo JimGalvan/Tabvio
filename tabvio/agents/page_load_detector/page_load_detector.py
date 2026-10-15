@@ -8,10 +8,10 @@ from typing import Any
 
 from langchain.agents import create_agent
 
-from tabvio.agents.shared.llm import model
+from tabvio.agents.shared.llm import build_fast_model
 from tabvio.agents.page_load_detector.prompts import PAGE_LOAD_DETECTOR_PROMPT
 
 
 def build_page_loader_detector_subagent() -> Any:
     """Build the agent that judges whether a page snapshot looks loaded."""
-    return create_agent(model=model, system_prompt=PAGE_LOAD_DETECTOR_PROMPT)
+    return create_agent(model=build_fast_model(), system_prompt=PAGE_LOAD_DETECTOR_PROMPT)

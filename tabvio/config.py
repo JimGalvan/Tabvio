@@ -79,6 +79,14 @@ def read_fast_model_setting(default: str) -> str:
     return configured_value or default
 
 
+def read_langchain_model_setting(name: str, default: str) -> str:
+    configured_value = os.getenv(name, "").strip() or default
+    provider, separator, model_id = configured_value.partition(":")
+    if not provider.strip() or not separator or not model_id.strip():
+        raise RuntimeError(f"{name} must use provider:model format (for example openai:gpt-5-nano)")
+    return configured_value
+
+
 def read_max_concurrent_runs(default: int) -> int:
     configured_value = os.getenv("TABVIO_MAX_CONCURRENT_RUNS", str(default))
     try:
