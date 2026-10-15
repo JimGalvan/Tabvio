@@ -130,7 +130,7 @@ class BrowserAgentSession:
 
     async def decline_sensitive_input(self, request_id: UUID) -> None:
         async with self._command_lock:
-            if self._closed or not self._sensitive_inputs.pending:
+            if self._closed or self._status != "waiting_for_input" or not self._sensitive_inputs.pending:
                 raise SensitiveInputNotPendingError("The run is not waiting for a verification code")
             try:
                 self._sensitive_inputs.require(request_id)

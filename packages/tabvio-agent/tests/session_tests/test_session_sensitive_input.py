@@ -89,6 +89,15 @@ class SessionSensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SensitiveInputNotPendingError):
             await session.decline_sensitive_input(request.request_id)
 
+    async def test_a_submitted_request_cannot_be_declined_while_resuming(self):
+        session, _, events, request = await self.park()
+        await session.submit_sensitive_input(request.request_id, "123456")
+        with self.assertRaises(SensitiveInputNotPendingError):
+            await session.decline_sensitive_input(request.request_id)
+        await ready(session, events)
+        await session._execution_task
+        self.assertTrue(session._event_queue.empty())
+
     async def test_an_unanswered_code_request_expires(self):
         session, _, events, request = await self.park(window=0.02)
         with patch.object(session._runtime, "resume_input", wraps=session._runtime.resume_input) as resume:
