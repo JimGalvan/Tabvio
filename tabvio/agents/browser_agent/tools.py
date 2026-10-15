@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, tool
@@ -10,7 +9,6 @@ from pydantic import BaseModel
 from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.agents.shared.events import publish_custom_event
 from tabvio.runs.sensitive_input import SensitiveInputChannel
-from tabvio.agents.shared.utils import Utils
 from tabvio.agents.shared.verification import describe_entered_code, explain_missing_code
 from tabvio.agents.browser_agent.steps import (
     BROWSER_STEP_ADAPTER,
@@ -26,7 +24,6 @@ from tabvio.agents.browser_agent.steps import (
     step_reference,
     validate_plan,
 )
-from tabvio.agents.page_load_detector.page_load_detector import build_page_loader_detector_subagent
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.service import CredentialService
 
@@ -36,12 +33,9 @@ def build_browser_tools(
         credential_service: CredentialService | None = None,
         sensitive_inputs: SensitiveInputChannel | None = None,
 ) -> list[BaseTool]:
-    """Build the tools for one browser run and its security boundaries."""
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
     acknowledged_payment_surface: str | None = None
     pending_payment_observation = None
-
-    page_load_detector_subagent = build_page_loader_detector_subagent()
 
     @tool
     async def get_text_in_viewport() -> str:
@@ -99,19 +93,21 @@ def build_browser_tools(
             runtime.context.credential_ids,
             runtime.context.user_id,
         )
-        return json.dumps(
-            [
+        described = []
+        for item in metadata:
+            preferred = []
+            for method in item.preferred_verification:
+                preferred.append(method.value)
+            described.append(
                 {
                     "id": str(item.id),
                     "name": item.name,
                     "allowed_domains": item.allowed_domains,
-                    "preferred_verification": [
-                        method.value for method in item.preferred_verification
-                    ],
+                    "available_fields": item.available_fields,
+                    "preferred_verification": preferred,
                 }
-                for item in metadata
-            ]
-        )
+            )
+        return json.dumps(described)
 
     async def finish_observation(page_state: str) -> str:
         nonlocal pending_payment_observation
@@ -198,7 +194,9 @@ def build_browser_tools(
                         runtime.context.user_id,
                         browser.current_hostname,
                     )
-                    value = secret.login if step.field == "login" else secret.password
+                    value = getattr(secret, step.field)
+                    if not value:
+                        raise ValueError(f"The selected credential has no saved {step.field} field")
                     await browser.fill(step.element_index, value)
                     del secret, value
                 elif isinstance(step, MfaCodeStep):

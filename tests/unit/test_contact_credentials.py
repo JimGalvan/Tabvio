@@ -2,17 +2,35 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import uuid4
 
-from tabvio.agents.strands.browser_agent.context import AgentContext
-from tabvio.agents.strands.browser_agent.tools import build_browser_tools
-from tabvio.agents.strands.shared.events import AgentEventChannel
+from tabvio.agents.browser_agent.context import AgentContext
+from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.browser.models import Element
+from tabvio.browser.payment_detection_result import PaymentDetectionResult
 from tabvio.credentials.cipher import KEY_LENGTH_BYTES, LocalAesGcmCredentialCipher
 from tabvio.credentials.exceptions import CredentialInvalidError
 from tabvio.credentials.models import CreateCredentialRequest, UpdateCredentialRequest
 from tabvio.credentials.repository import CredentialRepository
 from tabvio.credentials.service import CredentialService
-from tests.unit.test_strands_tools import ObservedBrowser, RecordingToolContext
+
+
+class ObservedBrowser:
+    def __init__(self):
+        self.elements = {
+            1: Element(1, "user", "input", "Email", "type=email", 0, 0),
+            2: Element(2, "pass", "input", "Password", "type=password", 0, 0),
+        }
+        self.fills = []
+        self.payment_detection_result = PaymentDetectionResult()
+
+    def get_stored_element(self, element_index):
+        return self.elements.get(element_index)
+
+    async def fill(self, element_index, value):
+        self.fills.append((element_index, value))
 
 
 class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
@@ -103,36 +121,48 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
     def browser_tools(self, owner_id=None, selected=True, hostname="shop.example"):
         browser = ObservedBrowser()
         browser.current_hostname = hostname
-        channel = AgentEventChannel()
         context = AgentContext(
             user_id=owner_id or self.owner_id,
             credential_ids=(self.metadata.id,) if selected else (),
         )
-        tools = build_browser_tools(browser, channel, context, self.service)
-        return {tool.tool_name: tool._tool_func for tool in tools}, browser, channel
+        runtime = SimpleNamespace(context=context, state={"messages": []})
+        events = []
+        event_patch = patch(
+            "tabvio.agents.browser_agent.tools.publish_custom_event",
+            side_effect=lambda event_type, payload: events.append(
+                {"event_type": event_type, "payload": payload}
+            ),
+        )
+        event_patch.start()
+        self.addCleanup(event_patch.stop)
+        tools = {}
+        for browser_tool in build_browser_tools(browser, self.service):
+            tools[browser_tool.name] = browser_tool.coroutine
+        return tools, browser, events, runtime
 
-    async def fill(self, tools, field):
+    async def fill(self, tools, runtime, field):
         return json.loads(await tools["execute_steps"](steps=[{
             "action": "fill_credential", "credential_id": str(self.metadata.id),
             "field": field, "element_index": 2 if field == "password" else 1,
-        }], tool_context=RecordingToolContext()))
+        }], runtime=runtime))
 
     async def test_contact_fields_fill_directly_without_values_in_tool_results_or_events(self):
-        tools, browser, channel = self.browser_tools()
-        metadata = await tools["list_selected_credentials"]()
+        tools, browser, events, runtime = self.browser_tools()
+        metadata = await tools["list_selected_credentials"](runtime)
         self.assertEqual(json.loads(metadata)[0]["available_fields"], list(self.contact))
         for field, value in self.contact.items():
-            result = await self.fill(tools, field)
+            events.clear()
+            result = await self.fill(tools, runtime, field)
             self.assertTrue(result["ok"])
             self.assertEqual(browser.fills[-1], (1, value))
-            events = [await channel.next_item(), await channel.next_item()]
+            self.assertEqual(len(events), 2)
             self.assertNotIn(value, json.dumps(result))
             self.assertNotIn(value, json.dumps(events))
             self.assertNotIn(value, metadata)
 
     async def test_missing_password_does_not_fill_an_empty_value(self):
-        tools, browser, _ = self.browser_tools()
-        result = await self.fill(tools, "password")
+        tools, browser, _, runtime = self.browser_tools()
+        result = await self.fill(tools, runtime, "password")
         self.assertFalse(result["ok"])
         self.assertIn("no saved password", result["error"])
         self.assertEqual(browser.fills, [])
@@ -140,7 +170,7 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
     async def test_contact_fill_enforces_owner_selection_and_domain(self):
         for options in ({"owner_id": uuid4()}, {"selected": False}, {"hostname": "attacker.example"}):
             with self.subTest(options=options):
-                tools, browser, _ = self.browser_tools(**options)
-                result = await self.fill(tools, "email")
+                tools, browser, _, runtime = self.browser_tools(**options)
+                result = await self.fill(tools, runtime, "email")
                 self.assertFalse(result["ok"])
                 self.assertEqual(browser.fills, [])

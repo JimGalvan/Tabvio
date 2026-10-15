@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from tabvio.agents.strands.browser_agent.steps import StepPlan, validate_plan
+from tabvio.agents.browser_agent.steps import StepPlan, validate_plan
 from tabvio.browser.models import Element
 
 
@@ -154,3 +154,4 @@ class SecureBrowserStepTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
