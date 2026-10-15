@@ -9,31 +9,7 @@ from tabvio.runs.exceptions import RunNotFoundError, RunNotRerunnableError
 from tabvio.runs.models import RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
-
-
-class StubRuntime:
-    """Enough of an AgentRuntime that create_run can start without a browser."""
-
-    def __init__(self):
-        self.browser = self
-        self.context = None
-        self.sensitive_inputs = None
-
-    def start_input(self, task):
-        return {"task": task}
-
-    def resume_input(self, value):
-        return {"resume": value}
-
-    async def stream(self, agent_input):
-        for item in []:
-            yield item
-
-    async def final_output(self) -> str:
-        return ""
-
-    async def close(self) -> None:
-        return None
+from tests.session_support import StubSession
 
 
 class StubCredentialService:
@@ -63,11 +39,7 @@ class RunRerunTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def asyncTearDown(self) -> None:
-        for context in list(self._manager._contexts.values()):
-            if context.execution_task is not None:
-                context.execution_task.cancel()
-            if context.capture_task is not None:
-                context.capture_task.cancel()
+        await self._manager.shutdown()
         self._temporary_directory.cleanup()
 
     def _store_run(self, status: RunStatus, credential_ids=None) -> RunRecord:
@@ -83,10 +55,8 @@ class RunRerunTests(unittest.IsolatedAsyncioTestCase):
         return run
 
     async def _rerun(self, run):
-        with patch("tabvio.runs.service.build_agent_runtime", return_value=StubRuntime()):
-            with patch.object(RunManager, "_execute", return_value=None):
-                with patch.object(RunManager, "_capture_frames", return_value=None):
-                    return await self._manager.rerun_run(run.id, self._owner_id)
+        with patch("tabvio.runs.service.build_agent_runtime", return_value=StubSession(complete_turns=False)):
+            return await self._manager.rerun_run(run.id, self._owner_id)
 
     async def test_a_finished_run_starts_again_with_the_same_task(self) -> None:
         credential_ids = [uuid4()]

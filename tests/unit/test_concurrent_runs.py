@@ -1,7 +1,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import uuid4
 
 from tabvio.runs import constants
@@ -9,14 +8,7 @@ from tabvio.runs.exceptions import RunCapacityReachedError
 from tabvio.runs.models import RunContext, RunRecord, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
-
-
-class ClosingBrowser:
-    def __init__(self) -> None:
-        self.closed = False
-
-    async def close(self) -> None:
-        self.closed = True
+from tests.session_support import StubSession
 
 
 class ConcurrentRunTests(unittest.IsolatedAsyncioTestCase):
@@ -49,7 +41,7 @@ class ConcurrentRunTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_terminal_runs_release_contexts_and_bound_frame_memory(self) -> None:
-        closed_browsers = []
+        closed_sessions = []
 
         for run_number in range(self.SEQUENTIAL_RUN_COUNT):
             run = RunRecord(
@@ -57,28 +49,27 @@ class ConcurrentRunTests(unittest.IsolatedAsyncioTestCase):
                 max_runtime_seconds=300,
                 status=RunStatus.SUCCEEDED,
             )
-            browser = ClosingBrowser()
+            session = StubSession()
             context = RunContext(
                 run=run,
-                runtime=SimpleNamespace(browser=browser),
+                session=session,
                 latest_frame=f"frame-{run_number}".encode(),
             )
             self._repository.save_run(run)
             self._manager._contexts[run.id] = context
             self._manager._active_run_ids.add(run.id)
-            self._manager._resuming_run_ids.add(run.id)
 
             await self._manager._finish_context(context)
-            closed_browsers.append(browser)
+            closed_sessions.append(session)
 
         self.assertEqual(self._manager._contexts, {})
         self.assertEqual(self._manager._active_run_ids, set())
-        self.assertEqual(self._manager._resuming_run_ids, set())
         self.assertLessEqual(
             len(self._manager._completed_frames),
             constants.MAX_COMPLETED_FRAME_COUNT,
         )
-        self.assertTrue(all(browser.closed for browser in closed_browsers))
+        for session in closed_sessions:
+            session.close.assert_awaited_once()
 
     async def test_concurrency_limit_must_be_positive(self) -> None:
         with self.assertRaises(ValueError):

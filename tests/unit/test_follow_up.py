@@ -2,46 +2,14 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from tabvio.runs.exceptions import RunCapacityReachedError, RunNotReadyForFollowUpError
-from tabvio.runs.models import RunContext, RunRecord, RunStatus
+from tabvio.runs.models import RunContext, RunStatus
 from tabvio.runs.repository import RunRepository
 from tabvio.runs.service import RunManager
-
-
-class FollowUpBrowser:
-    def __init__(self) -> None:
-        self.closed = False
-        self.capture_count = 0
-
-    async def capture_frame(self) -> bytes:
-        self.capture_count += 1
-        return b"browser-frame"
-
-    async def close(self) -> None:
-        self.closed = True
-
-
-class FollowUpRuntime:
-    def __init__(self, browser) -> None:
-        self.inputs = []
-        self.browser = browser
-        self.sensitive_inputs = None
-
-    def start_input(self, task):
-        return {"task": task}
-
-    def resume_input(self, value):
-        return {"resume": value}
-
-    async def stream(self, agent_input):
-        self.inputs.append(agent_input)
-        for item in []:
-            yield item
-
-    async def final_output(self) -> str:
-        return f"Result {len(self.inputs)}"
+from tests.session_support import StubSession
 
 
 class FollowUpTests(unittest.IsolatedAsyncioTestCase):
@@ -55,18 +23,13 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._temporary_directory.cleanup()
 
-    def _build_context(
-        self,
-        manager: RunManager,
-    ) -> tuple[RunContext, FollowUpRuntime, FollowUpBrowser]:
-        run = RunRecord(task="First task", max_runtime_seconds=60, user_id=self._owner_id)
-        browser = FollowUpBrowser()
-        runtime = FollowUpRuntime(browser)
-        context = RunContext(run=run, runtime=runtime)
-        self._repository.save_run(run)
-        manager._contexts[run.id] = context
-        manager._active_run_ids.add(run.id)
-        return context, runtime, browser
+    async def _build_context(self, manager):
+        session = StubSession()
+        with patch("tabvio.runs.service.build_agent_runtime", return_value=session):
+            run = await manager.create_run("First task", 60, self._owner_id)
+        context = manager._contexts[run.id]
+        await self._wait_for_status(context, RunStatus.READY_FOR_FOLLOW_UP)
+        return context, session
 
     async def test_follow_up_reuses_runtime_and_end_releases_capacity(self) -> None:
         manager = RunManager(
@@ -74,14 +37,12 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
             max_concurrent_runs=1,
             follow_up_window_seconds=30,
         )
-        context, runtime, browser = self._build_context(manager)
-
-        await manager._execute(context, context.runtime.start_input("First task"))
+        context, session = await self._build_context(manager)
 
         self.assertEqual(context.run.status, RunStatus.READY_FOR_FOLLOW_UP)
         self.assertIn(context.run.id, manager._contexts)
         self.assertIn(context.run.id, manager._active_run_ids)
-        self.assertFalse(browser.closed)
+        session.close.assert_not_awaited()
         self.assertIsNotNone(context.run.follow_up_expires_at)
 
         with self.assertRaises(RunCapacityReachedError):
@@ -97,18 +58,18 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
             RunStatus.READY_FOR_FOLLOW_UP,
         )
 
-        self.assertEqual(len(runtime.inputs), 2)
+        self.assertEqual(len(session.inputs), 2)
         self.assertEqual(
-            runtime.inputs[1]["task"],
+            session.inputs[1],
             "Add the first item to the cart",
         )
-        self.assertFalse(browser.closed)
+        session.close.assert_not_awaited()
 
         ended_run = await manager.end_session(context.run.id, self._owner_id)
 
         self.assertEqual(ended_run.status, RunStatus.SUCCEEDED)
         self.assertIsNone(ended_run.follow_up_expires_at)
-        self.assertTrue(browser.closed)
+        session.close.assert_awaited_once()
         self.assertNotIn(context.run.id, manager._contexts)
         self.assertNotIn(context.run.id, manager._active_run_ids)
 
@@ -117,14 +78,12 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
             self._repository,
             follow_up_window_seconds=0.01,
         )
-        context, _, browser = self._build_context(manager)
-
-        await manager._execute(context, context.runtime.start_input("First task"))
+        context, session = await self._build_context(manager)
         await self._wait_for_context_cleanup(manager, context)
 
         self.assertEqual(context.run.status, RunStatus.SUCCEEDED)
         self.assertIsNone(context.run.follow_up_expires_at)
-        self.assertTrue(browser.closed)
+        session.close.assert_awaited_once()
         self.assertNotIn(context.run.id, manager._active_run_ids)
 
         stored_events = self._repository.list_events(context.run.id)
@@ -135,7 +94,8 @@ class FollowUpTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_follow_up_requires_ready_status(self) -> None:
         manager = RunManager(self._repository)
-        context, _, _ = self._build_context(manager)
+        context, session = await self._build_context(manager)
+        context.run.status = RunStatus.RUNNING
 
         with self.assertRaises(RunNotReadyForFollowUpError):
             await manager.submit_follow_up(context.run.id, self._owner_id, "Another task")

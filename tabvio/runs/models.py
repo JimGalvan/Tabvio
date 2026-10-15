@@ -18,7 +18,7 @@ from tabvio_agent.browser.constants import (
 from tabvio.clock import utc_now
 
 if TYPE_CHECKING:
-    from tabvio_agent.runtime import LangChainAgentRuntime
+    from tabvio_agent.session import BrowserAgentSession
 
 
 class RunStatus(StrEnum):
@@ -68,19 +68,18 @@ class RunEvent(BaseModel):
 @dataclass
 class RunContext:
     run: RunRecord
-    runtime: LangChainAgentRuntime
+    session: BrowserAgentSession
     events: list[RunEvent] = field(default_factory=list)
     event_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     frame_condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     latest_frame: bytes | None = None
     frame_sequence: int = 0
     next_event_sequence: int = 1
-    execution_task: asyncio.Task[None] | None = None
-    capture_task: asyncio.Task[None] | None = None
+    event_task: asyncio.Task[None] | None = None
+    frame_task: asyncio.Task[None] | None = None
     follow_up_expiry_task: asyncio.Task[None] | None = None
-    sensitive_input_timeout_task: asyncio.Task[None] | None = None
-    assistant_output_parts: list[str] = field(default_factory=list)
-    controller_count: int = 0
+    sensitive_input_request_id: UUID | None = None
+    control_results: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
     mouse_controller: str | None = None
     control_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
