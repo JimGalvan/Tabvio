@@ -37,6 +37,25 @@ class PaymentDetectionResultTests(unittest.TestCase):
         observed = detection(CHECKOUT_URL, PAY_BUTTON + [CARD_FIELDS[0]])
         self.assertTrue(observed.needs_handoff(None))
 
+    def test_a_hosted_card_field_stops_the_agent(self) -> None:
+        for provider in ("stripe", "braintree"):
+            with self.subTest(provider=provider):
+                observed = detection(CHECKOUT_URL, [("hosted-field", provider)])
+                self.assertTrue(observed.needs_handoff(None))
+                self.assertEqual(observed.get_signals, [f"hosted-field:{provider}"])
+                self.assertIn(f"hosted-field:{provider}", observed.describe())
+
+    def test_a_pay_button_with_a_hosted_card_field_stops_the_agent(self) -> None:
+        for provider in ("stripe", "braintree"):
+            with self.subTest(provider=provider):
+                observed = detection(CHECKOUT_URL, PAY_BUTTON + [("hosted-field", provider)])
+                self.assertTrue(observed.needs_handoff(None))
+                self.assertFalse(observed.needs_handoff(observed.fingerprint))
+
+    def test_a_pay_button_with_only_an_sdk_signal_does_not_stop_the_agent(self) -> None:
+        observed = detection(CHECKOUT_URL, PAY_BUTTON + UNKNOWN_SIGNAL)
+        self.assertFalse(observed.needs_handoff(None))
+
     def test_each_card_autocomplete_field_stops_the_agent_on_its_own(self) -> None:
         for value in ("cc-number", "cc-exp", "cc-exp-month", "cc-exp-year", "cc-csc"):
             with self.subTest(value=value):

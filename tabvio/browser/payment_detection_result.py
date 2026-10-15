@@ -1,6 +1,6 @@
 from urllib.parse import urlsplit
 
-from tabvio.browser.constants import PAYMENT_HANDOFF_SIGNAL_KINDS
+from tabvio.browser.constants import PAY_BUTTON_SIGNAL_KIND, PAYMENT_HANDOFF_SIGNAL_KINDS
 from tabvio.browser.models import PaymentSignal
 
 
@@ -36,7 +36,7 @@ class PaymentDetectionResult:
     def needs_handoff(self, acknowledged: str | None) -> bool:
         fingerprint = self.fingerprint
         for signal in self._signals:
-            if signal.type in PAYMENT_HANDOFF_SIGNAL_KINDS and signal.type != "pay-button":
+            if signal.type in PAYMENT_HANDOFF_SIGNAL_KINDS and signal.type != PAY_BUTTON_SIGNAL_KIND:
                 return fingerprint is not None and fingerprint != acknowledged
         return False
 
