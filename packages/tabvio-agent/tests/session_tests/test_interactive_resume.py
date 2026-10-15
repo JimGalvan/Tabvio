@@ -2,7 +2,6 @@ import unittest
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
-
 from tabvio_agent.events import AgentMessageDeltaEvent
 
 from .session_support import build_session, next_event

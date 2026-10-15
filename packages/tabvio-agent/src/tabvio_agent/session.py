@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Any, Self
 from uuid import UUID, uuid4
@@ -221,23 +221,25 @@ class BrowserAgentSession:
             yield event
 
     async def cancel(self) -> None:
-        if self._closed or self._terminal:
-            return
-        if self._execution_task and not self._execution_task.done():
-            self._execution_task.cancel()
-            await self._await_task(self._execution_task)
-        if not self._terminal:
-            self._terminal = True
-            await self._emit(RunCancelledEvent())
-            await self._set_status("cancelled")
-        await self._finish_resources()
+        async with self._command_lock:
+            if self._closed or self._terminal:
+                return
+            if self._execution_task and not self._execution_task.done():
+                self._execution_task.cancel()
+                await self._await_task(self._execution_task)
+            if not self._terminal:
+                self._terminal = True
+                await self._emit(RunCancelledEvent())
+                await self._set_status("cancelled")
+            await self._finish_resources()
 
     async def close(self) -> None:
-        if self._execution_task and not self._execution_task.done():
-            if not self._terminal:
-                self._execution_task.cancel()
-            await self._await_task(self._execution_task)
-        await self._finish_resources()
+        async with self._command_lock:
+            if self._execution_task and not self._execution_task.done():
+                if not self._terminal:
+                    self._execution_task.cancel()
+                await self._await_task(self._execution_task)
+            await self._finish_resources()
 
     async def __aenter__(self) -> Self:
         return self
@@ -251,6 +253,8 @@ class BrowserAgentSession:
         await self.close()
 
     async def _start_turn(self, agent_input: Any) -> None:
+        if self._closed or self._terminal:
+            raise RuntimeError("The session has already been closed")
         await self._set_status("running")
         self._start_frame_capture()
         self._execution_task = asyncio.create_task(self._execute(agent_input))
@@ -329,7 +333,7 @@ class BrowserAgentSession:
     def _start_sensitive_input_timeout(self) -> datetime:
         self._cancel_sensitive_input_timeout()
         self._sensitive_input_timeout_task = asyncio.create_task(self._expire_sensitive_input())
-        return datetime.now(timezone.utc) + timedelta(seconds=self._settings.sensitive_input_window_seconds)
+        return datetime.now(UTC) + timedelta(seconds=self._settings.sensitive_input_window_seconds)
 
     def _cancel_sensitive_input_timeout(self) -> None:
         timeout_task = self._sensitive_input_timeout_task

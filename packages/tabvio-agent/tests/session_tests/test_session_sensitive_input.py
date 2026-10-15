@@ -1,16 +1,18 @@
 import asyncio
 import unittest
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.types import interrupt
-
 from tabvio_agent import constants
-from tabvio_agent.exceptions import SensitiveInputNotPendingError, SessionNotWaitingForInputError
+from tabvio_agent.exceptions import (
+    SensitiveInputNotPendingError,
+    SessionNotWaitingForInputError,
+)
 from tabvio_agent.settings import AgentSettings
 from tabvio_agent.shared.events import publish_custom_event
 
@@ -106,7 +108,7 @@ class SessionSensitiveInputTests(unittest.IsolatedAsyncioTestCase):
         browser.fill_sensitive.assert_awaited_once()
 
     async def test_the_dashboard_is_told_when_the_code_window_closes(self):
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         _, _, _, request = await self.park()
         self.assertGreater(request.expires_at, before)
         self.assertEqual(request.kind, "mfa_code")

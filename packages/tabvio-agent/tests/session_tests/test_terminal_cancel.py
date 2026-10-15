@@ -2,7 +2,7 @@ import unittest
 
 from langchain_core.messages import AIMessage
 
-from .session_support import build_session, next_event, ready
+from .session_support import build_session, ready
 
 
 class SessionCancellationTests(unittest.IsolatedAsyncioTestCase):
