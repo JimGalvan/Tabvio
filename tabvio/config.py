@@ -4,6 +4,10 @@ import base64
 import binascii
 import os
 from pathlib import Path
+from uuid import UUID
+
+from tabvio.agents.settings import AgentSettings
+from tabvio.agents.shared.constants import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "server" / "static"
@@ -27,12 +31,15 @@ def read_browser_trace_setting() -> bool:
     return configured_value in {"true", "1", "yes"}
 
 
-def read_langchain_model_setting(name: str, default: str) -> str:
-    configured_value = os.getenv(name, "").strip() or default
-    provider, separator, model_id = configured_value.partition(":")
-    if not provider.strip() or not separator or not model_id.strip():
-        raise RuntimeError(f"{name} must use provider:model format (for example openai:gpt-5-nano)")
-    return configured_value
+def read_agent_settings(thread_id: UUID) -> AgentSettings:
+    trace_path = TRACE_DIRECTORY / f"{thread_id}.zip" if read_browser_trace_setting() else None
+    return AgentSettings(
+        strong_model=os.getenv("TABVIO_STRONG_MODEL", "").strip() or DEFAULT_STRONG_MODEL,
+        fast_model=os.getenv("TABVIO_FAST_MODEL", "").strip() or DEFAULT_FAST_MODEL,
+        headless=read_headless_setting(),
+        browser_channel=read_browser_channel_setting(),
+        trace_path=trace_path,
+    )
 
 
 def read_max_concurrent_runs(default: int) -> int:
