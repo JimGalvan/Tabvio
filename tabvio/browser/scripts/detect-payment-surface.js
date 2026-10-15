@@ -20,6 +20,10 @@
     const BUTTON_SELECTOR =
         'button, input[type="submit"], input[type="button"], [role="button"]';
     const LONGEST_BUTTON_LABEL = 80;
+    const STRIPE_ORIGIN_PATTERN = /^https:\/\/js\.stripe\.com(?:\/|$)/;
+    const STRIPE_FRAME_NAME_PATTERN = /^__privateStripeFrame\d+$/;
+    const CARD_FIELD_LABEL_PATTERN = /\b(card|cardnumber|expiry|expiration|cvc|cvv|security[\s-]+code)\b/i;
+    const BRAINTREE_FIELD_NAME_PATTERN = /^braintree-hosted-field-(number|expirationDate|expirationMonth|expirationYear|cvv)$/;
 
     const signals = [];
     const seen = new Set();
@@ -57,6 +61,20 @@
             if (CARD_ENTRY_AUTOCOMPLETE_VALUES.has(autocompleteValue)) {
                 record('card-autocomplete', autocompleteValue);
             }
+        }
+    }
+
+    for (const iframe of document.querySelectorAll('iframe')) {
+        const name = iframe.getAttribute('name') || '';
+        const title = iframe.getAttribute('title') || '';
+        const isStripeFrame = STRIPE_ORIGIN_PATTERN.test(iframe.src) ||
+            STRIPE_FRAME_NAME_PATTERN.test(name);
+
+        if (isStripeFrame && CARD_FIELD_LABEL_PATTERN.test(name + ' ' + title)) {
+            record('hosted-field', 'stripe');
+        }
+        if (BRAINTREE_FIELD_NAME_PATTERN.test(name)) {
+            record('hosted-field', 'braintree');
         }
     }
 
