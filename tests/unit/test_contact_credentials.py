@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.agents.credentials.models import CredentialMetadata, CredentialSecret
 from tabvio.browser.models import Element
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 from tabvio.credentials.cipher import KEY_LENGTH_BYTES, LocalAesGcmCredentialCipher
@@ -33,7 +34,7 @@ class ObservedBrowser:
         self.fills.append((element_index, value))
 
 
-class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
+class ContactCredentialTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.repository = CredentialRepository(Path(self.directory.name) / "credentials.db")
@@ -118,14 +119,45 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(secret.password, "old-password")
         self.assertIsNone(secret.email)
 
-    def browser_tools(self, owner_id=None, selected=True, hostname="shop.example"):
+
+class InMemoryCredentialProvider:
+    def __init__(self, metadata, secrets):
+        self.metadata = metadata
+        self.secrets = secrets
+        self.resolve_error = None
+        self.resolutions = []
+
+    async def list_selected(self):
+        return self.metadata
+
+    async def resolve(self, credential_id, domain):
+        self.resolutions.append((credential_id, domain))
+        if self.resolve_error:
+            raise self.resolve_error
+        if credential_id not in self.secrets:
+            raise ValueError("Credential is not selected for this run")
+        return self.secrets[credential_id]
+
+
+class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.contact = {
+            "email": "ada@example.com", "first_name": "Ada",
+            "last_name": "Lovelace", "phone": "+16195550123",
+        }
+        self.metadata = CredentialMetadata(
+            id=uuid4(), name="Checkout contact", allowed_domains=("shop.example",),
+            login_hint="", is_default=False, available_fields=tuple(self.contact),
+            preferred_verification=("sms", "email"),
+        )
+        self.provider = InMemoryCredentialProvider(
+            (self.metadata,), {self.metadata.id: CredentialSecret(**self.contact)},
+        )
+
+    def browser_tools(self, provider=True, hostname="shop.example"):
         browser = ObservedBrowser()
         browser.current_hostname = hostname
-        context = AgentContext(
-            user_id=owner_id or self.owner_id,
-            credential_ids=(self.metadata.id,) if selected else (),
-        )
-        runtime = SimpleNamespace(context=context, state={"messages": []})
+        runtime = SimpleNamespace(context=AgentContext(), state={"messages": []})
         events = []
         event_patch = patch(
             "tabvio.agents.browser_agent.tools.publish_custom_event",
@@ -136,7 +168,7 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
         event_patch.start()
         self.addCleanup(event_patch.stop)
         tools = {}
-        for browser_tool in build_browser_tools(browser, self.service):
+        for browser_tool in build_browser_tools(browser, self.provider if provider else None):
             tools[browser_tool.name] = browser_tool.coroutine
         return tools, browser, events, runtime
 
@@ -149,16 +181,39 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
     async def test_contact_fields_fill_directly_without_values_in_tool_results_or_events(self):
         tools, browser, events, runtime = self.browser_tools()
         metadata = await tools["list_selected_credentials"](runtime)
-        self.assertEqual(json.loads(metadata)[0]["available_fields"], list(self.contact))
+        self.assertEqual(metadata, json.dumps([{
+            "id": str(self.metadata.id), "name": "Checkout contact",
+            "allowed_domains": ["shop.example"], "available_fields": list(self.contact),
+            "preferred_verification": ["sms", "email"],
+        }]))
         for field, value in self.contact.items():
             events.clear()
             result = await self.fill(tools, runtime, field)
-            self.assertTrue(result["ok"])
+            self.assertEqual(result, {
+                "ok": True, "kind": "success", "completed": [f"fill_credential.{field}[1]"],
+                "failed": None, "notes": [],
+            })
             self.assertEqual(browser.fills[-1], (1, value))
-            self.assertEqual(len(events), 2)
+            self.assertEqual(events, [
+                {"event_type": "browser.action.started", "payload": {"action": "fill_credential", "target": "Email"}},
+                {"event_type": "browser.action.completed", "payload": {"action": "fill_credential", "target": "Email"}},
+            ])
             self.assertNotIn(value, json.dumps(result))
             self.assertNotIn(value, json.dumps(events))
             self.assertNotIn(value, metadata)
+        self.assertEqual(self.provider.resolutions, [(self.metadata.id, "shop.example")] * len(self.contact))
+
+    async def test_login_and_password_fill_without_values_in_results_or_events(self):
+        secret = CredentialSecret(login="ada-login", password="saved-password")
+        self.provider.secrets[self.metadata.id] = secret
+        tools, browser, events, runtime = self.browser_tools()
+        for field in ("login", "password"):
+            result = await self.fill(tools, runtime, field)
+            self.assertTrue(result["ok"])
+            self.assertEqual(browser.fills[-1], (2 if field == "password" else 1, getattr(secret, field)))
+            for value in (secret.login, secret.password):
+                self.assertNotIn(value, json.dumps(result))
+                self.assertNotIn(value, json.dumps(events))
 
     async def test_missing_password_does_not_fill_an_empty_value(self):
         tools, browser, _, runtime = self.browser_tools()
@@ -167,10 +222,40 @@ class ContactCredentialTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("no saved password", result["error"])
         self.assertEqual(browser.fills, [])
 
-    async def test_contact_fill_enforces_owner_selection_and_domain(self):
-        for options in ({"owner_id": uuid4()}, {"selected": False}, {"hostname": "attacker.example"}):
-            with self.subTest(options=options):
-                tools, browser, _, runtime = self.browser_tools(**options)
+    async def test_provider_errors_are_preserved_in_results_and_events(self):
+        errors = (
+            "Credential was not found", "Credential is not selected for this run",
+            "Credential 'Checkout contact' is not allowed on attacker.example. "
+            "Add attacker.example or *.attacker.example to its allowed domains.",
+        )
+        for error in errors:
+            with self.subTest(error=error):
+                self.provider.resolve_error = ValueError(error)
+                tools, browser, events, runtime = self.browser_tools(hostname="attacker.example")
                 result = await self.fill(tools, runtime, "email")
-                self.assertFalse(result["ok"])
+                self.assertEqual(result, {
+                    "ok": False, "kind": "execution_error", "completed": [],
+                    "failed": "fill_credential.email[1]", "error": error, "notes": [],
+                })
+                self.assertEqual(events[-1], {
+                    "event_type": "browser.action.failed",
+                    "payload": {"action": "fill_credential", "target": "Email", "error": error},
+                })
                 self.assertEqual(browser.fills, [])
+                self.assertEqual(self.provider.resolutions[-1], (self.metadata.id, "attacker.example"))
+
+    async def test_no_provider_lists_nothing_and_reports_storage_error_on_fill(self):
+        tools, browser, _, runtime = self.browser_tools(provider=False)
+        self.assertEqual(await tools["list_selected_credentials"](runtime), "[]")
+        result = await self.fill(tools, runtime, "email")
+        self.assertEqual(result["error"], "Credential storage is not configured")
+        self.assertEqual(browser.fills, [])
+
+    async def test_empty_provider_lists_nothing_and_refuses_unselected_fill(self):
+        self.provider.metadata = ()
+        self.provider.secrets = {}
+        tools, browser, _, runtime = self.browser_tools()
+        self.assertEqual(await tools["list_selected_credentials"](runtime), "[]")
+        result = await self.fill(tools, runtime, "email")
+        self.assertEqual(result["error"], "Credential is not selected for this run")
+        self.assertEqual(browser.fills, [])

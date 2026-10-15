@@ -11,7 +11,10 @@ from tabvio.agents.credentials.models import CredentialMetadata, CredentialSecre
 from tabvio.agents.credentials.provider import CredentialProvider
 from tabvio.credentials.agent_provider import CredentialServiceProvider
 from tabvio.credentials.cipher import KEY_LENGTH_BYTES, LocalAesGcmCredentialCipher
-from tabvio.credentials.exceptions import CredentialDomainDeniedError, CredentialNotFoundError
+from tabvio.credentials.exceptions import (
+    CredentialDomainDeniedError,
+    CredentialNotFoundError,
+)
 from tabvio.credentials.models import CreateCredentialRequest
 from tabvio.credentials.repository import CredentialRepository
 from tabvio.credentials.service import CredentialService

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from deepagents import create_deep_agent
@@ -8,8 +9,10 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command, interrupt
 
+from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.agents.shared.events import publish_custom_event
-from tabvio.runs.runtime import LangChainAgentRuntime, extract_text
+from tabvio.credentials.agent_provider import CredentialServiceProvider
+from tabvio.runs.runtime import LangChainAgentRuntime, build_agent_runtime, extract_text
 
 
 class ScriptedModel(GenericFakeChatModel):
@@ -139,6 +142,51 @@ class LangChainRuntimeInputTests(unittest.TestCase):
         resume = runtime.resume_input({"entered": True, "submitted": "Verify"})
         self.assertIsInstance(resume, Command)
         self.assertEqual(resume.resume, {"entered": True, "submitted": "Verify"})
+
+
+class BuildAgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        browser_patch = patch("tabvio.runs.runtime.BrowserSession")
+        self.browser = browser_patch.start()
+        self.addCleanup(browser_patch.stop)
+        agent_patch = patch("tabvio.runs.runtime.build_browser_agent")
+        self.build_agent = agent_patch.start()
+        self.addCleanup(agent_patch.stop)
+        trace_patch = patch("tabvio.runs.runtime._trace_path_for_run", return_value=None)
+        trace_patch.start()
+        self.addCleanup(trace_patch.stop)
+        channel_patch = patch("tabvio.runs.runtime.read_browser_channel_setting", return_value=None)
+        channel_patch.start()
+        self.addCleanup(channel_patch.stop)
+
+    async def test_selected_credentials_are_scoped_to_the_runtime_user(self):
+        thread_id, user_id, credential_id = uuid4(), uuid4(), uuid4()
+        service = Mock()
+        runtime = build_agent_runtime(thread_id, user_id, (credential_id,), service, headless=False)
+        provider = self.build_agent.call_args.kwargs["credential_provider"]
+        self.assertIsInstance(provider, CredentialServiceProvider)
+        self.assertEqual(runtime.context, AgentContext())
+        self.assertEqual(vars(runtime.context), {})
+        self.assertEqual(runtime.config, {"configurable": {"thread_id": str(thread_id)}})
+        self.assertIs(runtime.browser, self.browser.return_value)
+        self.assertIs(runtime.agent, self.build_agent.return_value)
+        self.browser.assert_called_once_with(headless=False, trace_path=None, browser_channel=None)
+        self.build_agent.assert_called_once_with(
+            runtime.browser, runtime.sensitive_inputs, credential_provider=provider,
+        )
+        service.require_selected.return_value = []
+        self.assertEqual(await provider.list_selected(), ())
+        service.require_selected.assert_called_once_with((credential_id,), user_id)
+
+    def test_provider_is_absent_without_service_selection_or_user(self):
+        for user_id, credential_ids, service in (
+                (uuid4(), (), Mock()),
+                (uuid4(), (uuid4(),), None),
+                (None, (uuid4(),), Mock()),
+        ):
+            with self.subTest(user_id=user_id, credential_ids=credential_ids, service=service):
+                build_agent_runtime(uuid4(), user_id, credential_ids, service)
+                self.assertIsNone(self.build_agent.call_args.kwargs["credential_provider"])
 
 
 class ExtractTextTests(unittest.TestCase):

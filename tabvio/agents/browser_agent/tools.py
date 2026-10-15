@@ -23,13 +23,13 @@ from tabvio.agents.browser_agent.steps import (
     step_reference,
     validate_plan,
 )
+from tabvio.agents.credentials.provider import CredentialProvider
 from tabvio.agents.shared.events import publish_custom_event
 from tabvio.agents.shared.verification import (
     describe_entered_code,
     explain_missing_code,
 )
 from tabvio.browser.session import BrowserSession
-from tabvio.credentials.service import CredentialService
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 STEP_PLAN_SCHEMA = SchemaUtils.inline_references(StepPlan.model_json_schema())
@@ -37,7 +37,7 @@ STEP_PLAN_SCHEMA = SchemaUtils.inline_references(StepPlan.model_json_schema())
 
 def build_browser_tools(
         browser: BrowserSession,
-        credential_service: CredentialService | None = None,
+        credential_provider: CredentialProvider | None = None,
         sensitive_inputs: SensitiveInputChannel | None = None,
 ) -> list[BaseTool]:
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
@@ -89,29 +89,19 @@ def build_browser_tools(
     @tool
     async def list_selected_credentials(runtime: ToolRuntime[AgentContext]) -> str:
         """List safe metadata for credentials selected for this run."""
-        if not runtime.context.credential_ids:
+        if credential_provider is None:
             return "[]"
-        if credential_service is None or runtime.context.user_id is None:
-            raise RuntimeError("Credential storage is not configured")
-
-        metadata = await asyncio.to_thread(
-            credential_service.require_selected,
-            runtime.context.credential_ids,
-            runtime.context.user_id,
-        )
+        metadata = await credential_provider.list_selected()
 
         described = []
         for item in metadata:
-            preferred = []
-            for method in item.preferred_verification:
-                preferred.append(method.value)
             described.append(
                 {
                     "id": str(item.id),
                     "name": item.name,
                     "allowed_domains": item.allowed_domains,
                     "available_fields": item.available_fields,
-                    "preferred_verification": preferred,
+                    "preferred_verification": item.preferred_verification,
                 }
             )
         return json.dumps(described)
@@ -226,23 +216,15 @@ def build_browser_tools(
         elif isinstance(step, PressStep):
             await browser.press(step.element_index, step.value)
         elif isinstance(step, CredentialFillStep):
-            await fill_credential(step, runtime)
+            await fill_credential(step)
         elif isinstance(step, MfaCodeStep):
             return await request_mfa_code(step, runtime)
         return None
 
-    async def fill_credential(step: CredentialFillStep, runtime: ToolRuntime[AgentContext]) -> None:
-        if credential_service is None or runtime.context.user_id is None:
+    async def fill_credential(step: CredentialFillStep) -> None:
+        if credential_provider is None:
             raise RuntimeError("Credential storage is not configured")
-        if step.credential_id not in runtime.context.credential_ids:
-            raise ValueError("Credential is not selected for this run")
-
-        secret = await asyncio.to_thread(
-            credential_service.resolve_for_domain,
-            step.credential_id,
-            runtime.context.user_id,
-            browser.current_hostname,
-        )
+        secret = await credential_provider.resolve(step.credential_id, browser.current_hostname)
         value = getattr(secret, step.field)
         if not value:
             raise ValueError(f"The selected credential has no saved {step.field} field")

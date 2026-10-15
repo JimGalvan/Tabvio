@@ -13,6 +13,7 @@ from tabvio.config import (
     read_browser_channel_setting,
     read_browser_trace_setting,
 )
+from tabvio.credentials.agent_provider import CredentialServiceProvider
 from tabvio.credentials.service import CredentialService
 from tabvio.runs import constants
 from tabvio.runs.sensitive_input import SensitiveInputChannel
@@ -123,7 +124,10 @@ def build_agent_runtime(
         trace_path=_trace_path_for_run(thread_id),
         browser_channel=read_browser_channel_setting(),
     )
-    agent_context = AgentContext(user_id=user_id, credential_ids=credential_ids)
+    agent_context = AgentContext()
     sensitive_inputs = SensitiveInputChannel()
-    agent = build_browser_agent(browser, sensitive_inputs, credential_service=credential_service)
+    credential_provider = None
+    if credential_service is not None and credential_ids and user_id is not None:
+        credential_provider = CredentialServiceProvider(credential_service, user_id, credential_ids)
+    agent = build_browser_agent(browser, sensitive_inputs, credential_provider=credential_provider)
     return LangChainAgentRuntime(agent, browser, agent_context, sensitive_inputs, thread_id)

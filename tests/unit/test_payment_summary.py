@@ -144,7 +144,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.tools = {}
         for browser_tool in build_browser_tools(self.browser):
             self.tools[browser_tool.name] = browser_tool.coroutine
-        self.runtime = SimpleNamespace(context=AgentContext(user_id=None), state=source_state())
+        self.runtime = SimpleNamespace(context=AgentContext(), state=source_state())
         interrupt_patch = patch(
             "tabvio.agents.browser_agent.tools.interrupt", side_effect=self.pause
         )
@@ -292,7 +292,7 @@ class PaymentGraphTests(unittest.IsolatedAsyncioTestCase):
                     "id": call_id, "name": "navigate_and_observe",
                     "args": {"url": "https://shop.example/pay"},
                 }]),
-            ]}, config, context=AgentContext(user_id=None))
+            ]}, config, context=AgentContext())
             payload = paused["__interrupt__"][0].value
             self.assertEqual(payload["kind"], "payment_handoff")
             self.assertTrue(payload["question"].startswith(SUMMARY_TEXT))

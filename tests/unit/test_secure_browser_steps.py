@@ -226,7 +226,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         event_patch.start()
         self.addCleanup(event_patch.stop)
         self.runtime = ToolRuntime(
-            state={"messages": []}, context=AgentContext(user_id=None), config={},
+            state={"messages": []}, context=AgentContext(), config={},
             stream_writer=lambda item: None, tool_call_id=str(uuid4()), store=None,
         )
 
@@ -355,7 +355,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
                 {"action": "fill", "element_index": 1, "value": "Ada"},
                 {"action": "click", "element_index": 4},
             ]},
-        }])]}, {"configurable": {"thread_id": str(uuid4())}}, context=AgentContext(user_id=None))
+        }])]}, {"configurable": {"thread_id": str(uuid4())}}, context=AgentContext())
         self.assertTrue(json.loads(result["messages"][-1].content)["ok"])
         self.assertEqual(self.browser.fills, [(1, "Ada")])
         self.assertEqual(self.browser.clicks, [4])
@@ -372,7 +372,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
                 "action": "request_mfa_code", "element_index": 3,
                 "prompt": "Enter the code", "submit_element_index": 4,
             }]},
-        }])]}, config, context=AgentContext(user_id=None))
+        }])]}, config, context=AgentContext())
         request_id = str(self.sensitive_inputs.pending.id)
         self.assertEqual(paused["__interrupt__"][0].value, {"kind": "mfa_code", "request_id": request_id})
         resumed = await agent.ainvoke(Command(resume={"entered": True}), config)

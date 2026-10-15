@@ -8,24 +8,24 @@ from langgraph.checkpoint.memory import InMemorySaver
 from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.agents.browser_agent.prompts import SYSTEM_PROMPT, TODO_SYSTEM_PROMPT
 from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.agents.credentials.provider import CredentialProvider
 from tabvio.agents.page_navigator.page_navigator import build_page_navigator
 from tabvio.agents.shared.llm import build_strong_model
 from tabvio.browser.session import BrowserSession
-from tabvio.credentials.service import CredentialService
 from tabvio.runs.sensitive_input import SensitiveInputChannel
 
 
 def build_browser_agent(
         browser_session: BrowserSession,
         sensitive_inputs: SensitiveInputChannel,
-        credential_service: CredentialService | None = None,
+        credential_provider: CredentialProvider | None = None,
 ):
     agent_skills_path = Path(__file__).resolve().parent / "skills"
     agent_files_path = Path(__file__).resolve().parent / "files"
 
     tools = build_browser_tools(
         browser_session,
-        credential_service=credential_service,
+        credential_provider=credential_provider,
         sensitive_inputs=sensitive_inputs,
     )
     page_navigator_subagent = build_page_navigator(browser_session)
