@@ -4,7 +4,11 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
-from tabvio_agent.exceptions import SessionNotWaitingForInputError
+from tabvio_agent.exceptions import (
+    SensitiveInputNotPendingError,
+    SessionNotReadyForFollowUpError,
+    SessionNotWaitingForInputError,
+)
 from tabvio_agent.models import ClickAction
 
 from .session_support import build_session, next_event, ready
@@ -184,6 +188,71 @@ class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(results[0])
         self.assertIsInstance(results[1], SessionNotWaitingForInputError)
         await session._execution_task
+
+    async def test_concurrent_inputs_are_rejected_while_browser_control_blocks_startup(self):
+        for command in ("answer", "submit_sensitive_input", "decline_sensitive_input", "follow_up"):
+            with self.subTest(command=command):
+                sensitive = command in {"submit_sensitive_input", "decline_sensitive_input"}
+                call = {
+                    "name": "request_code" if sensitive else "ask_person",
+                    "args": {} if sensitive else {"question": "Which size?"}, "id": str(uuid4()),
+                }
+                initial = AIMessage(content="Done") if command == "follow_up" else AIMessage(content="", tool_calls=[call])
+                session, browser = build_session(
+                    initial, AIMessage(content="Done"), tools=sensitive_tools if sensitive else None,
+                )
+                self.addAsyncCleanup(session.close)
+                events = session.events()
+                await session.start("Go")
+                if command == "follow_up":
+                    await ready(session, events)
+                    arguments = ("Continue",)
+                    error = SessionNotReadyForFollowUpError
+                elif sensitive:
+                    request = await next_event(events, "sensitive_input.required")
+                    arguments = (request.request_id, "123456") if command == "submit_sensitive_input" else (request.request_id,)
+                    error = SensitiveInputNotPendingError
+                else:
+                    await next_event(events, "input.required")
+                    arguments = ("M",)
+                    error = SessionNotWaitingForInputError
+                await session._execution_task
+                controlling = asyncio.Event()
+                release_control = asyncio.Event()
+
+                async def click(*args):
+                    controlling.set()
+                    await release_control.wait()
+                    return "Clicked"
+
+                browser.user_click.side_effect = click
+                applying = asyncio.create_task(session.apply_control(ClickAction(10, 20)))
+                await controlling.wait()
+                submit = getattr(session, command)
+                duplicate = None
+                try:
+                    await submit(*arguments)
+                    duplicate = asyncio.create_task(submit(*arguments))
+                    await asyncio.sleep(0)
+                    release_control.set()
+                    self.assertEqual(await applying, "Clicked")
+                    async with asyncio.timeout(2):
+                        result, = await asyncio.gather(duplicate, return_exceptions=True)
+                        await session._execution_task
+                        await session.close()
+                    completed = []
+                    async for event in events:
+                        if event.event_type == "run.completed":
+                            completed.append(event.output)
+                    self.assertEqual(completed, ["Done"])
+                    self.assertIsInstance(result, error)
+                finally:
+                    release_control.set()
+                    applying.cancel()
+                    if duplicate:
+                        duplicate.cancel()
+                        await asyncio.gather(duplicate, return_exceptions=True)
+                    await asyncio.gather(applying, return_exceptions=True)
 
     async def test_close_refuses_resume_after_sensitive_submission_finishes(self):
         call = {"name": "request_code", "args": {}, "id": str(uuid4())}
