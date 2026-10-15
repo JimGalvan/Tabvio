@@ -11,6 +11,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from tabvio.agents.browser_agent.browser_agent import build_browser_agent
 from tabvio.agents.browser_agent.prompts import TODO_SYSTEM_PROMPT
+from tabvio.agents.settings import AgentSettings
 from tabvio.browser.session import BrowserSession
 from tabvio.runs.runtime import LangChainAgentRuntime
 from tabvio.runs.sensitive_input import SensitiveInputChannel
@@ -68,7 +69,7 @@ class TodoEventTests(unittest.IsolatedAsyncioTestCase):
 class BrowserAgentTodoTests(unittest.TestCase):
     def test_the_browser_agent_offers_write_todos(self) -> None:
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            agent = build_browser_agent(BrowserSession(), SensitiveInputChannel())
+            agent = build_browser_agent(BrowserSession(), SensitiveInputChannel(), AgentSettings())
         tool_names = agent.nodes["tools"].bound.tools_by_name
         self.assertIn("write_todos", tool_names)
 

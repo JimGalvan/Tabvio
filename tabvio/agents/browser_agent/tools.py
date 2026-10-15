@@ -24,6 +24,7 @@ from tabvio.agents.browser_agent.steps import (
     validate_plan,
 )
 from tabvio.agents.credentials.provider import CredentialProvider
+from tabvio.agents.settings import AgentSettings
 from tabvio.agents.shared.events import publish_custom_event
 from tabvio.agents.shared.verification import (
     describe_entered_code,
@@ -39,6 +40,7 @@ def build_browser_tools(
         browser: BrowserSession,
         credential_provider: CredentialProvider | None = None,
         sensitive_inputs: SensitiveInputChannel | None = None,
+        settings: AgentSettings = AgentSettings(),
 ) -> list[BaseTool]:
     sensitive_inputs = sensitive_inputs or SensitiveInputChannel()
     acknowledged_payment_surface: str | None = None
@@ -129,7 +131,7 @@ def build_browser_tools(
             return
 
         if pending_payment_question is None:
-            summary = await generate_payment_summary(runtime.state, page_state)
+            summary = await generate_payment_summary(runtime.state, page_state, settings)
             handoff = (
                 "This page can take a payment, so I have stopped before touching it. "
                 "Take control of the browser, enter the payment details yourself, "

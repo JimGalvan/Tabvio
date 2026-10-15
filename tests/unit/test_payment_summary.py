@@ -18,6 +18,7 @@ from tabvio.agents.browser_agent.payment_summary import (
     summary_evidence,
 )
 from tabvio.agents.browser_agent.tools import build_browser_tools
+from tabvio.agents.settings import AgentSettings
 from tabvio.browser.models import PaymentSignal
 from tabvio.browser.payment_detection_result import PaymentDetectionResult
 
@@ -42,6 +43,7 @@ def source_state():
 
 class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.settings = AgentSettings(fast_model="anthropic:summary-model")
         self.model_patch = patch(f"{SUMMARY_MODULE}.build_fast_model")
         self.model_factory = self.model_patch.start()
         self.addCleanup(self.model_patch.stop)
@@ -53,9 +55,10 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_summary_uses_history_todos_and_current_page_without_tools(self):
         agent = source_state()
         before = list(agent["messages"])
-        summary = await generate_payment_summary(agent, PAGE_STATE)
+        summary = await generate_payment_summary(agent, PAGE_STATE, self.settings)
 
         self.assertEqual(summary, SUMMARY_TEXT)
+        self.model_factory.assert_called_once_with(self.settings.fast_model)
         self.model_factory.return_value.bind_tools.assert_not_called()
         self.assertEqual(agent["messages"], before)
         evidence = json.loads(self.invoke.call_args.args[0][1].content)
@@ -76,7 +79,7 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
                             "finish_reason": "length" if outcome == "incomplete" else "stop"
                         },
                     )
-                self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
+                self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE, self.settings), "")
 
     async def test_timeout_cancels_summary_and_returns_no_summary(self):
         cancelled = asyncio.Event()
@@ -89,19 +92,19 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
 
         self.invoke.side_effect = stall
         with patch(f"{SUMMARY_MODULE}.SUMMARY_TIMEOUT_SECONDS", 0.01):
-            self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
+            self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE, self.settings), "")
         self.assertTrue(cancelled.is_set())
 
     async def test_run_cancellation_is_not_swallowed(self):
         self.invoke.side_effect = asyncio.CancelledError()
         with self.assertRaises(asyncio.CancelledError):
-            await generate_payment_summary(source_state(), PAGE_STATE)
+            await generate_payment_summary(source_state(), PAGE_STATE, self.settings)
 
     async def test_incomplete_responses_result_is_not_shown(self):
         self.invoke.return_value = AIMessage(
             SUMMARY_TEXT, response_metadata={"status": "incomplete"}
         )
-        self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE), "")
+        self.assertEqual(await generate_payment_summary(source_state(), PAGE_STATE, self.settings), "")
 
     def test_long_history_keeps_request_and_recent_results_and_omits_images_and_reasoning(self):
         agent = source_state()
@@ -121,6 +124,7 @@ class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
 
 class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.settings = AgentSettings(fast_model="anthropic:handoff-model")
         self.detection = PaymentDetectionResult(
             url="https://shop.example/pay",
             signals=(PaymentSignal(type="card-autocomplete", value="cc-number"),),
@@ -142,7 +146,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         event_patch.start()
         self.addCleanup(event_patch.stop)
         self.tools = {}
-        for browser_tool in build_browser_tools(self.browser):
+        for browser_tool in build_browser_tools(self.browser, settings=self.settings):
             self.tools[browser_tool.name] = browser_tool.coroutine
         self.runtime = SimpleNamespace(context=AgentContext(), state=source_state())
         interrupt_patch = patch(
@@ -181,7 +185,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             })
             self.assertEqual(self.questions(), [question])
             self.browser.attempt_observe_page.assert_not_awaited()
-            summary.assert_awaited_once_with(self.runtime.state, PAGE_STATE)
+            summary.assert_awaited_once_with(self.runtime.state, PAGE_STATE, self.settings)
 
             self.interrupt.side_effect = None
             result = await self.tools["navigate_and_observe"]("https://shop.example/pay", self.runtime)
@@ -225,7 +229,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
                     {"action": "click", "element_index": 4},
                 ], self.runtime)
 
-        summary.assert_awaited_once_with(self.runtime.state, "")
+        summary.assert_awaited_once_with(self.runtime.state, "", self.settings)
         self.browser.get_stored_element.assert_not_called()
         self.browser.click.assert_not_awaited()
         self.browser.fill.assert_not_awaited()

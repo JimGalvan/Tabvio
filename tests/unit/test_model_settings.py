@@ -6,10 +6,11 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch, sentinel
+from unittest.mock import call, patch, sentinel
 from uuid import uuid4
 
 from tabvio import config
+from tabvio.agents.browser_agent import browser_agent
 from tabvio.agents.settings import AgentSettings
 from tabvio.agents.shared import llm
 
@@ -143,6 +144,20 @@ class ModelSettingsTests(unittest.TestCase):
                 runpy.run_path(llm.__file__)
                 load_dotenv.assert_not_called()
                 initialize.assert_not_called()
+
+    def test_browser_agent_and_page_navigator_use_the_supplied_models(self) -> None:
+        settings = AgentSettings(strong_model="openai:browser-model", fast_model="anthropic:navigator-model")
+        with patch.dict(os.environ, {"TABVIO_STRONG_MODEL": "invalid", "TABVIO_FAST_MODEL": "invalid"}):
+            with patch.object(llm, "init_chat_model", side_effect=[sentinel.fast_model, sentinel.strong_model]) as initialize:
+                with patch.object(browser_agent, "create_deep_agent", return_value=sentinel.agent) as create:
+                    agent = browser_agent.build_browser_agent(sentinel.browser, sentinel.inputs, settings)
+        self.assertIs(agent, sentinel.agent)
+        self.assertEqual(initialize.call_args_list, [
+            call("anthropic:navigator-model"),
+            call("openai:browser-model", reasoning_effort="none"),
+        ])
+        self.assertIs(create.call_args.kwargs["model"], sentinel.strong_model)
+        self.assertIs(create.call_args.kwargs["subagents"][0]["model"], sentinel.fast_model)
 
     def test_app_entry_point_loads_the_project_env_file(self) -> None:
         with TemporaryDirectory() as directory:

@@ -1,5 +1,5 @@
 import logging
-from pathlib import Path
+from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
@@ -8,11 +8,7 @@ from langgraph.types import Command
 from tabvio.agents.browser_agent.browser_agent import build_browser_agent
 from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.browser.session import BrowserSession
-from tabvio.config import (
-    TRACE_DIRECTORY,
-    read_browser_channel_setting,
-    read_browser_trace_setting,
-)
+from tabvio.config import read_agent_settings
 from tabvio.credentials.agent_provider import CredentialServiceProvider
 from tabvio.credentials.service import CredentialService
 from tabvio.runs import constants
@@ -106,28 +102,25 @@ class LangChainAgentRuntime:
         return namespace.startswith(constants.MAIN_AGENT_MODEL_NAMESPACE)
 
 
-def _trace_path_for_run(thread_id: UUID) -> Path | None:
-    if not read_browser_trace_setting():
-        return None
-    return TRACE_DIRECTORY / f"{thread_id}.zip"
-
-
 def build_agent_runtime(
         thread_id: UUID,
         user_id: UUID | None,
         credential_ids: tuple[UUID, ...] = (),
         credential_service: CredentialService | None = None,
-        headless: bool = True,
+        headless: bool | None = None,
 ):
+    settings = read_agent_settings(thread_id)
+    if headless is not None:
+        settings = replace(settings, headless=headless)
     browser = BrowserSession(
-        headless=headless,
-        trace_path=_trace_path_for_run(thread_id),
-        browser_channel=read_browser_channel_setting(),
+        headless=settings.headless,
+        trace_path=settings.trace_path,
+        browser_channel=settings.browser_channel,
     )
     agent_context = AgentContext()
     sensitive_inputs = SensitiveInputChannel()
     credential_provider = None
     if credential_service and credential_ids and user_id:
         credential_provider = CredentialServiceProvider(credential_service, user_id, credential_ids)
-    agent = build_browser_agent(browser, sensitive_inputs, credential_provider=credential_provider)
+    agent = build_browser_agent(browser, sensitive_inputs, settings, credential_provider=credential_provider)
     return LangChainAgentRuntime(agent, browser, agent_context, sensitive_inputs, thread_id)

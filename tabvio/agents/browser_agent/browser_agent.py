@@ -10,6 +10,7 @@ from tabvio.agents.browser_agent.prompts import SYSTEM_PROMPT, TODO_SYSTEM_PROMP
 from tabvio.agents.browser_agent.tools import build_browser_tools
 from tabvio.agents.credentials.provider import CredentialProvider
 from tabvio.agents.page_navigator.page_navigator import build_page_navigator
+from tabvio.agents.settings import AgentSettings
 from tabvio.agents.shared.llm import build_strong_model
 from tabvio.browser.session import BrowserSession
 from tabvio.runs.sensitive_input import SensitiveInputChannel
@@ -18,6 +19,7 @@ from tabvio.runs.sensitive_input import SensitiveInputChannel
 def build_browser_agent(
         browser_session: BrowserSession,
         sensitive_inputs: SensitiveInputChannel,
+        settings: AgentSettings,
         credential_provider: CredentialProvider | None = None,
 ):
     agent_skills_path = Path(__file__).resolve().parent / "skills"
@@ -27,8 +29,9 @@ def build_browser_agent(
         browser_session,
         credential_provider=credential_provider,
         sensitive_inputs=sensitive_inputs,
+        settings=settings,
     )
-    page_navigator_subagent = build_page_navigator(browser_session)
+    page_navigator_subagent = build_page_navigator(browser_session, settings)
 
     workspace_backend = FilesystemBackend(
         root_dir=agent_files_path,
@@ -46,7 +49,7 @@ def build_browser_agent(
     )
 
     agent = create_deep_agent(
-        model=build_strong_model(),
+        model=build_strong_model(settings.strong_model),
         backend=backend,
         checkpointer=InMemorySaver(),
         system_prompt=SYSTEM_PROMPT,

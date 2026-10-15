@@ -4,11 +4,12 @@ from langchain_quickjs import CodeInterpreterMiddleware
 
 from tabvio.agents.page_navigator.prompts import SYSTEM_PROMPT
 from tabvio.agents.page_navigator.tools import build_page_navigator_tools
+from tabvio.agents.settings import AgentSettings
 from tabvio.agents.shared.llm import build_fast_model
 from tabvio.browser.session import BrowserSession
 
 
-def build_page_navigator(browser: BrowserSession) -> dict[str, Any]:
+def build_page_navigator(browser: BrowserSession, settings: AgentSettings) -> dict[str, Any]:
     return {
         "name": "page-navigator",
         "description": (
@@ -18,7 +19,7 @@ def build_page_navigator(browser: BrowserSession) -> dict[str, Any]:
         ),
         "system_prompt": SYSTEM_PROMPT,
         "tools": build_page_navigator_tools(browser),
-        "model": build_fast_model(),
+        "model": build_fast_model(settings.fast_model),
         "middleware": [
             CodeInterpreterMiddleware(ptc=["get_text_in_viewport", "scroll"])
         ],
