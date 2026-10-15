@@ -9,10 +9,13 @@ from tabvio.agents.page_navigator.tools import build_page_navigator_tools
 
 
 def build_page_navigator(browser: BrowserSession) -> dict[str, Any]:
-    """Build the page-navigator subagent, bound to one browser session."""
     return {
         "name": "page-navigator",
-        "description": "Locate an off-screen target from a JSON keywords list.",
+        "description": (
+            "Locate an off-screen target by reading viewport text for meaning and context. "
+            "Provide a natural-language description of the target and its identifying details. "
+            "Returns whether it was found, supporting text, and the reason for stopping."
+        ),
         "system_prompt": SYSTEM_PROMPT,
         "tools": build_page_navigator_tools(browser),
         "model": build_fast_model(),
