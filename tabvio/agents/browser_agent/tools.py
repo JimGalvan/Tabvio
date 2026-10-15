@@ -7,6 +7,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import interrupt
 from pydantic import ValidationError
 
+from tabvio.agents.browser_agent.constants import PAGE_TEXT_CHARACTER_LIMIT
 from tabvio.agents.browser_agent.context import AgentContext
 from tabvio.agents.browser_agent.payment_summary import generate_payment_summary
 from tabvio.agents.browser_agent.schema_utils import SchemaUtils
@@ -70,6 +71,16 @@ def build_browser_tools(
                 "browser.observation", {"message": "Observed the current page"}
             )
             return await finish_observation(observation.page_state, runtime)
+
+    @tool
+    async def read_page_text() -> str:
+        """Return the full text of the current page or selected frame, for reading values an observation shortened."""
+        async with browser_lock:
+            page_text = await browser.get_page_text()
+        if len(page_text) <= PAGE_TEXT_CHARACTER_LIMIT:
+            return page_text
+        omitted = len(page_text) - PAGE_TEXT_CHARACTER_LIMIT
+        return f"{page_text[:PAGE_TEXT_CHARACTER_LIMIT]}…[{omitted} chars omitted]"
 
     @tool
     async def switch_tab(tab_id: str, runtime: ToolRuntime[AgentContext]) -> str:
@@ -255,6 +266,7 @@ def build_browser_tools(
     return [
         navigate_and_observe,
         observe_page,
+        read_page_text,
         execute_steps,
         list_selected_credentials,
         switch_tab,
