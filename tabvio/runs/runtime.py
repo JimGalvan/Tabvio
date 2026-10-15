@@ -168,8 +168,17 @@ class LangChainAgentRuntime:
             if text:
                 return {"kind": "message", "text": text}
             return None
-        if stream_type == "updates" and constants.AGENT_INTERRUPT_KEY in data:
+        if stream_type == "updates":
+            return self._update_item(data)
+        return None
+
+    def _update_item(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if constants.AGENT_INTERRUPT_KEY in data:
             return {"kind": "interrupt"}
+        for update in data.values():
+            if update and constants.TODOS_STATE_KEY in update:
+                todos = update[constants.TODOS_STATE_KEY]
+                return {"kind": "custom", "event_type": constants.TODOS_EVENT_TYPE, "payload": {"todos": todos}}
         return None
 
     def _assistant_text(self, data: tuple[Any, dict[str, Any]]) -> str:
