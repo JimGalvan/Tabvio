@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from tabvio.browser.session import BrowserSession  # noqa: E402
+from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
 PAGES = Path(__file__).resolve().parent
 

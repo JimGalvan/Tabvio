@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 from playwright.async_api import Page
 
-from tabvio.browser.browser_utils import BrowserUtils, evaluate_with_timeout
+from tabvio_agent.browser.browser_utils import BrowserUtils, evaluate_with_timeout
 
 WHITESPACE = re.compile(r"\s+")
 

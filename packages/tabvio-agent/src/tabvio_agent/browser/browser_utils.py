@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from tabvio.browser.constants import EVALUATE_TIMEOUT_SECONDS, KEY_ALIASES
+from tabvio_agent.browser.constants import EVALUATE_TIMEOUT_SECONDS, KEY_ALIASES
 
 
 class BrowserUtils:

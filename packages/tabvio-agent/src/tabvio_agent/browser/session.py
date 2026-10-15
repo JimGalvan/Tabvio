@@ -15,8 +15,8 @@ from playwright.async_api import (
 from playwright.async_api import Frame as PlaywrightFrame
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from tabvio.browser.browser_utils import evaluate_with_timeout, normalize_key
-from tabvio.browser.constants import (
+from tabvio_agent.browser.browser_utils import evaluate_with_timeout, normalize_key
+from tabvio_agent.browser.constants import (
     BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
@@ -25,11 +25,11 @@ from tabvio.browser.constants import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
-from tabvio.browser.formatting import format_scan_for_llm
-from tabvio.browser.models import Element, Iframe, Tab, Observation
-from tabvio.browser.page_content import PageContent
-from tabvio.browser.payment_detection_result import PaymentDetectionResult
-from tabvio.browser.payment_detector import PaymentDetector
+from tabvio_agent.browser.formatting import format_scan_for_llm
+from tabvio_agent.browser.models import Element, Iframe, Tab, Observation
+from tabvio_agent.browser.page_content import PageContent
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
+from tabvio_agent.browser.payment_detector import PaymentDetector
 from collections import Counter
 
 logger = logging.getLogger(__name__)

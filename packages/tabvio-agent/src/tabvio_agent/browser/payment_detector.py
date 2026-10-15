@@ -4,9 +4,9 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
-from tabvio.browser.browser_utils import evaluate_with_timeout
-from tabvio.browser.models import PaymentSignal
-from tabvio.browser.payment_detection_result import PaymentDetectionResult
+from tabvio_agent.browser.browser_utils import evaluate_with_timeout
+from tabvio_agent.browser.models import PaymentSignal
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
 from urllib.parse import urlsplit
 
-from tabvio.browser.constants import (
+from tabvio_agent.browser.constants import (
     PAY_BUTTON_SIGNAL_KIND,
     PAYMENT_HANDOFF_SIGNAL_KINDS,
 )
-from tabvio.browser.models import PaymentSignal
+from tabvio_agent.browser.models import PaymentSignal
 
 
 class PaymentDetectionResult:
