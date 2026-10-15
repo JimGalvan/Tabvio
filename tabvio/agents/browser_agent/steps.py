@@ -1,7 +1,7 @@
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field
 
 from tabvio.browser.session import BrowserSession
 from tabvio.credentials.models import CredentialField
@@ -52,7 +52,6 @@ BrowserStep = Annotated[
     ClickStep | FillStep | SelectStep | PressStep | CredentialFillStep | MfaCodeStep,
     Field(discriminator="action"),
 ]
-BROWSER_STEP_ADAPTER = TypeAdapter(BrowserStep)
 
 
 class StepPlan(BaseModel):
