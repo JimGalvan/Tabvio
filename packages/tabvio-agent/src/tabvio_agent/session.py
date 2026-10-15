@@ -259,19 +259,15 @@ class BrowserAgentSession:
     async def _start_turn(self, agent_input: Any) -> None:
         if self._terminating:
             raise RuntimeError("The session has already been closed")
-        prepared = asyncio.Event()
-        self._execution_task = asyncio.create_task(self._execute(agent_input, prepared))
-        await self._set_status("running")
-        if self._terminating:
-            return
-        self._start_frame_capture()
-        prepared.set()
+        self._execution_task = asyncio.create_task(self._execute(agent_input))
+        await asyncio.sleep(0)
 
-    async def _execute(self, agent_input: Any, prepared: asyncio.Event) -> None:
+    async def _execute(self, agent_input: Any) -> None:
         try:
-            await prepared.wait()
+            await self._set_status("running")
             if self._terminating:
                 return
+            self._start_frame_capture()
             async with asyncio.timeout(self._settings.max_runtime_seconds):
                 async for stream_item in self._runtime.stream(agent_input):
                     await self._handle_stream_item(stream_item)

@@ -120,6 +120,59 @@ class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(session._capture_task)
         browser.close.assert_awaited_once()
 
+    async def test_cancelling_an_answer_caller_does_not_strand_the_resumed_turn(self):
+        call = {"name": "ask_person", "args": {"question": "Which size?"}, "id": str(uuid4())}
+        session, browser = build_session(AIMessage(content="", tool_calls=[call]), AIMessage(content="Done"))
+        self.addAsyncCleanup(session.close)
+        events = session.events()
+        await session.start("Buy it")
+        await next_event(events, "input.required")
+        await session._execution_task
+        controlling = asyncio.Event()
+        release_control = asyncio.Event()
+        resuming = asyncio.Event()
+        answered = asyncio.Event()
+        caller_alive = asyncio.Event()
+        set_status = session._set_status
+
+        async def click(*args):
+            controlling.set()
+            await release_control.wait()
+            return "Clicked"
+
+        async def status(value):
+            if value == "running":
+                resuming.set()
+            await set_status(value)
+
+        async def submit_answer():
+            await session.answer("M")
+            answered.set()
+            await caller_alive.wait()
+
+        browser.user_click.side_effect = click
+        applying = asyncio.create_task(session.apply_control(ClickAction(10, 20)))
+        await controlling.wait()
+        with patch.object(session, "_set_status", side_effect=status):
+            answering = asyncio.create_task(submit_answer())
+            try:
+                async with asyncio.timeout(2):
+                    await resuming.wait()
+                    answering.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await answering
+                    self.assertFalse(session._execution_task.done())
+                    release_control.set()
+                    self.assertEqual(await applying, "Clicked")
+                    self.assertEqual((await next_event(events, "run.completed")).output, "Done")
+                    await ready(session, events)
+                    await session._execution_task
+                self.assertTrue(answered.is_set())
+            finally:
+                release_control.set()
+                answering.cancel()
+                await asyncio.gather(answering, applying, return_exceptions=True)
+
     async def test_concurrent_answers_resume_a_question_once(self):
         call = {"name": "ask_person", "args": {"question": "Which size?"}, "id": str(uuid4())}
         session, _ = build_session(AIMessage(content="", tool_calls=[call]), AIMessage(content="Done"))
