@@ -44,12 +44,10 @@ class BrowserSession:
             headless: bool = True,
             trace_path: Path | None = None,
             browser_channel: str | None = None,
-            remote_browser=None,
     ):
         self._headless = headless
         self._trace_path = trace_path
         self._browser_channel = browser_channel
-        self._remote_browser = remote_browser
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -95,31 +93,17 @@ class BrowserSession:
             self._playwright = await async_playwright().start()
 
         if self._browser is None:
-            if self._remote_browser is not None:
-                self._browser = await self._connect_remote_browser()
-            else:
-                self._browser = await self._playwright.chromium.launch(
-                    headless=self._headless,
-                    channel=self._browser_channel,
-                    args=BROWSER_LAUNCH_ARGS,
-                )
-            self._context = await self._open_context()
+            self._browser = await self._playwright.chromium.launch(
+                headless=self._headless,
+                channel=self._browser_channel,
+                args=BROWSER_LAUNCH_ARGS,
+            )
+            self._context = await self._browser.new_context(
+                viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
+            )
             await self._start_trace()
 
         return self._browser
-
-    async def _connect_remote_browser(self) -> Browser:
-        endpoint, headers = await self._remote_browser.connect_endpoint()
-        return await self._playwright.chromium.connect_over_cdp(
-            endpoint, headers=headers
-        )
-
-    async def _open_context(self) -> BrowserContext:
-        if self._browser.contexts:
-            return self._browser.contexts[0]
-        return await self._browser.new_context(
-            viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
-        )
 
     async def _start_trace(self) -> None:
         if self._trace_path is None or self._context is None:
@@ -522,20 +506,12 @@ class BrowserSession:
     async def close(self) -> None:
         if self._context is not None:
             await self._stop_trace()
-            # A remote context belongs to the session, which is stopped below.
-            if self._remote_browser is None:
-                await self._context.close()
+            await self._context.close()
             self._context = None
 
         if self._browser is not None:
-            try:
-                await self._browser.close()
-            finally:
-                self._browser = None
-                if self._remote_browser is not None:
-                    await self._remote_browser.close()
-        elif self._remote_browser is not None:
-            await self._remote_browser.close()
+            await self._browser.close()
+            self._browser = None
 
         if self._playwright is not None:
             await self._playwright.stop()
