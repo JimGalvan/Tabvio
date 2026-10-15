@@ -334,6 +334,11 @@ class BrowserSession:
             self._active_frame(), self._get_script("get-text-in-viewport.js")
         )
 
+    async def get_page_text(self) -> str:
+        return await evaluate_with_timeout(
+            self._active_frame(), self._get_script("get-page-text.js")
+        )
+
     async def scroll(self, amount: float) -> str:
         position = await evaluate_with_timeout(
             self._active_frame(),
