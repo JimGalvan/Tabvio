@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command, interrupt
 
 from tabvio.agents.shared.events import publish_custom_event
-from tabvio.runs.runtime import LangChainAgentRuntime
+from tabvio.runs.runtime import LangChainAgentRuntime, extract_text
 
 
 class ScriptedModel(GenericFakeChatModel):
@@ -139,6 +139,23 @@ class LangChainRuntimeInputTests(unittest.TestCase):
         resume = runtime.resume_input({"entered": True, "submitted": "Verify"})
         self.assertIsInstance(resume, Command)
         self.assertEqual(resume.resume, {"entered": True, "submitted": "Verify"})
+
+
+class ExtractTextTests(unittest.TestCase):
+    def test_plain_text_is_returned_as_is(self) -> None:
+        self.assertEqual(extract_text("Task complete"), "Task complete")
+
+    def test_text_blocks_are_joined(self) -> None:
+        content = [{"type": "text", "text": "Page code is "}, {"type": "text", "text": "HOME-7F3"}]
+        self.assertEqual(extract_text(content), "Page code is HOME-7F3")
+
+    def test_blocks_without_text_are_skipped(self) -> None:
+        content = [{"type": "tool_use", "name": "observe_page"}, {"type": "text", "text": "done"}]
+        self.assertEqual(extract_text(content), "done")
+
+    def test_anything_else_is_empty(self) -> None:
+        self.assertEqual(extract_text(None), "")
+        self.assertEqual(extract_text({"text": "not a list"}), "")
 
 
 if __name__ == "__main__":

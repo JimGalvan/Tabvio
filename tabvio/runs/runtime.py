@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -34,90 +33,6 @@ def extract_text(content: Any) -> str:
         elif isinstance(block, dict) and isinstance(block.get("text"), str):
             parts.append(block["text"])
     return "".join(parts)
-
-
-class StrandsAgentRuntime:
-    def __init__(self, agent, browser, context, sensitive_inputs, channel):
-        self.agent = agent
-        self.browser = browser
-        self.context = context
-        self.sensitive_inputs = sensitive_inputs
-        self.channel = channel
-        self.pending_interrupt_id: str | None = None
-        self._last_message: Any = None
-
-    def start_input(self, task: str) -> Any:
-        return task
-
-    def resume_input(self, value: Any) -> Any:
-        if self.pending_interrupt_id is None:
-            raise RuntimeError("The agent is not waiting on an interrupt")
-        return [
-            {
-                "interruptResponse": {
-                    "interruptId": self.pending_interrupt_id,
-                    "response": value,
-                }
-            }
-        ]
-
-    async def stream(self, agent_input: Any):
-        self.channel.reset()
-        pump = asyncio.create_task(self._pump(agent_input))
-        finished = False
-        try:
-            while True:
-                item = await self.channel.next_item()
-                if item["kind"] == "finished":
-                    finished = True
-                    break
-                if item["kind"] == "custom":
-                    yield item
-                    continue
-
-                normalized = self._normalize_agent_event(item["event"])
-                if normalized is not None:
-                    yield normalized
-        finally:
-            if finished:
-                # Re-raises whatever the agent loop failed with.
-                await pump
-            else:
-                pump.cancel()
-                await asyncio.gather(pump, return_exceptions=True)
-
-    async def final_output(self) -> str:
-        if self._last_message is None:
-            return ""
-        if isinstance(self._last_message, dict):
-            return extract_text(self._last_message.get("content"))
-        return extract_text(getattr(self._last_message, "content", ""))
-
-    async def _pump(self, agent_input: Any) -> None:
-        try:
-            async for event in self.agent.stream_async(agent_input):
-                self.channel.publish_agent_event(event)
-        finally:
-            self.channel.finish()
-
-    def _normalize_agent_event(self, event: dict[str, Any]) -> dict[str, Any] | None:
-        text = event.get("data")
-        if isinstance(text, str) and text:
-            return {"kind": "message", "text": text}
-
-        result = event.get("result")
-        if result is None:
-            return None
-
-        self._last_message = getattr(result, "message", None)
-        if getattr(result, "stop_reason", None) != "interrupt":
-            self.pending_interrupt_id = None
-            return None
-
-        interrupts = getattr(result, "interrupts", None) or []
-        if interrupts:
-            self.pending_interrupt_id = interrupts[0].id
-        return {"kind": "interrupt"}
 
 
 class LangChainAgentRuntime:
