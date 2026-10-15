@@ -42,7 +42,7 @@ def source_state():
 
 class PaymentSummaryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.model_patch = patch(f"{SUMMARY_MODULE}.build_summary_model")
+        self.model_patch = patch(f"{SUMMARY_MODULE}.build_fast_model")
         self.model_factory = self.model_patch.start()
         self.addCleanup(self.model_patch.stop)
         self.invoke = AsyncMock(return_value=AIMessage(
@@ -204,7 +204,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(summary.await_count, 2)
 
     async def test_model_failure_still_publishes_the_original_handoff_and_interrupts(self):
-        with patch(f"{SUMMARY_MODULE}.build_summary_model", side_effect=RuntimeError("unavailable")):
+        with patch(f"{SUMMARY_MODULE}.build_fast_model", side_effect=RuntimeError("unavailable")):
             with self.assertRaises(GraphInterrupt):
                 await self.tools["switch_tab"]("tab:2", self.runtime)
         questions = self.questions()

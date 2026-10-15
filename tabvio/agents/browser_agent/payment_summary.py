@@ -10,6 +10,7 @@ from tabvio.agents.browser_agent.constants import (
     REQUEST_CHARACTER_LIMIT,
     SUMMARY_TIMEOUT_SECONDS,
 )
+from tabvio.agents.shared.llm import build_fast_model
 
 logger = logging.getLogger(__name__)
 
@@ -59,16 +60,10 @@ def summary_evidence(state: dict, page_state: str) -> str:
     })
 
 
-def build_summary_model():
-    from tabvio.agents.shared.llm import model
-
-    return model
-
-
 async def generate_payment_summary(state: dict, page_state: str) -> str:
     try:
         evidence = summary_evidence(state, page_state)
-        summarizer = build_summary_model()
+        summarizer = build_fast_model()
         result = await asyncio.wait_for(
             summarizer.ainvoke(
                 [SystemMessage(SYSTEM_PROMPT), HumanMessage(evidence)],
