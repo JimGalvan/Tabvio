@@ -17,7 +17,6 @@ license = "Apache-2.0"
 
 dependencies = [
     "strands-agents[openai,otel]>=1.55,<2.0",
-    "bedrock-agentcore>=1.22,<2.0",
     "python-dotenv",
     "tavily-python",
     "markdown",
@@ -29,7 +28,6 @@ dependencies = [
     "playwright>=1.59.0,<2.0",
     "workos>=5.10",
     "cryptography>=43.0",
-    "aws-opentelemetry-distro>=0.18,<0.19",
     "deepagents>=0.7.25,<0.8",
     "langgraph>=1.2.15,<2.0",
     "langchain>=1.4.6,<2.0",
