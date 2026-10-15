@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 from tabvio_agent.exceptions import SessionNotWaitingForInputError
+from tabvio_agent.models import ClickAction
 
 from .session_support import build_session, next_event, ready
 from .test_session_sensitive_input import sensitive_tools
@@ -68,6 +69,56 @@ class SessionLifecycleTests(unittest.IsolatedAsyncioTestCase):
         browser.close.assert_awaited_once()
         self.assertTrue(session._execution_task.done())
         self.assertIsNone(session._capture_task)
+
+    async def test_cancel_stops_an_answer_waiting_for_browser_control(self):
+        call = {"name": "ask_person", "args": {"question": "Which size?"}, "id": str(uuid4())}
+        session, browser = build_session(AIMessage(content="", tool_calls=[call]), AIMessage(content="Done"))
+        self.addAsyncCleanup(session.close)
+        events = session.events()
+        await session.start("Buy it")
+        await next_event(events, "input.required")
+        await session._execution_task
+        previous_execution = session._execution_task
+        controlling = asyncio.Event()
+        resuming = asyncio.Event()
+        browser_closed = asyncio.Event()
+        set_status = session._set_status
+
+        async def click(*args):
+            controlling.set()
+            await browser_closed.wait()
+            return "Clicked"
+
+        async def status(value):
+            if value == "running":
+                resuming.set()
+            await set_status(value)
+
+        browser.user_click.side_effect = click
+        browser.close.side_effect = browser_closed.set
+        applying = asyncio.create_task(session.apply_control(ClickAction(10, 20)))
+        await controlling.wait()
+        with patch.object(session, "_set_status", side_effect=status):
+            with patch.object(session._runtime, "stream", wraps=session._runtime.stream) as stream:
+                answering = asyncio.create_task(session.answer("M"))
+                await resuming.wait()
+                try:
+                    async with asyncio.timeout(2):
+                        await session.cancel()
+                        await answering
+                        self.assertEqual(await applying, "Clicked")
+                    self.assertIsNot(session._execution_task, previous_execution)
+                    self.assertTrue(session._execution_task.done())
+                    stream.assert_not_called()
+                finally:
+                    browser_closed.set()
+                    answering.cancel()
+                    applying.cancel()
+                    await asyncio.gather(answering, applying, return_exceptions=True)
+
+        self.assertEqual(session._status, "cancelled")
+        self.assertIsNone(session._capture_task)
+        browser.close.assert_awaited_once()
 
     async def test_concurrent_answers_resume_a_question_once(self):
         call = {"name": "ask_person", "args": {"question": "Which size?"}, "id": str(uuid4())}

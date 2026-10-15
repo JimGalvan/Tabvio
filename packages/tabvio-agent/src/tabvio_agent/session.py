@@ -73,6 +73,7 @@ class BrowserAgentSession:
         self._latest_frame: bytes | None = None
         self._frame_sequence = 0
         self._execution_task: asyncio.Task[None] | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
         self._capture_task: asyncio.Task[None] | None = None
         self._sensitive_input_timeout_task: asyncio.Task[None] | None = None
         self._assistant_output_parts: list[str] = []
@@ -84,6 +85,7 @@ class BrowserAgentSession:
         self._started = False
         self._resuming = False
         self._terminal = False
+        self._terminating = False
         self._closed = False
 
     async def start(self, task: str) -> None:
@@ -222,16 +224,20 @@ class BrowserAgentSession:
             yield event
 
     async def cancel(self) -> None:
-        if self._closed or self._terminal:
-            return
-        if self._execution_task and not self._execution_task.done():
-            self._execution_task.cancel()
-            await self._await_task(self._execution_task)
-        if not self._terminal:
-            self._terminal = True
-            await self._emit(RunCancelledEvent())
-            await self._set_status("cancelled")
+        await self._terminate("cancelled", RunCancelledEvent())
+
+    async def _terminate(self, status: SessionStatus | None = None, event: AgentEvent | None = None) -> None:
+        if not self._terminating:
+            self._terminating = True
+            execution_task = self._execution_task
+            if execution_task and execution_task is not asyncio.current_task() and not execution_task.done():
+                execution_task.cancel()
+            if status and event:
+                self._terminal = True
+                await self._emit(event)
+                await self._publish_status(status)
         await self._finish_resources()
+        await self._await_task(self._execution_task)
 
     async def close(self) -> None:
         async with self._command_lock:
@@ -253,14 +259,21 @@ class BrowserAgentSession:
         await self.close()
 
     async def _start_turn(self, agent_input: Any) -> None:
-        if self._closed or self._terminal:
+        if self._terminating:
             raise RuntimeError("The session has already been closed")
+        prepared = asyncio.Event()
+        self._execution_task = asyncio.create_task(self._execute(agent_input, prepared))
         await self._set_status("running")
+        if self._terminating:
+            return
         self._start_frame_capture()
-        self._execution_task = asyncio.create_task(self._execute(agent_input))
+        prepared.set()
 
-    async def _execute(self, agent_input: Any) -> None:
+    async def _execute(self, agent_input: Any, prepared: asyncio.Event) -> None:
         try:
+            await prepared.wait()
+            if self._terminating:
+                return
             async with asyncio.timeout(self._settings.max_runtime_seconds):
                 async for stream_item in self._runtime.stream(agent_input):
                     await self._handle_stream_item(stream_item)
@@ -273,21 +286,13 @@ class BrowserAgentSession:
             await self._set_status("ready_for_follow_up")
             await self._pause_frame_capture()
         except TimeoutError:
-            self._terminal = True
-            await self._emit(RunFailedEvent(constants.EXECUTION_TIMEOUT_ERROR))
-            await self._set_status("timed_out")
+            await self._terminate("timed_out", RunFailedEvent(constants.EXECUTION_TIMEOUT_ERROR))
         except asyncio.CancelledError:
-            self._terminal = True
-            await self._emit(RunCancelledEvent())
-            await self._set_status("cancelled")
+            await self._terminate("cancelled", RunCancelledEvent())
         except Exception as exception:
-            self._terminal = True
-            await self._emit(RunFailedEvent(str(exception)))
-            await self._set_status("failed")
+            await self._terminate("failed", RunFailedEvent(str(exception)))
         finally:
             self._resuming = False
-            if self._terminal:
-                await self._finish_resources()
 
     async def _handle_stream_item(self, stream_item: dict[str, Any]) -> None:
         kind = stream_item.get("kind")
@@ -414,27 +419,38 @@ class BrowserAgentSession:
             )
 
     async def _finish_resources(self) -> None:
-        if self._closed:
-            return
+        self._terminating = True
+        if self._cleanup_task is None:
+            self._cleanup_task = asyncio.create_task(self._close_resources())
+        await self._cleanup_task
+
+    async def _close_resources(self) -> None:
         self._closed = True
+        releasing_mouse = asyncio.create_task(self._release_control_mouse())
+        await self._browser.close()
+        await self._await_task(releasing_mouse)
         timeout_task = self._sensitive_input_timeout_task
         self._cancel_sensitive_input_timeout()
         await self._await_task(timeout_task)
         await self._pause_frame_capture()
-        async with self._control_lock:
-            await self._release_control_mouse()
-        await self._browser.close()
         await self._event_queue.put(None)
         async with self._frame_condition:
             self._frame_condition.notify_all()
 
     async def _set_status(self, status: SessionStatus) -> None:
-        if self._status == status:
+        if self._terminating or self._status == status:
             return
         async with self._control_lock:
+            if self._terminating:
+                return
             if status not in {"waiting_for_input", "ready_for_follow_up"}:
                 await self._release_control_mouse()
-            self._status = status
+                if self._terminating:
+                    return
+            await self._publish_status(status)
+
+    async def _publish_status(self, status: SessionStatus) -> None:
+        self._status = status
         await self._emit(SessionStatusEvent(status))
 
     async def _emit(self, event: AgentEvent) -> None:
