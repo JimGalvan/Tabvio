@@ -88,6 +88,12 @@ class BrowserTabChangedEvent:
 
 
 @dataclass(frozen=True)
+class BrowserFrameChangedEvent:
+    frame_id: str
+    event_type: Literal["browser.frame.changed"] = field(default="browser.frame.changed", init=False)
+
+
+@dataclass(frozen=True)
 class BrowserObservationEvent:
     message: str
     event_type: Literal["browser.observation"] = field(default="browser.observation", init=False)
@@ -164,6 +170,7 @@ _BrowserEvent: TypeAlias = (
     | BrowserActionCompletedEvent
     | BrowserActionFailedEvent
     | BrowserTabChangedEvent
+    | BrowserFrameChangedEvent
     | BrowserObservationEvent
     | BrowserCaptureFailedEvent
     | BrowserCaptureRecoveredEvent

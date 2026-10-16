@@ -4,6 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
+from tabvio_agent import BrowserFrameChangedEvent
 from tabvio_agent.events import AgentMessageDeltaEvent, RunCompletedEvent
 from tabvio_agent.exceptions import (
     SessionNotReadyForFollowUpError,
@@ -28,6 +29,21 @@ class SessionCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(completed, RunCompletedEvent("Done."))
         await ready(session, events)
         browser.close.assert_not_awaited()
+
+    async def test_frame_custom_event_becomes_a_frozen_typed_event(self):
+        session, _ = build_session()
+        self.addAsyncCleanup(session.close)
+        await session._handle_stream_item({
+            "kind": "custom", "event_type": "browser.frame.changed",
+            "payload": {"frame_id": "frame:1"},
+        })
+
+        event = await anext(session.events())
+
+        self.assertEqual(event, BrowserFrameChangedEvent("frame:1"))
+        self.assertEqual(event.event_type, "browser.frame.changed")
+        with self.assertRaises(FrozenInstanceError):
+            event.frame_id = "frame:0"
 
     async def test_follow_up_reuses_the_browser_and_thread(self):
         session, browser = build_session(AIMessage(content="First"), AIMessage(content="Second"))
