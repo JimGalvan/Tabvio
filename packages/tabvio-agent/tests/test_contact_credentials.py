@@ -3,11 +3,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
+
+from tabvio_agent.browser.models import Element
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.models import CredentialMetadata, CredentialSecret
-from tabvio_agent.browser.models import Element
-from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 
 
 class ObservedBrowser:

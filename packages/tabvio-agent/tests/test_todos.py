@@ -8,13 +8,12 @@ from langchain.agents.middleware import TodoListMiddleware
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
-
+from tabvio_agent.browser.session import BrowserSession
 from tabvio_agent.browser_agent.browser_agent import build_browser_agent
 from tabvio_agent.browser_agent.prompts import TODO_SYSTEM_PROMPT
-from tabvio_agent.settings import AgentSettings
-from tabvio_agent.browser.session import BrowserSession
 from tabvio_agent.runtime import LangChainAgentRuntime
 from tabvio_agent.sensitive_input import SensitiveInputChannel
+from tabvio_agent.settings import AgentSettings
 
 
 class ScriptedModel(GenericFakeChatModel):

@@ -1,4 +1,5 @@
 import unittest
+
 from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 

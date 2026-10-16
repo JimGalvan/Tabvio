@@ -11,7 +11,8 @@ from langgraph.errors import GraphInterrupt
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, Interrupt
-
+from tabvio_agent.browser.models import PaymentSignal
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.payment_summary import (
     generate_payment_summary,
@@ -19,8 +20,6 @@ from tabvio_agent.browser_agent.payment_summary import (
 )
 from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.settings import AgentSettings
-from tabvio_agent.browser.models import PaymentSignal
-from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 
 SUMMARY_MODULE = "tabvio_agent.browser_agent.payment_summary"
 SUMMARY_TEXT = "I added two items and selected standard delivery. The total is USD 48.50."

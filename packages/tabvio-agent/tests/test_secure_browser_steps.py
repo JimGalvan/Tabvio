@@ -14,13 +14,12 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, Interrupt
 from pydantic import ValidationError
-
+from tabvio_agent.browser.models import Element
+from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.schema_utils import SchemaUtils
 from tabvio_agent.browser_agent.steps import StepPlan, validate_plan
 from tabvio_agent.browser_agent.tools import build_browser_tools
-from tabvio_agent.browser.models import Element
-from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 

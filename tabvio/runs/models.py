@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, SecretStr, model_validator
-
 from tabvio_agent.browser.constants import (
     CONTROL_KEYS,
     MAX_CONTROL_SCROLL_PIXELS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
+
 from tabvio.clock import utc_now
 
 if TYPE_CHECKING:

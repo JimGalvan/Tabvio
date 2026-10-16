@@ -7,8 +7,9 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from tabvio_agent.models import CredentialMetadata, CredentialSecret
 from tabvio_agent.credentials import CredentialProvider
+from tabvio_agent.models import CredentialMetadata, CredentialSecret
+
 from tabvio.credentials.agent_provider import CredentialServiceProvider
 from tabvio.credentials.cipher import KEY_LENGTH_BYTES, LocalAesGcmCredentialCipher
 from tabvio.credentials.exceptions import (

@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 from uuid import UUID
 
-from tabvio_agent.settings import AgentSettings
 from tabvio_agent.constants import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL
+from tabvio_agent.settings import AgentSettings
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "server" / "static"

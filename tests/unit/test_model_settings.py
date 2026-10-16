@@ -7,8 +7,10 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch, sentinel
 from uuid import uuid4
-from tabvio import config
+
 from tabvio_agent.settings import AgentSettings
+
+from tabvio import config
 
 
 class ModelSettingsTests(unittest.TestCase):

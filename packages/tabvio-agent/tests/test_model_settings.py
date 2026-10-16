@@ -3,6 +3,7 @@ import runpy
 import unittest
 from dataclasses import FrozenInstanceError
 from unittest.mock import call, patch, sentinel
+
 from tabvio_agent.browser_agent import browser_agent
 from tabvio_agent.settings import AgentSettings
 from tabvio_agent.shared import llm
