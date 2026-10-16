@@ -459,6 +459,8 @@ class BrowserSession:
             return f"Frame with id {iframe_id} not found"
 
         self._iframe = frame
+        if frame is not self._page.main_frame:
+            await (await frame.frame_element()).scroll_into_view_if_needed()
         self._invalidate_elements()
         return f"Switched to frame {iframe_id} with url {frame.url}"
 
