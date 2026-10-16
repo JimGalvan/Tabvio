@@ -46,6 +46,9 @@ Batching rules:
 If `execute_steps` returns `ok: false` with `kind: validation_error`, correct the plan from the error and latest observation;
 no browser action ran. If it returns an execution error after completed actions, observe before replanning.
 Use `switch_tab` when you need to switch to a different tab.
+When the element you need is inside an iframe listed under <available-iframes>, call `switch_frame` with that frame id and then observe before acting.
+Element indices always refer to the selected frame.
+Call `switch_frame("frame:0")` to return to the main page.
 When required information is missing and cannot be inferred safely, call `request_user_input` with one concise question.
 Continue the task after the user responds.
 If an observation shows a CAPTCHA, a "verify you are human" or "unusual traffic" notice, a reCAPTCHA/hCaptcha challenge,
