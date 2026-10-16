@@ -5,15 +5,15 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
 
+from tabvio_agent.browser.session import BrowserSession
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.prompts import SYSTEM_PROMPT, TODO_SYSTEM_PROMPT
 from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.credentials import CredentialProvider
 from tabvio_agent.page_navigator.page_navigator import build_page_navigator
+from tabvio_agent.sensitive_input import SensitiveInputChannel
 from tabvio_agent.settings import AgentSettings
 from tabvio_agent.shared.llm import build_strong_model
-from tabvio_agent.browser.session import BrowserSession
-from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 
 def build_browser_agent(

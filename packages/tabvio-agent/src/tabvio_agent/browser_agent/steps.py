@@ -3,8 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tabvio_agent.models import CredentialField
 from tabvio_agent.browser.session import BrowserSession
+from tabvio_agent.models import CredentialField
 
 
 class StrictStep(BaseModel):

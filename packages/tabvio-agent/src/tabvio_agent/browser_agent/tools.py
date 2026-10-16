@@ -7,6 +7,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import interrupt
 from pydantic import ValidationError
 
+from tabvio_agent.browser.session import BrowserSession
 from tabvio_agent.browser_agent.constants import PAGE_TEXT_CHARACTER_LIMIT
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.payment_summary import generate_payment_summary
@@ -25,14 +26,13 @@ from tabvio_agent.browser_agent.steps import (
     validate_plan,
 )
 from tabvio_agent.credentials import CredentialProvider
+from tabvio_agent.sensitive_input import SensitiveInputChannel
 from tabvio_agent.settings import AgentSettings
 from tabvio_agent.shared.events import publish_custom_event
 from tabvio_agent.shared.verification import (
     describe_entered_code,
     explain_missing_code,
 )
-from tabvio_agent.browser.session import BrowserSession
-from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 STEP_PLAN_SCHEMA = SchemaUtils.inline_references(StepPlan.model_json_schema())
 
