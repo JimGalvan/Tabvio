@@ -1,1 +1,0 @@
-"""Tabvio browser-agent application."""
