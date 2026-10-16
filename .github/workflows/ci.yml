@@ -15,7 +15,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
-      - run: uv sync
+      - run: uv sync --locked
       - run: uv run playwright install --with-deps chromium
       - run: uv run ruff check
       - run: uv run pytest
+      - run: uv build
