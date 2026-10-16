@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from collections import Counter
 from pathlib import Path
 from typing import TypeVar
 from urllib.parse import urlsplit
@@ -13,7 +14,7 @@ from playwright.async_api import (
     async_playwright,
 )
 from playwright.async_api import Frame as PlaywrightFrame
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from tabvio_agent.browser.browser_utils import evaluate_with_timeout, normalize_key
 from tabvio_agent.browser.constants import (
@@ -26,11 +27,10 @@ from tabvio_agent.browser.constants import (
     VIEWPORT_WIDTH,
 )
 from tabvio_agent.browser.formatting import format_scan_for_llm
-from tabvio_agent.browser.models import Element, Iframe, Tab, Observation
+from tabvio_agent.browser.models import Element, Iframe, Observation, Tab
 from tabvio_agent.browser.page_content import PageContent
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser.payment_detector import PaymentDetector
-from collections import Counter
 
 logger = logging.getLogger(__name__)
 
