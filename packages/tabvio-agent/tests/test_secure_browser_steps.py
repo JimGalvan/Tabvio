@@ -265,6 +265,60 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         release.set()
         self.assertEqual(await asyncio.gather(navigation, observation), ["Navigated", "Observed"])
 
+    async def test_switch_frame_returns_the_browser_result_and_publishes_the_frame_id(self):
+        self.browser.switch_to_iframe = AsyncMock(return_value="Switched to frame frame:1")
+
+        result = await self.tools["switch_frame"].coroutine("frame:1", self.runtime)
+
+        self.assertEqual(result, "Switched to frame frame:1")
+        self.browser.switch_to_iframe.assert_awaited_once_with("frame:1")
+        self.assertEqual(self.events, [{
+            "event_type": "browser.frame.changed", "payload": {"frame_id": "frame:1"},
+        }])
+
+    async def test_switch_frame_waits_for_another_browser_tool(self):
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def navigate(url):
+            entered.set()
+            await release.wait()
+            return SimpleNamespace(page_state="Navigated")
+
+        self.browser.attempt_navigate_and_observe = navigate
+        self.browser.switch_to_iframe = AsyncMock(return_value="Switched")
+        navigation = asyncio.create_task(self.tools["navigate_and_observe"].coroutine("https://shop.example", self.runtime))
+        await entered.wait()
+        switching = asyncio.create_task(self.tools["switch_frame"].coroutine("frame:1", self.runtime))
+        await asyncio.sleep(0)
+        self.browser.switch_to_iframe.assert_not_awaited()
+        self.assertEqual(self.events, [{
+            "event_type": "browser.navigation.started", "payload": {"url": "https://shop.example"},
+        }])
+        release.set()
+        self.assertEqual(await asyncio.gather(navigation, switching), ["Navigated", "Switched"])
+        self.browser.switch_to_iframe.assert_awaited_once_with("frame:1")
+
+    async def test_switch_frame_holds_the_lock_until_switching_finishes(self):
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def switch(frame_id):
+            entered.set()
+            await release.wait()
+            return "Switched"
+
+        self.browser.switch_to_iframe = switch
+        self.browser.attempt_observe_page = AsyncMock(return_value=SimpleNamespace(page_state="Observed"))
+        switching = asyncio.create_task(self.tools["switch_frame"].coroutine("frame:1", self.runtime))
+        await entered.wait()
+        observation = asyncio.create_task(self.tools["observe_page"].coroutine(self.runtime))
+        await asyncio.sleep(0)
+        self.browser.attempt_observe_page.assert_not_awaited()
+        self.assertEqual(self.events, [])
+        release.set()
+        self.assertEqual(await asyncio.gather(switching, observation), ["Switched", "Observed"])
+
     async def test_select_and_press_use_browser_values_and_publish_action_events(self):
         self.browser.select = AsyncMock()
         self.browser.press = AsyncMock()

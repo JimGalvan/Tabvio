@@ -134,6 +134,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             attempt_navigate_and_observe=AsyncMock(return_value=SimpleNamespace(page_state=PAGE_STATE)),
             attempt_observe_page=AsyncMock(return_value=SimpleNamespace(page_state="Refreshed after payment")),
             switch_tab=AsyncMock(return_value=PAGE_STATE),
+            switch_to_iframe=AsyncMock(return_value=PAGE_STATE),
         )
         self.events = []
         event_patch = patch(
@@ -235,11 +236,14 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.events[0]["event_type"], "input.required")
 
     async def test_observe_and_switch_replay_refresh_without_repeating_browser_calls(self):
-        for name, args in (("observe_page", ()), ("switch_tab", ("tab:2",))):
+        for name, args in (
+            ("observe_page", ()), ("switch_tab", ("tab:2",)), ("switch_frame", ("frame:1",)),
+        ):
             with self.subTest(tool=name):
                 self.events.clear()
                 self.browser.attempt_observe_page.reset_mock()
                 self.browser.switch_tab.reset_mock()
+                self.browser.switch_to_iframe.reset_mock()
                 self.interrupt.side_effect = self.pause
                 tools = {}
                 for browser_tool in build_browser_tools(self.browser):
@@ -260,12 +264,23 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(first_event["event_type"], "browser.observation")
                     self.assertEqual(self.browser.attempt_observe_page.await_count, 2)
                     self.browser.switch_tab.assert_not_awaited()
-                else:
+                elif name == "switch_tab":
                     self.assertEqual(first_event, {
                         "event_type": "browser.tab.changed", "payload": {"tab_id": "tab:2"},
                     })
                     self.browser.switch_tab.assert_awaited_once_with("tab:2")
                     self.browser.attempt_observe_page.assert_awaited_once()
+                else:
+                    self.assertEqual(first_event, {
+                        "event_type": "browser.frame.changed", "payload": {"frame_id": "frame:1"},
+                    })
+                    self.browser.switch_to_iframe.assert_awaited_once_with("frame:1")
+                    self.browser.attempt_observe_page.assert_awaited_once()
+                    changed_events = []
+                    for event in self.events:
+                        if event["event_type"] == "browser.frame.changed":
+                            changed_events.append(event)
+                    self.assertEqual(changed_events, [first_event])
 
 
 class PaymentGraphTests(unittest.IsolatedAsyncioTestCase):
