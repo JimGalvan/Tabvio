@@ -6,6 +6,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import interrupt
+
 from tabvio_agent.session import BrowserAgentSession
 from tabvio_agent.settings import AgentSettings
 from tabvio_agent.shared.events import publish_custom_event

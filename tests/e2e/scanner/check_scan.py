@@ -26,7 +26,7 @@ import sys
 import threading
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from tabvio_agent.browser.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
 from tabvio_agent.browser.formatting import format_scan_for_llm  # noqa: E402

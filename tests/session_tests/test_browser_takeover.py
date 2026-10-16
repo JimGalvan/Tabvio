@@ -3,6 +3,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
+
 from tabvio_agent import constants
 from tabvio_agent.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio_agent.exceptions import SessionNotWaitingForInputError

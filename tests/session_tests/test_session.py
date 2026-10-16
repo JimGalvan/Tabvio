@@ -4,6 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
+
 from tabvio_agent import BrowserFrameChangedEvent
 from tabvio_agent.events import AgentMessageDeltaEvent, RunCompletedEvent
 from tabvio_agent.exceptions import (

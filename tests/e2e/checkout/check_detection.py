@@ -15,7 +15,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
