@@ -454,7 +454,13 @@ class BrowserSession:
         return f"Switched to tab with title {await page.title()} and url {page.url}"
 
     async def switch_to_iframe(self, iframe_id: str) -> str:
-        pass
+        frame = self._iframes_by_id.get(iframe_id)
+        if frame is None or frame.is_detached():
+            return f"Frame with id {iframe_id} not found"
+
+        self._iframe = frame
+        self._invalidate_elements()
+        return f"Switched to frame {iframe_id} with url {frame.url}"
 
     def _invalidate_elements(self) -> None:
         self._elements = []
