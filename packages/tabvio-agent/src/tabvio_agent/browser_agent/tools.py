@@ -93,6 +93,16 @@ def build_browser_tools(
             return await finish_observation(result, runtime)
 
     @tool
+    async def switch_frame(frame_id: str, runtime: ToolRuntime[AgentContext]) -> str:
+        """Switch to a frame by an id such as `frame:1` from <available-iframes>; `frame:0` is the main page."""
+        async with browser_lock:
+            if pending_payment_observation is not None:
+                return await finish_observation("", runtime)
+            result = await browser.switch_to_iframe(frame_id)
+            publish_custom_event("browser.frame.changed", {"frame_id": frame_id})
+            return await finish_observation(result, runtime)
+
+    @tool
     def request_user_input(question: str, runtime: ToolRuntime[AgentContext]) -> str:
         """Pause and ask the user for required non-sensitive information."""
         publish_custom_event("input.required", {"question": question})
@@ -270,5 +280,6 @@ def build_browser_tools(
         execute_steps,
         list_selected_credentials,
         switch_tab,
+        switch_frame,
         request_user_input,
     ]
