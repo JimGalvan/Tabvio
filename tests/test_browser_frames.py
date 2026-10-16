@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from tabvio_agent.browser.session import BrowserSession
 
@@ -10,8 +10,10 @@ class BrowserFrameTests(unittest.IsolatedAsyncioTestCase):
         self.main_frame = SimpleNamespace(
             name="", url="https://shop.example", is_detached=Mock(return_value=False),
         )
+        self.child_frame_element = SimpleNamespace(scroll_into_view_if_needed=AsyncMock())
         self.child_frame = SimpleNamespace(
             name="frame-a", url="https://shop.example/form", is_detached=Mock(return_value=False),
+            frame_element=AsyncMock(return_value=self.child_frame_element),
         )
         self.page = SimpleNamespace(
             main_frame=self.main_frame, frames=[self.main_frame, self.child_frame],
@@ -49,3 +51,7 @@ class BrowserFrameTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result, f"Frame with id {frame_id} not found")
                 self.assertIs(self.browser._active_frame(), self.main_frame)
                 self.assertIs(self.browser._elements, elements)
+
+    async def test_switching_into_a_child_frame_scrolls_it_into_view(self):
+        await self.browser.switch_to_iframe("frame:1")
+        self.child_frame_element.scroll_into_view_if_needed.assert_awaited_once()
