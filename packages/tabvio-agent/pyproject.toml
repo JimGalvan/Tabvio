@@ -5,7 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tabvio-agent"
 version = "0.1.0"
+description = "An event-driven browser agent built with LangChain, deepagents, and Playwright."
+readme = { text = "See the [repository README](https://github.com/JimGalvan/Tabvio/blob/master/README.md) for an overview and development instructions.", content-type = "text/markdown" }
 license = "Apache-2.0"
+keywords = ["browser", "automation", "agent", "langchain", "playwright"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 requires-python = ">=3.11"
 dependencies = [
     "deepagents>=0.7.25,<0.8",
@@ -17,6 +29,11 @@ dependencies = [
     "playwright>=1.59.0,<2.0",
     "pydantic>=2.0,<3.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/JimGalvan/Tabvio"
+Repository = "https://github.com/JimGalvan/Tabvio"
+Issues = "https://github.com/JimGalvan/Tabvio/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
