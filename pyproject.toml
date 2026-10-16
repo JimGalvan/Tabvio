@@ -38,8 +38,12 @@ testpaths = ["tests", "packages/tabvio-agent/tests"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff]
+extend-exclude = ["notebooks"]
 lint.select = ["E", "F", "I", "UP"]
 lint.ignore = ["T201", "E501", "UP006", "UP007", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"packages/tabvio-agent/src/tabvio_agent/browser/page_content.py" = ["UP035"]
 
 [dependency-groups]
 dev = [
