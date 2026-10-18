@@ -10,7 +10,7 @@ and payment detection.
 
 import asyncio
 
-from tabvio.browser.session import BrowserSession
+from tabvio_agent.browser.session import BrowserSession
 
 CHECKOUT = """<!doctype html>
 <title>Checkout regression</title>

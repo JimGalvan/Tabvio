@@ -15,9 +15,9 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from tabvio.browser.session import BrowserSession  # noqa: E402
+from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
 PAGES = Path(__file__).resolve().parent
 
@@ -34,6 +34,7 @@ EXPECTED = {
     "wallet-widgets.html": False,
     "shipping.html": False,
     "cart.html": False,
+    "../nav/form.html": False,
     # The realistic flow next door, which is the same judgement on pages
     # that look like a shop rather than like a test case.
     "../shop/product.html": False,
