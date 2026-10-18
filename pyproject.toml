@@ -46,6 +46,7 @@ include = ["tabvio_agent*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+timeout = 30
 
 [tool.ruff]
 extend-exclude = ["notebooks"]
@@ -60,6 +61,7 @@ dev = [
     "ipykernel>=7.3.0",
     "notebook>=7.6.2",
     "pytest>=8.0.0,<9.0.0",
+    "pytest-timeout>=2.4.0",
     "python-dotenv",
     "ruff>=0.15.17",
 ]
