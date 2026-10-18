@@ -385,9 +385,8 @@ class BrowserAgentSession:
             taken_over = self._controller_count > 0
             quality = FRAME_QUALITY_TAKEOVER if taken_over else FRAME_QUALITY
             try:
-                frame = await asyncio.wait_for(
-                    self._browser.capture_screen_frame(quality), timeout=constants.FRAME_CAPTURE_TIMEOUT_SECONDS,
-                )
+                async with asyncio.timeout(constants.FRAME_CAPTURE_TIMEOUT_SECONDS):
+                    frame = await self._browser.capture_screen_frame(quality)
             except asyncio.CancelledError:
                 raise
             except Exception as exception:

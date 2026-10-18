@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import patch
 
@@ -53,13 +54,33 @@ class SessionFrameCaptureTests(unittest.IsolatedAsyncioTestCase):
     async def test_capture_calls_have_the_original_timeout(self):
         session, _ = build_session()
         self.addAsyncCleanup(session.close)
-        import asyncio
-        with patch("tabvio_agent.session.asyncio.wait_for", wraps=asyncio.wait_for) as capture:
+        with patch("tabvio_agent.session.asyncio.timeout", wraps=asyncio.timeout) as capture:
             session._start_frame_capture()
             frames = session.screen_frames()
             self.assertEqual(await anext(frames), b"jpeg-frame")
             await frames.aclose()
-            self.assertEqual(capture.call_args.kwargs["timeout"], constants.FRAME_CAPTURE_TIMEOUT_SECONDS)
+            capture.assert_called_once_with(constants.FRAME_CAPTURE_TIMEOUT_SECONDS)
+
+    async def test_pausing_capture_when_a_frame_finishes_stops_the_capture_task(self):
+        session, browser = build_session()
+        self.addAsyncCleanup(session.close)
+        captured = asyncio.Event()
+        pausing = None
+
+        async def capture(*args):
+            nonlocal pausing
+            if pausing is None:
+                pausing = asyncio.create_task(session._pause_frame_capture())
+                captured.set()
+            return b"jpeg-frame"
+
+        browser.capture_screen_frame.side_effect = capture
+        session._start_frame_capture()
+        capture_task = session._capture_task
+        await captured.wait()
+        await pausing
+        self.assertTrue(capture_task.done())
+        self.assertIsNone(session._capture_task)
 
     async def test_closed_frame_stream_delivers_the_last_frame_and_ends(self):
         session, _ = build_session()
