@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
+from tabvio_agent.browser.browser_manager import BrowserManager  # noqa: E402
 from tabvio_agent.browser.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
 from tabvio_agent.browser.formatting import format_scan_for_llm  # noqa: E402
 from tabvio_agent.browser.session import BrowserSession  # noqa: E402
@@ -354,7 +355,7 @@ def report(name: str, problems: list[str]) -> int:
 async def main() -> int:
     server, port = serve(SITE_ROOT)
     base = f"http://127.0.0.1:{port}"
-    session = BrowserSession(headless=True)
+    session = BrowserSession(BrowserManager(headless=True))
     failures = 0
 
     try:

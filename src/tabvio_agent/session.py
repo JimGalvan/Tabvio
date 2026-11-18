@@ -8,6 +8,7 @@ from typing import Any, Self
 from uuid import UUID, uuid4
 
 from tabvio_agent import constants
+from tabvio_agent.browser.browser_manager import BrowserManager
 from tabvio_agent.browser.constants import FRAME_QUALITY, FRAME_QUALITY_TAKEOVER
 from tabvio_agent.browser.session import BrowserSession
 from tabvio_agent.browser_agent.browser_agent import build_browser_agent
@@ -54,10 +55,13 @@ class BrowserAgentSession:
         if settings.sensitive_input_window_seconds <= 0:
             raise ValueError("sensitive_input_window_seconds must be greater than 0")
         self._settings = settings
-        self._browser = BrowserSession(
+        self._browser_manager = BrowserManager(
             headless=settings.headless,
+            channel=settings.browser_channel,
+        )
+        self._browser = BrowserSession(
+            self._browser_manager,
             trace_path=settings.trace_path,
-            browser_channel=settings.browser_channel,
         )
         self._sensitive_inputs = SensitiveInputChannel()
         if credential_provider:
@@ -422,6 +426,7 @@ class BrowserAgentSession:
         self._closed = True
         releasing_mouse = asyncio.create_task(self._release_control_mouse())
         await self._browser.close()
+        await self._browser_manager.stop()
         await self._await_task(releasing_mouse)
         timeout_task = self._sensitive_input_timeout_task
         self._cancel_sensitive_input_timeout()

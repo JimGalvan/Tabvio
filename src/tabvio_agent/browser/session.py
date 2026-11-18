@@ -6,23 +6,17 @@ from functools import cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from playwright.async_api import (
-    Browser,
-    BrowserContext,
-    Page,
-    Playwright,
-    async_playwright,
-)
+from playwright.async_api import BrowserContext, Page
 from playwright.async_api import Frame as PlaywrightFrame
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from tabvio_agent.browser.browser_manager import BrowserManager
 from tabvio_agent.browser.browser_utils import (
     evaluate_with_timeout,
     get_js_script,
     normalize_key,
 )
 from tabvio_agent.browser.constants import (
-    BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
@@ -44,15 +38,11 @@ class BrowserSession:
 
     def __init__(
             self,
-            headless: bool = True,
+            browser_manager: BrowserManager,
             trace_path: Path | None = None,
-            browser_channel: str | None = None,
     ):
-        self._headless = headless
+        self._browser_manager = browser_manager
         self._trace_path = trace_path
-        self._browser_channel = browser_channel
-        self._playwright: Playwright | None = None
-        self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._iframe: PlaywrightFrame | None = None
@@ -88,27 +78,16 @@ class BrowserSession:
     def _get_script(name: str) -> str:
         return get_js_script(name)
 
-    async def _initialize_browser(self) -> Browser:
-        if self._playwright is None:
-            self._playwright = await async_playwright().start()
-
-        if self._browser is None:
-            self._browser = await self._playwright.chromium.launch(
-                headless=self._headless,
-                channel=self._browser_channel,
-                args=BROWSER_LAUNCH_ARGS,
-            )
-            self._context = await self._browser.new_context(
+    async def _ensure_context(self) -> BrowserContext:
+        if self._context is None:
+            browser = await self._browser_manager.start()
+            self._context = await browser.new_context(
                 viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
             )
-            await self._start_trace()
+            if self._trace_path is not None:
+                await self._context.tracing.start(screenshots=False, snapshots=True)
 
-        return self._browser
-
-    async def _start_trace(self) -> None:
-        if self._trace_path is None or self._context is None:
-            return
-        await self._context.tracing.start(screenshots=False, snapshots=True)
+        return self._context
 
     async def _stop_trace(self) -> None:
         if self._trace_path is None or self._context is None:
@@ -145,10 +124,10 @@ class BrowserSession:
             pass
 
     async def attempt_navigate_and_observe(self, url: str) -> Observation:
-        await self._initialize_browser()
+        context = await self._ensure_context()
 
-        if self._page is None or self._page.is_closed():
-            self._reset_page_state(await self._context.new_page())
+        if not self.is_open:
+            self._reset_page_state(await context.new_page())
 
         await self._page.goto(url, timeout=LOAD_TIMEOUT_MS)
         self._reset_page_state(self._page)
@@ -171,9 +150,6 @@ class BrowserSession:
         return pages
 
     def _reconcile_current_page(self) -> None:
-        if self._context is None:
-            return
-
         pages = self._live_pages()
         if self._page not in pages:
             self._reset_page_state(pages[-1] if pages else None)
@@ -484,18 +460,11 @@ class BrowserSession:
         )
 
     async def close(self) -> None:
+        """Close this session's context. The browser belongs to BrowserManager."""
         if self._context is not None:
             await self._stop_trace()
             await self._context.close()
             self._context = None
-
-        if self._browser is not None:
-            await self._browser.close()
-            self._browser = None
-
-        if self._playwright is not None:
-            await self._playwright.stop()
-            self._playwright = None
 
         self._reset_page_state()
         self._tabs.reset()

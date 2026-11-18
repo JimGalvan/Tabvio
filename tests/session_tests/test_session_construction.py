@@ -10,6 +10,9 @@ from tabvio_agent.settings import AgentSettings
 
 class SessionConstructionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        manager_patch = patch("tabvio_agent.session.BrowserManager")
+        self.browser_manager = manager_patch.start()
+        self.addCleanup(manager_patch.stop)
         browser_patch = patch("tabvio_agent.session.BrowserSession")
         self.browser = browser_patch.start()
         self.addCleanup(browser_patch.stop)
@@ -23,7 +26,10 @@ class SessionConstructionTests(unittest.IsolatedAsyncioTestCase):
             browser_channel="chrome", trace_path=Path("trace.zip"),
         )
         session = BrowserAgentSession(settings)
-        self.browser.assert_called_once_with(headless=False, trace_path=settings.trace_path, browser_channel="chrome")
+        self.browser_manager.assert_called_once_with(headless=False, channel="chrome")
+        self.browser.assert_called_once_with(
+            self.browser_manager.return_value, trace_path=settings.trace_path,
+        )
         self.agent.assert_called_once_with(
             self.browser.return_value, session._sensitive_inputs, settings, credential_provider=None,
         )

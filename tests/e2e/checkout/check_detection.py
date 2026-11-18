@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
+from tabvio_agent.browser.browser_manager import BrowserManager  # noqa: E402
 from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
 PAGES = Path(__file__).resolve().parent
@@ -47,7 +48,7 @@ EXPECTED = {
 
 
 async def main() -> int:
-    session = BrowserSession(headless=True)
+    session = BrowserSession(BrowserManager(headless=True))
     failures = 0
     try:
         for name, should_trigger in EXPECTED.items():

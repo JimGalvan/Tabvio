@@ -10,6 +10,7 @@ and payment detection.
 
 import asyncio
 
+from tabvio_agent.browser.browser_manager import BrowserManager
 from tabvio_agent.browser.session import BrowserSession
 
 CHECKOUT = """<!doctype html>
@@ -28,7 +29,7 @@ PAYMENT = """<!doctype html>
 
 
 async def main():
-    browser = BrowserSession(browser_channel="chrome")
+    browser = BrowserSession(BrowserManager(channel="chrome"))
     try:
         async with asyncio.timeout(40):
             await browser._initialize_browser()

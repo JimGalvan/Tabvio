@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+from tabvio_agent.browser.browser_manager import BrowserManager
 from tabvio_agent.browser.session import BrowserSession
 
 
@@ -19,7 +20,7 @@ class BrowserFrameTests(unittest.IsolatedAsyncioTestCase):
             main_frame=self.main_frame, frames=[self.main_frame, self.child_frame],
             is_closed=Mock(return_value=False),
         )
-        self.browser = BrowserSession()
+        self.browser = BrowserSession(BrowserManager())
         self.browser._reset_page_state(self.page)
         self.browser._collect_iframes()
 
