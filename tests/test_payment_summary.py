@@ -27,6 +27,16 @@ SUMMARY_TEXT = "I added two items and selected standard delivery. The total is U
 PAGE_STATE = "Checkout: two items. Total USD 48.50. Card number: [empty]"
 
 
+class ObservedPage:
+    """Stands in for an Observation: the tools only render it to text."""
+
+    def __init__(self, text: str):
+        self.text = text
+
+    def __str__(self) -> str:
+        return self.text
+
+
 def source_state():
     return {
         "messages": [
@@ -132,8 +142,8 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.detection.needs_handoff(None))
         self.browser = SimpleNamespace(
             payment_detection_result=self.detection,
-            attempt_navigate_and_observe=AsyncMock(return_value=SimpleNamespace(page_state=PAGE_STATE)),
-            attempt_observe_page=AsyncMock(return_value=SimpleNamespace(page_state="Refreshed after payment")),
+            attempt_navigate_and_observe=AsyncMock(return_value=ObservedPage(PAGE_STATE)),
+            attempt_observe_page=AsyncMock(return_value=ObservedPage("Refreshed after payment")),
             switch_tab=AsyncMock(return_value=PAGE_STATE),
             switch_to_iframe=AsyncMock(return_value=PAGE_STATE),
         )
@@ -291,8 +301,8 @@ class PaymentGraphTests(unittest.IsolatedAsyncioTestCase):
                 url="https://shop.example/pay",
                 signals=(PaymentSignal(type="card-autocomplete", value="cc-number"),),
             ),
-            attempt_navigate_and_observe=AsyncMock(return_value=SimpleNamespace(page_state=PAGE_STATE)),
-            attempt_observe_page=AsyncMock(return_value=SimpleNamespace(page_state="Payment complete")),
+            attempt_navigate_and_observe=AsyncMock(return_value=ObservedPage(PAGE_STATE)),
+            attempt_observe_page=AsyncMock(return_value=ObservedPage("Payment complete")),
         )
         graph = StateGraph(MessagesState, context_schema=AgentContext)
         graph.add_node("tools", ToolNode(build_browser_tools(browser)))

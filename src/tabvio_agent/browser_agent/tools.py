@@ -58,7 +58,7 @@ def build_browser_tools(
             publish_custom_event("browser.navigation.started", {"url": url})
             observation = await browser.attempt_navigate_and_observe(url)
             publish_custom_event("browser.navigation.completed", {"url": url})
-            return await finish_observation(observation.page_state, runtime)
+            return await finish_observation(str(observation), runtime)
 
     @tool
     async def observe_page(runtime: ToolRuntime[AgentContext]) -> str:
@@ -70,7 +70,7 @@ def build_browser_tools(
             publish_custom_event(
                 "browser.observation", {"message": "Observed the current page"}
             )
-            return await finish_observation(observation.page_state, runtime)
+            return await finish_observation(str(observation), runtime)
 
     @tool
     async def read_page_text() -> str:
@@ -140,7 +140,7 @@ def build_browser_tools(
         await guard_payment_surface(runtime, detection, page_state)
         pending_payment_observation = None
         observation = await browser.attempt_observe_page()
-        return observation.page_state
+        return str(observation)
 
     async def guard_payment_surface(
             runtime: ToolRuntime[AgentContext], detection=None, page_state: str = ""

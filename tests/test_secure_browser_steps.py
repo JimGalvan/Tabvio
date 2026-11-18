@@ -1,7 +1,6 @@
 import asyncio
 import json
 import unittest
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -24,6 +23,16 @@ from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 NO_BOUNDS = Bounds(0, 0, 0, 0, 0, 0, 0, 0)
+
+
+class ObservedPage:
+    """Stands in for an Observation: the tools only render it to text."""
+
+    def __init__(self, text: str):
+        self.text = text
+
+    def __str__(self) -> str:
+        return self.text
 
 
 class ObservedBrowser:
@@ -256,10 +265,10 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         async def navigate(url):
             entered.set()
             await release.wait()
-            return SimpleNamespace(page_state="Navigated")
+            return ObservedPage("Navigated")
 
         self.browser.attempt_navigate_and_observe = navigate
-        self.browser.attempt_observe_page = AsyncMock(return_value=SimpleNamespace(page_state="Observed"))
+        self.browser.attempt_observe_page = AsyncMock(return_value=ObservedPage("Observed"))
         navigation = asyncio.create_task(self.tools["navigate_and_observe"].coroutine("https://shop.example", self.runtime))
         await entered.wait()
         observation = asyncio.create_task(self.tools["observe_page"].coroutine(self.runtime))
@@ -286,7 +295,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         async def navigate(url):
             entered.set()
             await release.wait()
-            return SimpleNamespace(page_state="Navigated")
+            return ObservedPage("Navigated")
 
         self.browser.attempt_navigate_and_observe = navigate
         self.browser.switch_to_iframe = AsyncMock(return_value="Switched")
@@ -312,7 +321,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             return "Switched"
 
         self.browser.switch_to_iframe = switch
-        self.browser.attempt_observe_page = AsyncMock(return_value=SimpleNamespace(page_state="Observed"))
+        self.browser.attempt_observe_page = AsyncMock(return_value=ObservedPage("Observed"))
         switching = asyncio.create_task(self.tools["switch_frame"].coroutine("frame:1", self.runtime))
         await entered.wait()
         observation = asyncio.create_task(self.tools["observe_page"].coroutine(self.runtime))

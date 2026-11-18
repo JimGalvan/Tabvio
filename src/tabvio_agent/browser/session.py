@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from collections import Counter
 from functools import cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -25,7 +24,6 @@ from tabvio_agent.browser.constants import (
     VIEWPORT_WIDTH,
 )
 from tabvio_agent.browser.element_factory import ElementFactory
-from tabvio_agent.browser.formatting import format_scan_for_llm
 from tabvio_agent.browser.models import Element, Iframe, Observation, Tab, Viewport
 from tabvio_agent.browser.page_content import PageContent
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
@@ -235,15 +233,6 @@ class BrowserSession:
                 self._reset_page_state(self._page)
         raise RuntimeError("The page kept navigating and could not be observed")
 
-    async def _capture_page_snapshot(self, page):
-        try:
-            text = await evaluate_with_timeout(
-                page, self._get_script("capture-page-snapshot.js")
-            )
-        except Exception:
-            return Counter()
-        return Counter(line.strip() for line in text.splitlines() if line.strip())
-
     @staticmethod
     def _remove_duplicate_links(raw_elements: list[dict]) -> list[dict]:
         """Keep the first link for each (text, href) pair and every non-link element."""
@@ -271,50 +260,40 @@ class BrowserSession:
     @staticmethod
     def _keep_elements_on_screen(
             raw_elements: list[dict], viewport: Viewport
-    ) -> tuple[list[Element], list[dict]]:
-        """Return the on-screen elements, renumbered from zero, beside the raw scan entries they came from."""
+    ) -> list[Element]:
+        """Return the elements a person can see, renumbered from zero."""
         elements = []
-        kept_raw_elements = []
         for raw_element in raw_elements:
             element = ElementFactory.create_element(len(elements), raw_element)
             if viewport.check_if_on_screen(element.element_bounds):
                 elements.append(element)
-                kept_raw_elements.append(raw_element)
-        return elements, kept_raw_elements
+        return elements
 
     async def _observe_current_page(self) -> Observation:
         result = json.loads(await self._scan_page())
 
         unique_raw_elements = self._remove_duplicate_links(result["elements"])
         viewport = Viewport(**result["viewport"])
-        self._elements, kept_raw_elements = self._keep_elements_on_screen(
-            unique_raw_elements, viewport
-        )
+        self._elements = self._keep_elements_on_screen(unique_raw_elements, viewport)
         elements_outside_viewport_count = len(unique_raw_elements) - len(self._elements)
 
-        interactable_elements = format_scan_for_llm({**result, "elements": kept_raw_elements})
-        if elements_outside_viewport_count:
-            interactable_elements += (
-                f"\n({elements_outside_viewport_count} more elements outside the screen, "
-                "use page-navigator to reach them)"
-            )
         self._reconcile_current_page()
-        tabs = await self._collect_tabs()
-        frames = self._collect_iframes()
         page_content = await PageContent.get_page_content(
             self._page, self._active_frame(), result, char_budget=500
         )
         self._payment_detection_result = await self._payment_detector.detect(self._page)
-        page_snapshot = await self._capture_page_snapshot(self._page)
-        described_frames = "\n".join(str(frame) for frame in frames)
-        page_state = (
-            f"{interactable_elements}\n"
-            f"<page-content>{page_content}</page-content>\n"
-            f"<available-tabs>{tabs}</available-tabs>\n"
-            f"<available-iframes>\n{described_frames}\n</available-iframes>"
-            f"{self.payment_detection_result.describe()}"
+
+        return Observation(
+            url=self.page.url,
+            title=await self.page.title(),
+            pages_below=float(result.get("pagesBelow", 0)),
+            elements=self._elements,
+            page_content=page_content,
+            tabs=await self._collect_tabs(),
+            iframes=self._collect_iframes(),
+            elements_outside_viewport_count=elements_outside_viewport_count,
+            payment_notice=self._payment_detection_result.describe(),
         )
-        return Observation(page_state=page_state, page_snapshot=page_snapshot)
 
     def get_stored_element(self, element_index: int) -> Element | None:
         if 0 <= element_index < len(self._elements):

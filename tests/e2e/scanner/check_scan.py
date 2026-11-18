@@ -30,7 +30,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
 from tabvio_agent.browser.browser_manager import BrowserManager  # noqa: E402
 from tabvio_agent.browser.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
-from tabvio_agent.browser.formatting import format_scan_for_llm  # noqa: E402
 from tabvio_agent.browser.models import Viewport  # noqa: E402
 from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
@@ -268,13 +267,20 @@ def elements_on_screen(scan: dict) -> list[dict]:
     """The elements the agent is actually offered: deduplicated and cut to the screen."""
     unique_elements = BrowserSession._remove_duplicate_links(scan["elements"])
     viewport = Viewport(**scan["viewport"])
-    _, kept_elements = BrowserSession._keep_elements_on_screen(unique_elements, viewport)
+    kept_elements = []
+    for element in BrowserSession._keep_elements_on_screen(unique_elements, viewport):
+        kept_elements.append({
+            "tag": element.tag,
+            "text": element.text,
+            "attrs": element.attrs,
+            "cx": element.cx,
+            "cy": element.cy,
+        })
     return kept_elements
 
 
-def check_prompt(scan: dict, elements: list[dict], case: dict) -> list[str]:
+def check_prompt(prompt: str, case: dict) -> list[str]:
     problems = []
-    prompt = format_scan_for_llm({**scan, "elements": elements})
 
     for needle in case.get("in_prompt", []):
         if needle not in prompt:
@@ -290,14 +296,14 @@ def check_prompt(scan: dict, elements: list[dict], case: dict) -> list[str]:
 
 
 async def check_page(session: BrowserSession, url: str, case: dict) -> list[str]:
-    await session.attempt_navigate_and_observe(url)
+    observation = await session.attempt_navigate_and_observe(url)
     scan = json.loads(await session._scan_page())
     elements = elements_on_screen(scan)
 
     return (
         check_labels(elements, case)
         + await check_coordinates(session, elements, case)
-        + check_prompt(scan, elements, case)
+        + check_prompt(str(observation), case)
     )
 
 

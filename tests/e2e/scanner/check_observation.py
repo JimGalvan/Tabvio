@@ -32,19 +32,20 @@ async def main():
     browser = BrowserSession(BrowserManager(channel="chrome"))
     try:
         async with asyncio.timeout(40):
-            await browser._initialize_browser()
+            context = await browser._ensure_context()
 
             async def fulfill(route):
                 body = PAYMENT if route.request.url == "https://payments.test/form" else CHECKOUT
                 await route.fulfill(content_type="text/html", body=body)
 
-            await browser._context.route("https://*.test/**", fulfill)
+            await context.route("https://*.test/**", fulfill)
             observation = await browser.attempt_navigate_and_observe("https://checkout.test/order")
+            page_state = str(observation)
 
             assert any(frame.url == "" for frame in browser._page.frames), "Lazy state not reproduced"
-            assert "One taco in your cart" in observation.page_state
-            assert "Frame unavailable" in observation.page_state
-            assert "<payment-surface>" in observation.page_state
+            assert "One taco in your cart" in page_state
+            assert "Frame unavailable" in page_state
+            assert "<payment-surface>" in page_state
             assert set(browser.payment_detection_result.get_signals) == {
                 "card-autocomplete:cc-number",
                 "card-autocomplete:cc-exp",
