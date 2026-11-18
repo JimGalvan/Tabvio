@@ -309,7 +309,7 @@ async def check_tall_frame(
     """Inside a frame taller than the viewport, only what a person can see counts."""
     problems = []
     await session.attempt_navigate_and_observe(f"{base}/scanner/tall-frame.html")
-    page = session._require_page()
+    page = session.page
 
     if other_origin:
         await page.evaluate(

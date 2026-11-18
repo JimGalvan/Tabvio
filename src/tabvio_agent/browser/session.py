@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 from collections import Counter
+from functools import cache
 from pathlib import Path
-from typing import TypeVar
 from urllib.parse import urlsplit
 
 from playwright.async_api import (
@@ -16,7 +16,11 @@ from playwright.async_api import (
 from playwright.async_api import Frame as PlaywrightFrame
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
-from tabvio_agent.browser.browser_utils import evaluate_with_timeout, normalize_key
+from tabvio_agent.browser.browser_utils import (
+    evaluate_with_timeout,
+    get_js_script,
+    normalize_key,
+)
 from tabvio_agent.browser.constants import (
     BROWSER_LAUNCH_ARGS,
     FRAME_QUALITY,
@@ -31,10 +35,9 @@ from tabvio_agent.browser.models import Element, Iframe, Observation, Tab
 from tabvio_agent.browser.page_content import PageContent
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser.payment_detector import PaymentDetector
+from tabvio_agent.browser.target_registry import TargetRegistry
 
 logger = logging.getLogger(__name__)
-
-Registered = TypeVar("Registered")
 
 
 class BrowserSession:
@@ -54,11 +57,8 @@ class BrowserSession:
         self._page: Page | None = None
         self._iframe: PlaywrightFrame | None = None
         self._elements: list[Element] = []
-        self._tabs_by_id: dict[str, Page] = {}
-        self._iframes_by_id: dict[str, PlaywrightFrame] = {}
-        self._next_tab_id = 0
-        self._next_iframe_id = 0
-        self._scripts: dict[str, str] = {}
+        self._tabs: TargetRegistry[Page] = TargetRegistry("tab")
+        self._iframes: TargetRegistry[PlaywrightFrame] = TargetRegistry("frame")
         self._payment_detector = PaymentDetector()
         self._payment_detection_result = PaymentDetectionResult()
 
@@ -71,22 +71,22 @@ class BrowserSession:
         return self._page is not None and not self._page.is_closed()
 
     @property
+    def page(self) -> Page:
+        if not self.is_open:
+            raise RuntimeError("No page is open")
+        return self._page
+
+    @property
     def current_hostname(self) -> str:
-        hostname = urlsplit(self._require_page().url).hostname
+        hostname = urlsplit(self.page.url).hostname
         if not hostname:
             raise RuntimeError("The current page has no valid hostname")
         return hostname
 
-    def _require_page(self) -> Page:
-        if self._page is None or self._page.is_closed():
-            raise RuntimeError("No page is open")
-        return self._page
-
-    def _get_script(self, name: str) -> str:
-        if name not in self._scripts:
-            script_path = Path(__file__).resolve().parent / "scripts" / name
-            self._scripts[name] = script_path.read_text(encoding="utf-8")
-        return self._scripts[name]
+    @staticmethod
+    @cache
+    def _get_script(name: str) -> str:
+        return get_js_script(name)
 
     async def _initialize_browser(self) -> Browser:
         if self._playwright is None:
@@ -128,8 +128,7 @@ class BrowserSession:
     def _reset_page_state(self, page: Page | None = None) -> None:
         self._page = page
         self._iframe = page.main_frame if page else None
-        self._iframes_by_id = {}
-        self._next_iframe_id = 0
+        self._iframes.reset()
         self._elements = []
 
     async def _wait_for_page_to_load(self, static_wait: float = 0.50, dom_wait: float = 3_500,
@@ -160,28 +159,6 @@ class BrowserSession:
         await self._wait_for_page_to_load(static_wait=0.25, dom_wait=0.50, network_wait=2_000)
         return await self._observe_current_page()
 
-    @staticmethod
-    def _sync_registry(
-            registry: dict[str, Registered],
-            live_items: list[Registered],
-            prefix: str,
-            next_id: int,
-    ) -> tuple[dict[str, Registered], int]:
-        """Drop ids for items that are gone, keep the rest, and number the new ones."""
-        synced = {}
-        for item_id, item in registry.items():
-            if item in live_items:
-                synced[item_id] = item
-
-        registered = list(synced.values())
-        for item in live_items:
-            if item not in registered:
-                synced[f"{prefix}:{next_id}"] = item
-                next_id += 1
-                registered.append(item)
-
-        return synced, next_id
-
     def _live_pages(self) -> list[Page]:
         if self._context is None:
             return []
@@ -202,12 +179,8 @@ class BrowserSession:
             self._reset_page_state(pages[-1] if pages else None)
 
     async def _collect_tabs(self) -> list[Tab]:
-        self._tabs_by_id, self._next_tab_id = self._sync_registry(
-            self._tabs_by_id, self._live_pages(), "tab", self._next_tab_id
-        )
-
         tabs = []
-        for tab_id, page in self._tabs_by_id.items():
+        for tab_id, page in self._tabs.sync(self._live_pages()).items():
             try:
                 title = await page.title()
             except Exception:
@@ -226,24 +199,19 @@ class BrowserSession:
 
     def _collect_iframes(self) -> list[Iframe]:
         if self._page is None:
-            self._iframes_by_id = {}
+            self._iframes.reset()
             return []
 
-        page_frames = list(self._page.frames)
-        if self._iframe not in page_frames:
-            self._iframe = self._page.main_frame
-
-        self._iframes_by_id, self._next_iframe_id = self._sync_registry(
-            self._iframes_by_id, page_frames, "frame", self._next_iframe_id
-        )
+        main_frame = self._page.main_frame
+        active_frame = self._active_frame()
 
         frames = []
-        for frame_id, frame in self._iframes_by_id.items():
+        for frame_id, frame in self._iframes.sync(list(self._page.frames)).items():
             frames.append(
                 Iframe(
                     id=frame_id,
-                    selected=frame is self._iframe,
-                    main=frame is self._page.main_frame,
+                    selected=frame is active_frame,
+                    main=frame is main_frame,
                     name=frame.name or "",
                     url=frame.url,
                 )
@@ -252,7 +220,7 @@ class BrowserSession:
         return frames
 
     def _active_frame(self) -> PlaywrightFrame:
-        page = self._require_page()
+        page = self.page
 
         if self._iframe not in page.frames:
             self._iframe = page.main_frame
@@ -350,7 +318,7 @@ class BrowserSession:
     async def _page_coordinates(
             self, horizontal: float, vertical: float
     ) -> tuple[float, float]:
-        page = self._require_page()
+        page = self.page
 
         frame = self._active_frame()
         if frame is page.main_frame:
@@ -371,8 +339,7 @@ class BrowserSession:
         )
 
     async def _click_element(self, element_index: int) -> None:
-        page = self._require_page()
-
+        page = self.page
         element = self.get_stored_element(element_index)
         if element is None:
             raise ValueError(f"Element [{element_index}] is not available")
@@ -385,7 +352,7 @@ class BrowserSession:
         return f"Clicked element [{element_index}]"
 
     async def fill(self, element_index: int, value: str) -> str:
-        page = self._require_page()
+        page = self.page
 
         await self._click_element(element_index)
         await page.keyboard.press("Control+A")
@@ -422,11 +389,11 @@ class BrowserSession:
                 f"element [{submit_element_index}] to submit it"
             )
 
-        await self._require_page().keyboard.press("Enter")
+        await self.page.keyboard.press("Enter")
         return f"Filled element [{element_index}] and pressed Enter to submit it"
 
     async def select(self, element_index: int, value: str) -> str:
-        page = self._require_page()
+        page = self.page
 
         await self._click_element(element_index)
         await page.keyboard.type(value)
@@ -434,7 +401,7 @@ class BrowserSession:
         return f"Selected an option in element [{element_index}]"
 
     async def press(self, element_index: int, value: str) -> str:
-        page = self._require_page()
+        page = self.page
 
         key = normalize_key(value)
         await self._click_element(element_index)
@@ -445,7 +412,7 @@ class BrowserSession:
         if self._context is None:
             raise RuntimeError("No browser is open")
 
-        page = self._tabs_by_id.get(tab_id)
+        page = self._tabs.get(tab_id)
         if page is None or page.is_closed():
             return f"Tab with id {tab_id} not found"
 
@@ -454,12 +421,12 @@ class BrowserSession:
         return f"Switched to tab with title {await page.title()} and url {page.url}"
 
     async def switch_to_iframe(self, iframe_id: str) -> str:
-        frame = self._iframes_by_id.get(iframe_id)
+        frame = self._iframes.get(iframe_id)
         if frame is None or frame.is_detached():
             return f"Frame with id {iframe_id} not found"
 
         self._iframe = frame
-        if frame is not self._page.main_frame:
+        if frame is not self.page.main_frame:
             await (await frame.frame_element()).scroll_into_view_if_needed()
         self._invalidate_elements()
         return f"Switched to frame {iframe_id} with url {frame.url}"
@@ -468,7 +435,7 @@ class BrowserSession:
         self._elements = []
 
     async def user_click(self, horizontal: float, vertical: float) -> str:
-        await self._require_page().mouse.click(horizontal, vertical)
+        await self.page.mouse.click(horizontal, vertical)
         self._invalidate_elements()
         return f"Clicked at {horizontal:.0f}, {vertical:.0f}"
 
@@ -478,31 +445,31 @@ class BrowserSession:
             vertical: float,
             amount: float,
     ) -> str:
-        page = self._require_page()
+        page = self.page
         await page.mouse.move(horizontal, vertical)
         await page.mouse.wheel(0, amount)
         self._invalidate_elements()
         return f"Scrolled by {amount:.0f} pixels"
 
     async def user_mouse_down(self, horizontal: float, vertical: float) -> str:
-        page = self._require_page()
+        page = self.page
         await page.mouse.move(horizontal, vertical)
         await page.mouse.down()
         self._invalidate_elements()
         return "Mouse button held"
 
     async def user_mouse_up(self) -> str:
-        await self._require_page().mouse.up()
+        await self.page.mouse.up()
         self._invalidate_elements()
         return "Mouse button released"
 
     async def user_key(self, key: str) -> str:
-        await self._require_page().keyboard.press(key)
+        await self.page.keyboard.press(key)
         self._invalidate_elements()
         return f"Pressed {key}"
 
     async def user_text(self, text: str) -> str:
-        await self._require_page().keyboard.insert_text(text)
+        await self.page.keyboard.insert_text(text)
         self._invalidate_elements()
         return "Typed text"
 
@@ -531,6 +498,5 @@ class BrowserSession:
             self._playwright = None
 
         self._reset_page_state()
-        self._tabs_by_id = {}
-        self._next_tab_id = 0
+        self._tabs.reset()
         self._payment_detection_result = PaymentDetectionResult()
