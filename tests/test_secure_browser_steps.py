@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -46,6 +47,10 @@ class ObservedBrowser:
         self.payment_detection_result = PaymentDetectionResult()
         self.fills = []
         self.clicks = []
+        self.page = SimpleNamespace(url="https://shop.example")
+
+    async def wait_for_page_to_settle(self):
+        return self.page.url
 
     def get_stored_element(self, element_index):
         return self.elements.get(element_index)
@@ -349,6 +354,27 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             {"event_type": "browser.action.started", "payload": {"action": "press", "target": "Email"}},
             {"event_type": "browser.action.completed", "payload": {"action": "press", "target": "Email"}},
         ])
+
+    async def test_a_batch_reports_the_url_the_page_settled_on(self):
+        async def settle():
+            self.browser.page.url = "https://shop.example/cart"
+            return self.browser.page.url
+
+        self.browser.wait_for_page_to_settle = settle
+        result = json.loads(await self.tools["execute_steps"].coroutine([
+            {"action": "click", "element_index": 4},
+        ], self.runtime))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["notes"], ["URL changed to https://shop.example/cart"])
+
+    async def test_a_batch_that_stays_on_the_page_reports_no_url_change(self):
+        result = json.loads(await self.tools["execute_steps"].coroutine([
+            {"action": "click", "element_index": 4},
+        ], self.runtime))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["notes"], [])
 
     async def test_a_type_step_enters_the_value_key_by_key(self):
         self.browser.type_text = AsyncMock()

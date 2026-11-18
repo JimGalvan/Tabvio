@@ -112,6 +112,7 @@ class BrowserSession:
 
     async def _wait_for_page_to_load(self, static_wait: float = 0.50, dom_wait: float = 3_500,
                                      network_wait: float = 5_500) -> None:
+        """static_wait is in seconds; dom_wait and network_wait are in milliseconds."""
         await asyncio.sleep(static_wait)
         try:
             await self._page.wait_for_load_state("domcontentloaded", timeout=dom_wait)
@@ -135,8 +136,13 @@ class BrowserSession:
         return await self._observe_current_page()
 
     async def attempt_observe_page(self) -> Observation:
-        await self._wait_for_page_to_load(static_wait=0.25, dom_wait=0.50, network_wait=2_000)
+        await self._wait_for_page_to_load(static_wait=0.25, dom_wait=500, network_wait=2_000)
         return await self._observe_current_page()
+
+    async def wait_for_page_to_settle(self) -> str:
+        """Let a batch of steps finish loading, and report where the page ended up."""
+        await self._wait_for_page_to_load(static_wait=0.25, dom_wait=2_000, network_wait=3_000)
+        return self.page.url
 
     def _live_pages(self) -> list[Page]:
         if self._context is None:

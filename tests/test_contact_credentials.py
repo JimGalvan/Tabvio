@@ -21,6 +21,10 @@ class ObservedBrowser:
         }
         self.fills = []
         self.payment_detection_result = PaymentDetectionResult()
+        self.page = SimpleNamespace(url="https://shop.example")
+
+    async def wait_for_page_to_settle(self):
+        return self.page.url
 
     def get_stored_element(self, element_index):
         return self.elements.get(element_index)

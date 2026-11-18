@@ -8,7 +8,10 @@ from langgraph.types import interrupt
 from pydantic import ValidationError
 
 from tabvio_agent.browser.session import BrowserSession
-from tabvio_agent.browser_agent.constants import PAGE_TEXT_CHARACTER_LIMIT
+from tabvio_agent.browser_agent.constants import (
+    ACTION_DELAY_SECONDS,
+    PAGE_TEXT_CHARACTER_LIMIT,
+)
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.payment_summary import generate_payment_summary
 from tabvio_agent.browser_agent.schema_utils import SchemaUtils
@@ -189,6 +192,7 @@ def build_browser_tools(
                     }
                 )
 
+            previous_url = browser.page.url
             completed = []
             notes = []
             for step in plan.steps:
@@ -219,6 +223,11 @@ def build_browser_tools(
 
                 completed.append(reference)
                 publish_custom_event("browser.action.completed", event_payload)
+                await asyncio.sleep(ACTION_DELAY_SECONDS)
+
+            current_url = await browser.wait_for_page_to_settle()
+            if current_url != previous_url:
+                notes.append(f"URL changed to {current_url}")
 
             return json.dumps(
                 {
