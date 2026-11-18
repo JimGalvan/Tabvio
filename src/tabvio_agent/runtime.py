@@ -21,11 +21,9 @@ def extract_text(content: Any) -> str:
 
 
 class LangChainAgentRuntime:
-    def __init__(self, agent, browser, context, sensitive_inputs, thread_id):
+    def __init__(self, agent, context, thread_id):
         self.agent = agent
-        self.browser = browser
         self.context = context
-        self.sensitive_inputs = sensitive_inputs
         self.config = {"configurable": {"thread_id": str(thread_id)}}
 
     def start_input(self, task: str) -> Any:

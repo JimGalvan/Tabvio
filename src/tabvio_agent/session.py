@@ -69,9 +69,7 @@ class BrowserAgentSession:
         agent = build_browser_agent(
             self._browser, self._sensitive_inputs, settings, credential_provider=credential_provider,
         )
-        self._runtime = LangChainAgentRuntime(
-            agent, self._browser, AgentContext(), self._sensitive_inputs, uuid4(),
-        )
+        self._runtime = LangChainAgentRuntime(agent, AgentContext(), uuid4())
         self._event_queue: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
         self._frame_condition = asyncio.Condition()
         self._latest_frame: bytes | None = None

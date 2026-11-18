@@ -111,14 +111,14 @@ def build_browser_tools(
             return await finish_observation(result, runtime)
 
     @tool
-    def request_user_input(question: str, runtime: ToolRuntime[AgentContext]) -> str:
+    def request_user_input(question: str) -> str:
         """Pause and ask the user for required non-sensitive information."""
         publish_custom_event("input.required", {"question": question})
         answer = interrupt({"kind": "question", "question": question})
         return str(answer)
 
     @tool
-    async def list_selected_credentials(runtime: ToolRuntime[AgentContext]) -> str:
+    async def list_selected_credentials() -> str:
         """List safe metadata for credentials selected for this run."""
         if not credential_provider:
             return "[]"

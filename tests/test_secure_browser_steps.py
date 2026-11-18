@@ -452,7 +452,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
     def test_question_interrupt_keeps_the_frontend_payload(self):
         question = "Which delivery slot?"
         with patch("tabvio_agent.browser_agent.tools.interrupt", return_value="Tomorrow") as pause:
-            answer = self.tools["request_user_input"].func(question, self.runtime)
+            answer = self.tools["request_user_input"].func(question)
         self.assertEqual(answer, "Tomorrow")
         pause.assert_called_once_with({"kind": "question", "question": question})
         self.assertEqual(self.events, [{"event_type": "input.required", "payload": {"question": question}}])

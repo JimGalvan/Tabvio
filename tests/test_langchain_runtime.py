@@ -51,7 +51,7 @@ def build_runtime(model, subagent_model=None):
     if subagent_model:
         subagents.append({"name": "helper", "description": "Finds things.", "system_prompt": "Find it.", "model": subagent_model})
     agent = create_deep_agent(model=model, tools=[ask_person, click_button], checkpointer=InMemorySaver(), subagents=subagents)
-    return LangChainAgentRuntime(agent, browser=None, context=None, sensitive_inputs=None, thread_id=uuid4())
+    return LangChainAgentRuntime(agent, context=None, thread_id=uuid4())
 
 
 async def collect(runtime, agent_input):

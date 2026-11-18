@@ -94,7 +94,7 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_contact_fields_fill_directly_without_values_in_tool_results_or_events(self):
         tools, browser, events, runtime = self.browser_tools()
-        metadata = await tools["list_selected_credentials"](runtime)
+        metadata = await tools["list_selected_credentials"]()
         self.assertEqual(metadata, json.dumps([{
             "id": str(self.metadata.id), "name": "Checkout contact",
             "allowed_domains": ["shop.example"], "available_fields": list(self.contact),
@@ -165,7 +165,7 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_provider_lists_nothing_and_reports_storage_error_on_fill(self):
         tools, browser, _, runtime = self.browser_tools(provider=False)
-        self.assertEqual(await tools["list_selected_credentials"](runtime), "[]")
+        self.assertEqual(await tools["list_selected_credentials"](), "[]")
         result = await self.fill(tools, runtime, "email")
         self.assertEqual(result["error"], "Credential storage is not configured")
         self.assertEqual(browser.fills, [])
@@ -174,7 +174,7 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
         self.provider.metadata = ()
         self.provider.secrets = {}
         tools, browser, _, runtime = self.browser_tools()
-        self.assertEqual(await tools["list_selected_credentials"](runtime), "[]")
+        self.assertEqual(await tools["list_selected_credentials"](), "[]")
         result = await self.fill(tools, runtime, "email")
         self.assertEqual(result["error"], "Credential is not selected for this run")
         self.assertEqual(browser.fills, [])

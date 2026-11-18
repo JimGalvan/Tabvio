@@ -44,7 +44,7 @@ def build_runtime(*messages):
         checkpointer=InMemorySaver(),
         middleware=[TodoListMiddleware(system_prompt=TODO_SYSTEM_PROMPT)],
     )
-    return LangChainAgentRuntime(agent, browser=None, context=None, sensitive_inputs=None, thread_id=uuid4())
+    return LangChainAgentRuntime(agent, context=None, thread_id=uuid4())
 
 
 async def todo_events(runtime):

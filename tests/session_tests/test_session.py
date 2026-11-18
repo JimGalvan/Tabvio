@@ -56,7 +56,6 @@ class SessionCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await session.follow_up("Second task"))
         self.assertEqual(await next_event(events, "run.completed"), RunCompletedEvent("Second"))
         self.assertIs(session._runtime.config, thread)
-        self.assertIs(session._runtime.browser, browser)
         messages = (await session._runtime.agent.aget_state(thread)).values["messages"]
         tasks = []
         for message in messages:

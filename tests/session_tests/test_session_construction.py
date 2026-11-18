@@ -33,7 +33,6 @@ class SessionConstructionTests(unittest.IsolatedAsyncioTestCase):
         self.agent.assert_called_once_with(
             self.browser.return_value, session._sensitive_inputs, settings, credential_provider=None,
         )
-        self.assertIs(session._runtime.browser, self.browser.return_value)
         self.assertIs(session._runtime.agent, self.agent.return_value)
         self.assertEqual(vars(session._runtime.context), {})
         self.assertIsInstance(UUID(session._runtime.config["configurable"]["thread_id"]), UUID)
