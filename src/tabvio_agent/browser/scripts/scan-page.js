@@ -1,10 +1,13 @@
 (async () => {
-    const MAX_ELEMENTS = 300;
+    const MAX_ELEMENTS = 2000;
     const MAX_LABEL_CHARS = 120;
     const MAX_VALUE_CHARS = 40;
     const MAX_SIGNATURE_TEXT_CHARS = 40;
     const MAX_HREF_CHARS = 60;
-    const MAX_PAGE_TEXT_CHARS = 3000;
+    const MAX_ID_CHARS = 60;
+    const READABLE_ID = /^[a-z][a-z0-9_-]*$/i;
+    const MAX_TEXT_BLOCKS = 2000;
+    const MAX_TEXT_BLOCK_CHARS = 300;
     const MIN_CLICKABLE_PX = 3;
     const CLIP_TIMEOUT_MS = 250;
 
@@ -273,13 +276,21 @@
         return element.disabled === true || element.getAttribute('aria-disabled') === 'true';
     }
 
+    function checkIfReadableId(value) {
+        return value && value.length <= MAX_ID_CHARS && READABLE_ID.test(value);
+    }
+
     function describeAttributes(element) {
         const attributes = [];
         const role = element.getAttribute('role');
         const href = element.getAttribute('href');
+        const id = element.getAttribute('id');
+        const name = element.getAttribute('name');
 
         if (role) attributes.push('role=' + role);
         if (element.type) attributes.push('type=' + element.type);
+        if (checkIfReadableId(id)) attributes.push('id=' + id);
+        if (checkIfReadableId(name) && name !== id) attributes.push('name=' + name);
         if (href) attributes.push('href=' + getLinkTarget(href).slice(0, MAX_HREF_CHARS));
 
         for (const state of [
@@ -302,6 +313,7 @@
     function describeElement(entry) {
         const tagName = entry.element.tagName.toLowerCase();
         const text = getAccessibleName(entry.element);
+        const boundingRectangle = entry.element.getBoundingClientRect().toJSON()
 
         return {
             signature: buildApproximateSignature(entry.element, tagName, text),
@@ -309,7 +321,8 @@
             text: text,
             attrs: describeAttributes(entry.element),
             cx: entry.point.x,
-            cy: entry.point.y
+            cy: entry.point.y,
+            boundingRectangle: boundingRectangle
         };
     }
 
@@ -326,8 +339,31 @@
             && keptElements.has(entry.element.control);
     }
 
+    function checkIfWrapsAnotherControl(entry, reachableElements) {
+        if (entry.kind !== INFERRED) return false;
+        for (const other of reachableElements) {
+            if (other !== entry.element && entry.element.contains(other)) return true;
+        }
+        return false;
+    }
+
+    function checkIfOutsideViewport(rect) {
+        return rect.bottom <= 0 || rect.top >= innerHeight
+            || rect.right <= 0 || rect.left >= innerWidth;
+    }
+
+    function checkIfWholeElementVisible(clip, rect) {
+        const showsFullWidth = clip.width >= rect.width - 1;
+        const showsFullHeight = clip.height >= rect.height - 1;
+        return showsFullWidth && showsFullHeight;
+    }
+
+    function findCenterOf(rect) {
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+    }
+
     function calculateRank(entry) {
-        return (entry.isLink ? 2 : 0) + (entry.wholeElementVisible ? 0 : 1);
+        return (entry.inViewport ? 0 : 4) + (entry.isLink ? 2 : 0) + (entry.wholeElementVisible ? 0 : 1);
     }
 
     function findScrollingContainer() {
@@ -347,12 +383,32 @@
         return Math.max(0, remaining / Math.max(viewport, 1));
     }
 
-    function getRenderedText(element) {
-        const documentHasNoBody = !element;
-        if (documentHasNoBody) {
-            return '';
+    function calculateDistanceFromViewport(rect) {
+        if (rect.bottom < 0) return -rect.bottom;
+        return Math.max(0, rect.top - innerHeight);
+    }
+
+    function collectTextBlocks() {
+        if (!document.body) return [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const blocks = [];
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = collapseWhitespace(node.textContent);
+            if (!text || !node.parentElement) continue;
+            if (!checkForVisibleOwnStyle(node.parentElement)) continue;
+
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            const rect = range.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) continue;
+
+            blocks.push({order: blocks.length, text: text.slice(0, MAX_TEXT_BLOCK_CHARS), rect: rect});
         }
-        return collapseWhitespace(element.innerText);
+        return blocks
+            .sort((first, second) => calculateDistanceFromViewport(first.rect) - calculateDistanceFromViewport(second.rect))
+            .slice(0, MAX_TEXT_BLOCKS)
+            .sort((first, second) => first.order - second.order)
+            .map((block) => ({text: block.text, boundingRectangle: block.rect.toJSON()}));
     }
 
     const candidates = [];
@@ -381,30 +437,33 @@
         const isInferred = candidate.kind === INFERRED;
         if (isInferred && checkForKeptAncestor(candidate.element)) continue;
 
+        const rect = candidate.element.getBoundingClientRect();
         const clip = clips.get(candidate.element);
-        const clipIsBigEnough = clip && checkIfBigEnoughToClick(clip);
-        if (!clipIsBigEnough) continue;
+        const inViewport = Boolean(clip && checkIfBigEnoughToClick(clip));
+        if (!inViewport && !checkIfOutsideViewport(rect)) continue;
 
-        const point = findClickPointWithin(candidate.element, clip);
+        const point = inViewport ? findClickPointWithin(candidate.element, clip) : findCenterOf(rect);
         if (!point) continue;
 
-        const rect = candidate.element.getBoundingClientRect();
         const isLink = candidate.element.tagName === 'A';
-        const wholeElementVisible =
-            clip.width >= rect.width - 1 && clip.height >= rect.height - 1;
+        const wholeElementVisible = inViewport && checkIfWholeElementVisible(clip, rect);
 
         keptElements.add(candidate.element);
         reachable.push({
             element: candidate.element,
+            kind: candidate.kind,
             point: point,
             order: reachable.length,
             isLink: isLink,
+            inViewport: inViewport,
             wholeElementVisible: wholeElementVisible
         });
     }
 
+    const reachableElements = reachable.map((entry) => entry.element);
     const found = reachable
         .filter((entry) => !checkIfNamesAKeptControl(entry))
+        .filter((entry) => !checkIfWrapsAnotherControl(entry, reachableElements))
         .sort((first, second) =>
             calculateRank(first) - calculateRank(second) || first.order - second.order)
         .slice(0, MAX_ELEMENTS)
@@ -414,7 +473,8 @@
         url: location.href,
         title: document.title,
         elements: found,
-        pageText: getRenderedText(document.body).slice(0, MAX_PAGE_TEXT_CHARS),
+        textBlocks: collectTextBlocks(),
+        viewport: {width: innerWidth, height: innerHeight},
         pagesBelow: calculatePagesBelow(findScrollingContainer())
     });
 })()

@@ -4,6 +4,40 @@ from typing import Any
 
 
 @dataclass
+class Bounds:
+    x: float
+    y: float
+    width: float
+    height: float
+    top: float
+    right: float
+    bottom: float
+    left: float
+
+
+@dataclass(frozen=True)
+class Box:
+    x: float
+    y: float
+    width: float
+    height: float
+
+    def fits_inside(self, width: int, height: int) -> bool:
+        return self.x >= 0 and self.y >= 0 and self.x + self.width <= width and self.y + self.height <= height
+
+
+@dataclass
+class Viewport:
+    width: int
+    height: int
+
+    def check_if_on_screen(self, bounds: Bounds) -> bool:
+        is_above = bounds.bottom <= 0
+        is_below = bounds.top >= self.height
+        return not (is_above or is_below)
+
+
+@dataclass
 class Element:
     index: int
     signature: str
@@ -12,6 +46,7 @@ class Element:
     attrs: str
     cx: float
     cy: float
+    element_bounds: Bounds
 
 
 @dataclass

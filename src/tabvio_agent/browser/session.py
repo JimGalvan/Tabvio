@@ -24,8 +24,9 @@ from tabvio_agent.browser.constants import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
+from tabvio_agent.browser.element_factory import ElementFactory
 from tabvio_agent.browser.formatting import format_scan_for_llm
-from tabvio_agent.browser.models import Element, Iframe, Observation, Tab
+from tabvio_agent.browser.models import Element, Iframe, Observation, Tab, Viewport
 from tabvio_agent.browser.page_content import PageContent
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser.payment_detector import PaymentDetector
@@ -243,18 +244,66 @@ class BrowserSession:
             return Counter()
         return Counter(line.strip() for line in text.splitlines() if line.strip())
 
+    @staticmethod
+    def _remove_duplicate_links(raw_elements: list[dict]) -> list[dict]:
+        """Keep the first link for each (text, href) pair and every non-link element."""
+
+        def find_href(attrs: str) -> str:
+            href = ""
+            for attribute in attrs.split():
+                if attribute.startswith("href="):
+                    href = attribute
+            return href
+
+        unique_elements = []
+        seen_links = set()
+        for raw_element in raw_elements:
+            href = find_href(raw_element["attrs"])
+            is_link = raw_element["tag"] == "a" and href != ""
+            if is_link:
+                link_key = (raw_element["text"], href)
+                if link_key in seen_links:
+                    continue
+                seen_links.add(link_key)
+            unique_elements.append(raw_element)
+        return unique_elements
+
+    @staticmethod
+    def _keep_elements_on_screen(
+            raw_elements: list[dict], viewport: Viewport
+    ) -> tuple[list[Element], list[dict]]:
+        """Return the on-screen elements, renumbered from zero, beside the raw scan entries they came from."""
+        elements = []
+        kept_raw_elements = []
+        for raw_element in raw_elements:
+            element = ElementFactory.create_element(len(elements), raw_element)
+            if viewport.check_if_on_screen(element.element_bounds):
+                elements.append(element)
+                kept_raw_elements.append(raw_element)
+        return elements, kept_raw_elements
+
     async def _observe_current_page(self) -> Observation:
         result = json.loads(await self._scan_page())
 
-        self._elements = []
-        for index, raw_element in enumerate(result["elements"]):
-            self._elements.append(Element(index=index, **raw_element))
+        unique_raw_elements = self._remove_duplicate_links(result["elements"])
+        viewport = Viewport(**result["viewport"])
+        self._elements, kept_raw_elements = self._keep_elements_on_screen(
+            unique_raw_elements, viewport
+        )
+        elements_outside_viewport_count = len(unique_raw_elements) - len(self._elements)
 
-        interactable_elements = format_scan_for_llm(result)
+        interactable_elements = format_scan_for_llm({**result, "elements": kept_raw_elements})
+        if elements_outside_viewport_count:
+            interactable_elements += (
+                f"\n({elements_outside_viewport_count} more elements outside the screen, "
+                "use page-navigator to reach them)"
+            )
         self._reconcile_current_page()
         tabs = await self._collect_tabs()
         frames = self._collect_iframes()
-        page_content = await PageContent.get_page_content(self._page, char_budget=400)
+        page_content = await PageContent.get_page_content(
+            self._page, self._active_frame(), result, char_budget=500
+        )
         self._payment_detection_result = await self._payment_detector.detect(self._page)
         page_snapshot = await self._capture_page_snapshot(self._page)
         described_frames = "\n".join(str(frame) for frame in frames)

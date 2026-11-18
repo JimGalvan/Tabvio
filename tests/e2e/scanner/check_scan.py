@@ -7,7 +7,7 @@ corpus by saving a page here and adding it to EXPECTED below.
     python tests/e2e/scanner/check_scan.py
 
 Each page is one defect the scanner used to have. A page passes when every label
-under "present" is in the snapshot, no label under "absent" is, the attributes
+under "present" is in the snapshot, no label under "absent" or "absent_labels" is, the attributes
 under "attrs" say what state the control is in, and every coordinate the scan
 hands out lands on the element it claims to describe. That last check is the one
 that catches silent dead clicks, where the agent is told it clicked and nothing
@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 from tabvio_agent.browser.browser_manager import BrowserManager  # noqa: E402
 from tabvio_agent.browser.constants import VIEWPORT_HEIGHT, VIEWPORT_WIDTH  # noqa: E402
 from tabvio_agent.browser.formatting import format_scan_for_llm  # noqa: E402
+from tabvio_agent.browser.models import Viewport  # noqa: E402
 from tabvio_agent.browser.session import BrowserSession  # noqa: E402
 
 PAGES = Path(__file__).resolve().parent
@@ -87,13 +88,16 @@ EXPECTED = {
         # The name belongs on the control, not on a second entry of its own.
         "absent": [
             "Search products by name and category",
+        ],
+        # The scan hands the agent a control's own id, so these may only show up there.
+        "absent_labels": [
             "express",
             "standard",
         ],
         "attrs": {
             "Card number": ["type=text"],
             "Email me offers": ["unchecked"],
-            "Express delivery": ["checked"],
+            "Express delivery": ["checked", "id=speed-express", "name=speed"],
             "Size": ["selected=9"],
             "Save my details": ["role=checkbox", "checked"],
             "Place the order": ["role=button", "disabled"],
@@ -199,6 +203,11 @@ def check_labels(elements: list[dict], case: dict) -> list[str]:
         if found is not None:
             problems.append(f"should not report {needle!r} (as <{found['tag']}>)")
 
+    for needle in case.get("absent_labels", []):
+        found = find(elements, needle)
+        if found is not None:
+            problems.append(f"should not label anything {needle!r} (as <{found['tag']}>)")
+
     for needle, tag in case.get("tags", {}).items():
         found = find(elements, needle)
         if found is not None and found["tag"] != tag:
@@ -255,9 +264,17 @@ async def check_coordinates(
     return problems
 
 
-def check_prompt(scan: dict, case: dict) -> list[str]:
+def elements_on_screen(scan: dict) -> list[dict]:
+    """The elements the agent is actually offered: deduplicated and cut to the screen."""
+    unique_elements = BrowserSession._remove_duplicate_links(scan["elements"])
+    viewport = Viewport(**scan["viewport"])
+    _, kept_elements = BrowserSession._keep_elements_on_screen(unique_elements, viewport)
+    return kept_elements
+
+
+def check_prompt(scan: dict, elements: list[dict], case: dict) -> list[str]:
     problems = []
-    prompt = format_scan_for_llm(scan)
+    prompt = format_scan_for_llm({**scan, "elements": elements})
 
     for needle in case.get("in_prompt", []):
         if needle not in prompt:
@@ -275,12 +292,12 @@ def check_prompt(scan: dict, case: dict) -> list[str]:
 async def check_page(session: BrowserSession, url: str, case: dict) -> list[str]:
     await session.attempt_navigate_and_observe(url)
     scan = json.loads(await session._scan_page())
-    elements = scan["elements"]
+    elements = elements_on_screen(scan)
 
     return (
         check_labels(elements, case)
         + await check_coordinates(session, elements, case)
-        + check_prompt(scan, case)
+        + check_prompt(scan, elements, case)
     )
 
 
@@ -298,7 +315,7 @@ async def check_scroll_pane(session: BrowserSession, base: str) -> list[str]:
 
     await session.scroll(1)
     scrolled = json.loads(await session._scan_page())
-    if find(scrolled["elements"], "Open message 20") is None:
+    if find(elements_on_screen(scrolled), "Open message 20") is None:
         problems.append("scrolling one page did not move the inner pane")
 
     return problems
@@ -326,7 +343,7 @@ async def check_tall_frame(
 
     session._iframe = frames[0]
     scan = json.loads(await session._scan_page())
-    elements = scan["elements"]
+    elements = elements_on_screen(scan)
 
     if find(elements, "Near the top of the frame") is None:
         problems.append("missing the button at the top of the frame")

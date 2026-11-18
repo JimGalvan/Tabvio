@@ -15,7 +15,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, Interrupt
 from pydantic import ValidationError
 
-from tabvio_agent.browser.models import Element
+from tabvio_agent.browser.models import Bounds, Element
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.schema_utils import SchemaUtils
@@ -23,14 +23,16 @@ from tabvio_agent.browser_agent.steps import StepPlan, validate_plan
 from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.sensitive_input import SensitiveInputChannel
 
+NO_BOUNDS = Bounds(0, 0, 0, 0, 0, 0, 0, 0)
+
 
 class ObservedBrowser:
     def __init__(self):
         self.elements = {
-            1: Element(1, "user", "input", "Email", "type=email", 0, 0),
-            2: Element(2, "pass", "input", "Password", "type=password", 0, 0),
-            3: Element(3, "code", "input", "Code", "type=text", 0, 0),
-            4: Element(4, "button", "button", "Sign in", "", 0, 0),
+            1: Element(1, "user", "input", "Email", "type=email", 0, 0, NO_BOUNDS),
+            2: Element(2, "pass", "input", "Password", "type=password", 0, 0, NO_BOUNDS),
+            3: Element(3, "code", "input", "Code", "type=text", 0, 0, NO_BOUNDS),
+            4: Element(4, "button", "button", "Sign in", "", 0, 0, NO_BOUNDS),
         }
         self.payment_detection_result = PaymentDetectionResult()
         self.fills = []

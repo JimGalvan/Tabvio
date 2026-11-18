@@ -4,18 +4,20 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
-from tabvio_agent.browser.models import Element
+from tabvio_agent.browser.models import Bounds, Element
 from tabvio_agent.browser.payment_detection_result import PaymentDetectionResult
 from tabvio_agent.browser_agent.context import AgentContext
 from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.models import CredentialMetadata, CredentialSecret
 
+NO_BOUNDS = Bounds(0, 0, 0, 0, 0, 0, 0, 0)
+
 
 class ObservedBrowser:
     def __init__(self):
         self.elements = {
-            1: Element(1, "user", "input", "Email", "type=email", 0, 0),
-            2: Element(2, "pass", "input", "Password", "type=password", 0, 0),
+            1: Element(1, "user", "input", "Email", "type=email", 0, 0, NO_BOUNDS),
+            2: Element(2, "pass", "input", "Password", "type=password", 0, 0, NO_BOUNDS),
         }
         self.fills = []
         self.payment_detection_result = PaymentDetectionResult()
