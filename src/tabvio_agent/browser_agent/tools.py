@@ -21,6 +21,7 @@ from tabvio_agent.browser_agent.steps import (
     PressStep,
     SelectStep,
     StepPlan,
+    TypeStep,
     step_event_payload,
     step_reference,
     validate_plan,
@@ -234,6 +235,8 @@ def build_browser_tools(
             await browser.click(step.element_index)
         elif isinstance(step, FillStep):
             await browser.fill(step.element_index, step.value)
+        elif isinstance(step, TypeStep):
+            await browser.type_text(step.element_index, step.value)
         elif isinstance(step, SelectStep):
             await browser.select(step.element_index, step.value)
         elif isinstance(step, PressStep):

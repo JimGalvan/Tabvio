@@ -20,6 +20,7 @@ from tabvio_agent.browser.constants import (
     LOAD_TIMEOUT_MS,
     OBSERVE_ATTEMPTS,
     SCAN_BUDGET_SECONDS,
+    TYPING_DELAY_MS,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
@@ -371,6 +372,13 @@ class BrowserSession:
         await page.keyboard.press("Control+A")
         await page.keyboard.insert_text(value)
         return f"Filled {self._describe_element(element_index)}"
+
+    async def type_text(self, element_index: int, value: str) -> str:
+        """Enter a value key by key, for pages that only react to real keystrokes."""
+        await self._click_element(element_index)
+        await self.page.keyboard.press("Control+A")
+        await self.page.keyboard.type(value, delay=TYPING_DELAY_MS)
+        return f"Typed into {self._describe_element(element_index)}"
 
     async def fill_sensitive(
             self,

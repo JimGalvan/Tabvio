@@ -208,7 +208,7 @@ class StepPlanSchemaTests(unittest.TestCase):
             if branch["properties"]["action"]["const"] == "request_mfa_code":
                 self.assertIn({"type": "null"}, branch["properties"]["submit_element_index"]["anyOf"])
         self.assertEqual(sorted(actions), [
-            "click", "fill", "fill_credential", "press", "request_mfa_code", "select",
+            "click", "fill", "fill_credential", "press", "request_mfa_code", "select", "type",
         ])
 
     def test_runtime_is_not_exposed_in_any_browser_tool_schema(self):
@@ -349,6 +349,27 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             {"event_type": "browser.action.started", "payload": {"action": "press", "target": "Email"}},
             {"event_type": "browser.action.completed", "payload": {"action": "press", "target": "Email"}},
         ])
+
+    async def test_a_type_step_enters_the_value_key_by_key(self):
+        self.browser.type_text = AsyncMock()
+        result = json.loads(await self.tools["execute_steps"].coroutine([
+            {"action": "type", "element_index": 1, "value": "Ada"},
+        ], self.runtime))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["completed"], ["type[1]"])
+        self.browser.type_text.assert_awaited_once_with(1, "Ada")
+        self.assertEqual(self.browser.fills, [])
+
+    async def test_a_type_step_cannot_target_something_that_takes_no_text(self):
+        self.browser.type_text = AsyncMock()
+        result = json.loads(await self.tools["execute_steps"].coroutine([
+            {"action": "type", "element_index": 4, "value": "Ada"},
+        ], self.runtime))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["kind"], "validation_error")
+        self.browser.type_text.assert_not_awaited()
 
     async def test_failed_action_preserves_completed_steps_and_publishes_failure(self):
         self.browser.click = AsyncMock(side_effect=RuntimeError("Page changed"))

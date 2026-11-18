@@ -22,6 +22,12 @@ class FillStep(StrictStep):
     value: str
 
 
+class TypeStep(StrictStep):
+    action: Literal["type"]
+    element_index: int = Field(ge=0)
+    value: str
+
+
 class SelectStep(StrictStep):
     action: Literal["select"]
     element_index: int = Field(ge=0)
@@ -49,7 +55,7 @@ class MfaCodeStep(StrictStep):
 
 
 BrowserStep = Annotated[
-    ClickStep | FillStep | SelectStep | PressStep | CredentialFillStep | MfaCodeStep,
+    ClickStep | FillStep | TypeStep | SelectStep | PressStep | CredentialFillStep | MfaCodeStep,
     Field(discriminator="action"),
 ]
 
@@ -105,7 +111,7 @@ def validate_plan(browser: BrowserSession, steps: list[BrowserStep]) -> None:
             raise ValueError(
                 f"element [{step.element_index}] is not in the latest observation"
             )
-        if isinstance(step, FillStep):
+        if isinstance(step, (FillStep, TypeStep)):
             require_fillable_element(browser, step.element_index)
         if isinstance(step, MfaCodeStep):
             require_fillable_element(browser, step.element_index)
