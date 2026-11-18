@@ -342,6 +342,15 @@ class BrowserSession:
             bounding_box["y"] + border["vertical"] + vertical,
         )
 
+    def _describe_element(self, element_index: int) -> str:
+        """Name an element the way the observation showed it, so a result reads back."""
+        element = self.get_stored_element(element_index)
+        if element is None:
+            return f"element [{element_index}]"
+
+        opening_tag = f"{element.tag} {element.attrs}".strip()
+        return f"<{opening_tag}> {element.text}".strip()
+
     async def _click_element(self, element_index: int) -> None:
         page = self.page
         element = self.get_stored_element(element_index)
@@ -353,7 +362,7 @@ class BrowserSession:
 
     async def click(self, element_index: int) -> str:
         await self._click_element(element_index)
-        return f"Clicked element [{element_index}]"
+        return f"Clicked {self._describe_element(element_index)}"
 
     async def fill(self, element_index: int, value: str) -> str:
         page = self.page
@@ -361,7 +370,7 @@ class BrowserSession:
         await self._click_element(element_index)
         await page.keyboard.press("Control+A")
         await page.keyboard.insert_text(value)
-        return f"Filled element [{element_index}]"
+        return f"Filled {self._describe_element(element_index)}"
 
     async def fill_sensitive(
             self,
@@ -402,7 +411,7 @@ class BrowserSession:
         await self._click_element(element_index)
         await page.keyboard.type(value)
         await page.keyboard.press("Enter")
-        return f"Selected an option in element [{element_index}]"
+        return f"Selected {value!r} in {self._describe_element(element_index)}"
 
     async def press(self, element_index: int, value: str) -> str:
         page = self.page
@@ -410,7 +419,7 @@ class BrowserSession:
         key = normalize_key(value)
         await self._click_element(element_index)
         await page.keyboard.press(key)
-        return f"Pressed {key} on element [{element_index}]"
+        return f"Pressed {key} on {self._describe_element(element_index)}"
 
     async def switch_tab(self, tab_id: str) -> str:
         if self._context is None:
