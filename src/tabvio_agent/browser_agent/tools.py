@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, tool
@@ -25,6 +26,7 @@ from tabvio_agent.browser_agent.steps import (
     SelectStep,
     StepPlan,
     TypeStep,
+    changes_fields,
     step_event_payload,
     step_reference,
     validate_plan,
@@ -39,6 +41,8 @@ from tabvio_agent.shared.verification import (
 )
 
 STEP_PLAN_SCHEMA = SchemaUtils.inline_references(StepPlan.model_json_schema())
+
+logger = logging.getLogger(__name__)
 
 
 def build_browser_tools(
@@ -173,13 +177,15 @@ def build_browser_tools(
         pending_payment_question = None
 
     @tool(args_schema=STEP_PLAN_SCHEMA)
-    async def execute_steps(steps: list, runtime: ToolRuntime[AgentContext]) -> str:
+    async def execute_steps(
+            steps: list, runtime: ToolRuntime[AgentContext], reason: str = "",
+    ) -> str:
         """Validate and execute browser steps, including credential and MFA steps."""
         async with browser_lock:
             await guard_payment_surface(runtime)
 
             try:
-                plan = StepPlan.model_validate({"steps": steps})
+                plan = StepPlan.model_validate({"steps": steps, "reason": reason})
                 validate_plan(browser, plan.steps)
             except (ValidationError, ValueError) as exception:
                 return json.dumps(
@@ -197,7 +203,7 @@ def build_browser_tools(
             notes = []
             for step in plan.steps:
                 reference = step_reference(step)
-                event_payload = step_event_payload(browser, step)
+                event_payload = step_event_payload(browser, step, plan)
                 publish_custom_event("browser.action.started", event_payload)
                 try:
                     note = await run_step(step, runtime)
@@ -222,7 +228,10 @@ def build_browser_tools(
                     )
 
                 completed.append(reference)
-                publish_custom_event("browser.action.completed", event_payload)
+                completed_payload = dict(event_payload)
+                if changes_fields(step):
+                    completed_payload["fields"] = await read_form_values()
+                publish_custom_event("browser.action.completed", completed_payload)
                 await asyncio.sleep(ACTION_DELAY_SECONDS)
 
             current_url = await browser.wait_for_page_to_settle()
@@ -238,6 +247,13 @@ def build_browser_tools(
                     "notes": notes,
                 }
             )
+
+    async def read_form_values() -> list[str]:
+        try:
+            return await browser.get_form_values()
+        except Exception:
+            logger.warning("Could not read form values after a step", exc_info=True)
+            return []
 
     async def run_step(step: BrowserStep, runtime: ToolRuntime[AgentContext]) -> str | None:
         if isinstance(step, ClickStep):

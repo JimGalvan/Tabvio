@@ -238,7 +238,7 @@ class PaymentHandoffTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(GraphInterrupt):
                 await self.tools["execute_steps"]([
                     {"action": "click", "element_index": 4},
-                ], self.runtime)
+                ], self.runtime, "Checking the port")
 
         summary.assert_awaited_once_with(self.runtime.state, "", self.settings)
         self.browser.get_stored_element.assert_not_called()

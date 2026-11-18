@@ -11,6 +11,7 @@ from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.models import CredentialMetadata, CredentialSecret
 
 NO_BOUNDS = Bounds(0, 0, 0, 0, 0, 0, 0, 0)
+REASON = "Filling the contact details"
 
 
 class ObservedBrowser:
@@ -89,7 +90,7 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
         return json.loads(await tools["execute_steps"](steps=[{
             "action": "fill_credential", "credential_id": str(self.metadata.id),
             "field": field, "element_index": 2 if field == "password" else 1,
-        }], runtime=runtime))
+        }], runtime=runtime, reason=REASON))
 
     async def test_contact_fields_fill_directly_without_values_in_tool_results_or_events(self):
         tools, browser, events, runtime = self.browser_tools()
@@ -108,8 +109,10 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
             })
             self.assertEqual(browser.fills[-1], (1, value))
             self.assertEqual(events, [
-                {"event_type": "browser.action.started", "payload": {"action": "fill_credential", "target": "Email"}},
-                {"event_type": "browser.action.completed", "payload": {"action": "fill_credential", "target": "Email"}},
+                {"event_type": "browser.action.started", "payload": {
+                    "action": "fill_credential", "target": "Email", "value": "", "reason": REASON}},
+                {"event_type": "browser.action.completed", "payload": {
+                    "action": "fill_credential", "target": "Email", "value": "", "reason": REASON}},
             ])
             self.assertNotIn(value, json.dumps(result))
             self.assertNotIn(value, json.dumps(events))
@@ -152,7 +155,10 @@ class AgentContactCredentialTests(unittest.IsolatedAsyncioTestCase):
                 })
                 self.assertEqual(events[-1], {
                     "event_type": "browser.action.failed",
-                    "payload": {"action": "fill_credential", "target": "Email", "error": error},
+                    "payload": {
+                        "action": "fill_credential", "target": "Email", "value": "",
+                        "reason": REASON, "error": error,
+                    },
                 })
                 self.assertEqual(browser.fills, [])
                 self.assertEqual(self.provider.resolutions[-1], (self.metadata.id, "attacker.example"))

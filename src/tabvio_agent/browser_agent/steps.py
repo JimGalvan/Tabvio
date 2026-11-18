@@ -62,6 +62,9 @@ BrowserStep = Annotated[
 
 class StepPlan(BaseModel):
     steps: list[BrowserStep] = Field(min_length=1, max_length=10)
+    reason: str = Field(
+        min_length=1, max_length=300, description="One short sentence on why these actions run now.",
+    )
 
 
 def require_fillable_element(
@@ -132,5 +135,24 @@ def step_reference(step: BrowserStep) -> str:
     return f"{step.action}[{step.element_index}]"
 
 
-def step_event_payload(browser: BrowserSession, step: BrowserStep) -> dict[str, Any]:
-    return {"action": step.action, "target": element_label(browser, step.element_index)}
+def step_event_payload(browser: BrowserSession, step: BrowserStep, plan: StepPlan) -> dict[str, Any]:
+    return {
+        "action": step.action,
+        "target": element_label(browser, step.element_index),
+        "value": step_value(browser, step),
+        "reason": plan.reason,
+    }
+
+
+def step_value(browser: BrowserSession, step: BrowserStep) -> str:
+    """The value a step entered, except into a password field."""
+    if not isinstance(step, (FillStep, TypeStep, SelectStep, PressStep)):
+        return ""
+    element = browser.get_stored_element(step.element_index)
+    if element is not None and "type=password" in element.attrs.lower():
+        return ""
+    return step.value
+
+
+def changes_fields(step: BrowserStep) -> bool:
+    return isinstance(step, (FillStep, TypeStep, SelectStep))

@@ -367,6 +367,24 @@ async def check_tall_frame(
     return problems
 
 
+async def check_form_values(session: BrowserSession, base: str) -> list[str]:
+    """The field snapshot after a step must mask what the scan would mask."""
+    problems = []
+    await session.attempt_navigate_and_observe(f"{base}/scanner/sensitive-values.html")
+    values = await session.get_form_values()
+    reported = " ".join(values)
+
+    for secret in ("4242424242424242", "jane.doe@example.com"):
+        if secret in reported:
+            problems.append(f"form values hand out {secret!r}")
+
+    for wanted in ("Card number: filled", "Email: filled", "Search: running shoes"):
+        if wanted not in values:
+            problems.append(f"form values are missing {wanted!r}, got {values}")
+
+    return problems
+
+
 def report(name: str, problems: list[str]) -> int:
     print(f"{'FAIL' if problems else 'ok  '}  {name}")
     for problem in problems:
@@ -386,6 +404,9 @@ async def main() -> int:
             problems = await check_page(session, f"{base}/scanner/{name}", case)
             failures += report(name, problems)
 
+        failures += report(
+            "form values", await check_form_values(session, base)
+        )
         failures += report(
             "scroll-pane.html", await check_scroll_pane(session, base)
         )

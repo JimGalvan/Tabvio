@@ -17,6 +17,8 @@ class EventUtils:
             values["expires_at"] = datetime.fromisoformat(values["expires_at"])
         if "payment_signals" in values:
             values["payment_signals"] = tuple(values["payment_signals"])
+        if "fields" in values:
+            values["fields"] = tuple(values["fields"])
         if "todos" in values:
             todos = []
             for todo in values["todos"]:

@@ -24,6 +24,7 @@ from tabvio_agent.browser_agent.tools import build_browser_tools
 from tabvio_agent.sensitive_input import SensitiveInputChannel
 
 NO_BOUNDS = Bounds(0, 0, 0, 0, 0, 0, 0, 0)
+REASON = "Checking the port"
 
 
 class ObservedPage:
@@ -61,6 +62,9 @@ class ObservedBrowser:
     async def click(self, element_index):
         self.clicks.append(element_index)
 
+    async def get_form_values(self):
+        return ["Email: ada@example.com"]
+
 
 class SecureBrowserStepTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -70,6 +74,7 @@ class SecureBrowserStepTests(unittest.TestCase):
         credential_id = uuid4()
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "fill_credential",
@@ -97,6 +102,7 @@ class SecureBrowserStepTests(unittest.TestCase):
     def test_a_code_step_may_name_the_control_that_sends_it(self) -> None:
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "request_mfa_code",
@@ -114,6 +120,7 @@ class SecureBrowserStepTests(unittest.TestCase):
     def test_a_code_step_cannot_submit_through_an_unobserved_element(self) -> None:
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "request_mfa_code",
@@ -133,6 +140,7 @@ class SecureBrowserStepTests(unittest.TestCase):
     def test_a_code_step_without_a_named_control_still_validates(self) -> None:
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "request_mfa_code",
@@ -149,6 +157,7 @@ class SecureBrowserStepTests(unittest.TestCase):
     def test_credential_password_target_must_be_a_password_input(self) -> None:
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "fill_credential",
@@ -167,7 +176,8 @@ class SecureBrowserStepTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             StepPlan.model_validate(
                 {
-                    "steps": [
+                    "reason": REASON,
+                "steps": [
                         {
                             "action": "request_mfa_code",
                             "element_index": 3,
@@ -180,6 +190,7 @@ class SecureBrowserStepTests(unittest.TestCase):
 
         plan = StepPlan.model_validate(
             {
+                "reason": REASON,
                 "steps": [
                     {
                         "action": "request_mfa_code",
@@ -204,7 +215,7 @@ class StepPlanSchemaTests(unittest.TestCase):
             self.assertNotIn(unsupported, serialized)
         self.assertEqual(json.dumps(original), before)
         self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(schema["required"], ["steps"])
+        self.assertEqual(schema["required"], ["steps", "reason"])
         actions = []
         for branch in schema["properties"]["steps"]["items"]["anyOf"]:
             actions.append(branch["properties"]["action"]["const"])
@@ -221,7 +232,7 @@ class StepPlanSchemaTests(unittest.TestCase):
             schema = convert_to_openai_tool(browser_tool, strict=True)["function"]["parameters"]
             self.assertNotIn("runtime", schema["properties"])
             if browser_tool.name == "execute_steps":
-                self.assertEqual(list(schema["properties"]), ["steps"])
+                self.assertEqual(list(schema["properties"]), ["steps", "reason"])
                 self.assertIn("anyOf", schema["properties"]["steps"]["items"])
 
 
@@ -256,7 +267,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         ]
         for steps in invalid_plans:
             with self.subTest(steps=steps):
-                result = json.loads(await self.tools["execute_steps"].coroutine(steps, self.runtime))
+                result = json.loads(await self.tools["execute_steps"].coroutine(steps, self.runtime, REASON))
                 self.assertEqual(result["kind"], "validation_error")
                 self.assertEqual(result["completed"], [])
         self.assertEqual(self.browser.fills, [])
@@ -342,17 +353,22 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "select", "element_index": 1, "value": "standard"},
             {"action": "press", "element_index": 1, "value": "Enter"},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["completed"], ["select[1]", "press[1]"])
         self.browser.select.assert_awaited_once_with(1, "standard")
         self.browser.press.assert_awaited_once_with(1, "Enter")
         self.assertEqual(self.events, [
-            {"event_type": "browser.action.started", "payload": {"action": "select", "target": "Email"}},
-            {"event_type": "browser.action.completed", "payload": {"action": "select", "target": "Email"}},
-            {"event_type": "browser.action.started", "payload": {"action": "press", "target": "Email"}},
-            {"event_type": "browser.action.completed", "payload": {"action": "press", "target": "Email"}},
+            {"event_type": "browser.action.started", "payload": {
+                "action": "select", "target": "Email", "value": "standard", "reason": REASON}},
+            {"event_type": "browser.action.completed", "payload": {
+                "action": "select", "target": "Email", "value": "standard", "reason": REASON,
+                "fields": ["Email: ada@example.com"]}},
+            {"event_type": "browser.action.started", "payload": {
+                "action": "press", "target": "Email", "value": "Enter", "reason": REASON}},
+            {"event_type": "browser.action.completed", "payload": {
+                "action": "press", "target": "Email", "value": "Enter", "reason": REASON}},
         ])
 
     async def test_a_batch_reports_the_url_the_page_settled_on(self):
@@ -363,7 +379,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         self.browser.wait_for_page_to_settle = settle
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "click", "element_index": 4},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["notes"], ["URL changed to https://shop.example/cart"])
@@ -371,7 +387,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_batch_that_stays_on_the_page_reports_no_url_change(self):
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "click", "element_index": 4},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["notes"], [])
@@ -380,7 +396,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         self.browser.type_text = AsyncMock()
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "type", "element_index": 1, "value": "Ada"},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["completed"], ["type[1]"])
@@ -391,7 +407,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         self.browser.type_text = AsyncMock()
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "type", "element_index": 4, "value": "Ada"},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["kind"], "validation_error")
@@ -402,7 +418,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         result = json.loads(await self.tools["execute_steps"].coroutine([
             {"action": "fill", "element_index": 1, "value": "Ada"},
             {"action": "click", "element_index": 4},
-        ], self.runtime))
+        ], self.runtime, REASON))
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["kind"], "execution_error")
@@ -412,7 +428,10 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.browser.fills, [(1, "Ada")])
         self.assertEqual(self.events[-1], {
             "event_type": "browser.action.failed",
-            "payload": {"action": "click", "target": "Sign in", "error": "Page changed"},
+            "payload": {
+                "action": "click", "target": "Sign in", "value": "", "reason": REASON,
+                "error": "Page changed",
+            },
         })
 
     async def test_unsuccessful_mfa_resume_clears_request_and_reports_failure(self):
@@ -420,7 +439,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             result = json.loads(await self.tools["execute_steps"].coroutine([{
                 "action": "request_mfa_code", "element_index": 3,
                 "prompt": "Enter the code", "submit_element_index": 4,
-            }], self.runtime))
+            }], self.runtime, REASON))
 
         self.assertEqual(result["kind"], "execution_error")
         self.assertEqual(result["failed"], "request_mfa_code[3]")
@@ -446,12 +465,12 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("tabvio_agent.browser_agent.tools.interrupt", side_effect=pause):
             with self.assertRaises(GraphInterrupt) as raised:
-                await self.tools["execute_steps"].coroutine(steps, self.runtime)
+                await self.tools["execute_steps"].coroutine(steps, self.runtime, REASON)
         request = self.sensitive_inputs.pending
         self.assertEqual(request.submit_element_index, 4)
         self.assertEqual(raised.exception.args[0][0].value, {"kind": "mfa_code", "request_id": str(request.id)})
         with patch("tabvio_agent.browser_agent.tools.interrupt", return_value={"entered": True}):
-            result = json.loads(await self.tools["execute_steps"].coroutine(steps, self.runtime))
+            result = json.loads(await self.tools["execute_steps"].coroutine(steps, self.runtime, REASON))
         self.assertTrue(result["ok"])
         self.assertIsNone(self.sensitive_inputs.pending)
         self.assertEqual(self.browser.fills, [])
@@ -466,7 +485,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             "id": str(uuid4()), "name": "execute_steps", "args": {"steps": [
                 {"action": "fill", "element_index": 1, "value": "Ada"},
                 {"action": "click", "element_index": 4},
-            ]},
+            ], "reason": REASON},
         }])]}, {"configurable": {"thread_id": str(uuid4())}}, context=AgentContext())
         self.assertTrue(json.loads(result["messages"][-1].content)["ok"])
         self.assertEqual(self.browser.fills, [(1, "Ada")])
@@ -483,7 +502,7 @@ class BrowserToolTests(unittest.IsolatedAsyncioTestCase):
             "id": str(uuid4()), "name": "execute_steps", "args": {"steps": [{
                 "action": "request_mfa_code", "element_index": 3,
                 "prompt": "Enter the code", "submit_element_index": 4,
-            }]},
+            }], "reason": REASON},
         }])]}, config, context=AgentContext())
         request_id = str(self.sensitive_inputs.pending.id)
         self.assertEqual(paused["__interrupt__"][0].value, {"kind": "mfa_code", "request_id": request_id})

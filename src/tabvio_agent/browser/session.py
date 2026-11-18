@@ -318,6 +318,23 @@ class BrowserSession:
             self._active_frame(), self._get_script("get-page-text.js")
         )
 
+    @staticmethod
+    def _describe_form_field(field: dict) -> str:
+        value = field["value"].strip()
+        if not value:
+            value = "(empty)"
+        return f"{field['label']}: {value}"
+
+    async def get_form_values(self) -> list[str]:
+        """What the visible form controls hold now, as `Label: value` lines."""
+        fields = await evaluate_with_timeout(
+            self._active_frame(), self._get_script("get-form-values.js")
+        )
+        lines = []
+        for field in fields:
+            lines.append(self._describe_form_field(field))
+        return lines
+
     async def scroll(self, amount: float) -> str:
         position = await evaluate_with_timeout(
             self._active_frame(),
