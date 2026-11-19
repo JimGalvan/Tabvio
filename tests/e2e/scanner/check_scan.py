@@ -385,6 +385,45 @@ async def check_form_values(session: BrowserSession, base: str) -> list[str]:
     return problems
 
 
+SLOW_CLIP_DELAY_MS = 500
+
+DELAY_CLIP_REPORTS = """
+delay => {
+    const Real = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor(callback) {
+            this.inner = new Real((entries, observer) => {
+                setTimeout(() => callback(entries, observer), delay);
+            });
+        }
+        observe(target) { this.inner.observe(target); }
+        disconnect() { this.inner.disconnect(); }
+    };
+}
+"""
+
+
+async def check_slow_clips(session: BrowserSession, base: str) -> list[str]:
+    """A browser slow to say what is on screen must not empty the page of elements.
+
+    The scan asks an IntersectionObserver which part of each element the screen
+    shows. On the first scan of a run that answer can arrive late, and a scan that
+    gives up waiting reports no interactive elements at all on a page full of them.
+    """
+    await session.attempt_navigate_and_observe(f"{base}/scanner/fold.html")
+    await session.page.evaluate(DELAY_CLIP_REPORTS, SLOW_CLIP_DELAY_MS)
+
+    scan = json.loads(await session._scan_page())
+    elements = elements_on_screen(scan)
+    if find(elements, "Dismiss the promo") is None:
+        return [
+            f"clips that arrive after {SLOW_CLIP_DELAY_MS}ms leave {len(elements)} "
+            "element(s) on screen, so the agent is shown an empty page"
+        ]
+
+    return []
+
+
 def report(name: str, problems: list[str]) -> int:
     print(f"{'FAIL' if problems else 'ok  '}  {name}")
     for problem in problems:
@@ -406,6 +445,9 @@ async def main() -> int:
 
         failures += report(
             "form values", await check_form_values(session, base)
+        )
+        failures += report(
+            "slow clips", await check_slow_clips(session, base)
         )
         failures += report(
             "scroll-pane.html", await check_scroll_pane(session, base)

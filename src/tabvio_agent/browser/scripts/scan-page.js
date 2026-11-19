@@ -10,6 +10,7 @@
     const MAX_TEXT_BLOCK_CHARS = 300;
     const MIN_CLICKABLE_PX = 3;
     const CLIP_TIMEOUT_MS = 250;
+    const CLIP_COLD_START_TIMEOUT_MS = 1000;
 
     const INTERACTIVE_TAGS = ['a', 'button', 'input', 'select', 'textarea', 'summary', 'label'];
     const INTERACTIVE_ROLES = ['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem',
@@ -99,6 +100,7 @@
     function observeClips(elements) {
         return new Promise((resolve) => {
             const clips = new Map();
+            let timer = null;
 
             function finish() {
                 clearTimeout(timer);
@@ -106,11 +108,23 @@
                 resolve(clips);
             }
 
+            // The observer reports nothing until the browser has laid the page out,
+            // which on the first scan of a run can take longer than the usual budget.
+            // Give up at that budget only once some clip has arrived; while none has,
+            // keep waiting, because giving up early loses every element on the screen.
+            function giveUpUnlessStillWaitingForTheFirstClip() {
+                if (clips.size === 0) {
+                    timer = setTimeout(finish, CLIP_COLD_START_TIMEOUT_MS - CLIP_TIMEOUT_MS);
+                    return;
+                }
+                finish();
+            }
+
             const observer = new IntersectionObserver((entries) => {
                 for (const entry of entries) clips.set(entry.target, entry.intersectionRect);
                 if (clips.size >= elements.length) finish();
             });
-            const timer = setTimeout(finish, CLIP_TIMEOUT_MS);
+            timer = setTimeout(giveUpUnlessStillWaitingForTheFirstClip, CLIP_TIMEOUT_MS);
             for (const element of elements) observer.observe(element);
         });
     }
